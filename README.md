@@ -65,9 +65,9 @@ All frameworks connect to a dedicated **PostgreSQL 15** container.
 
 ---
 
-## 🏆 The 25 Contenders (Targeting Latest Stable Versions - 2026)
+## 🏆 The 23 Contenders (Targeting Latest Stable Versions - 2026)
 
-We have updated our test suite to target the latest stable versions of all 25 frameworks:
+We have updated our test suite to target the latest stable versions of all 23 frameworks:
 
 | # | Framework | Language / Runtime | Targeted Version |
 |---|---|---|---|

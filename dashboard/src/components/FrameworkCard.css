@@ -17,6 +17,33 @@
   margin: 0;
 }
 
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rank-badge {
+  background: var(--accent-glow);
+  color: var(--accent-rullst);
+  font-weight: 900;
+  font-size: 1.2rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.top-tier {
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  box-shadow: 0 4px 30px rgba(251, 191, 36, 0.05);
+}
+
+.top-tier .rank-badge {
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
 .language-badge {
   background: rgba(255, 255, 255, 0.1);
   padding: 0.25rem 0.75rem;

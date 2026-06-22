@@ -1,0 +1,52 @@
+.metrics-section {
+  margin-top: 3rem;
+  padding: 2.5rem;
+}
+
+.metrics-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.metrics-header h2 {
+  font-size: 2rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.metrics-header p {
+  color: var(--text-secondary);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.metric-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 1.5rem;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.metric-icon {
+  font-size: 2rem;
+}
+
+.metric-card h4 {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.metric-card p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
