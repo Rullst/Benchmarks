@@ -2,33 +2,49 @@
   {
     "name": "Rullst",
     "language": "Rust",
-    "textRps": 0,
-    "dbRps": 0,
+    "textRps": 85518,
+    "dbRps": 14324,
     "stars": 5,
     "highlight": "The Challenger 👑"
   },
   {
+    "name": "FastAPI",
+    "language": "Python",
+    "textRps": 107841,
+    "dbRps": 100160,
+    "stars": 4,
+    "highlight": "High Python Perf"
+  },
+  {
+    "name": "Axum",
+    "language": "Rust",
+    "textRps": 89406,
+    "dbRps": 101950,
+    "stars": 4,
+    "highlight": "Rust Standard"
+  },
+  {
     "name": "Spring Boot",
     "language": "Java",
-    "textRps": 41857,
-    "dbRps": 32000,
+    "textRps": 99507,
+    "dbRps": 96305,
     "stars": 4,
     "highlight": "Enterprise Standard"
   },
   {
     "name": "Next.js",
     "language": "TypeScript",
-    "textRps": 12450,
-    "dbRps": 8500,
-    "stars": 3,
-    "highlight": "Frontend Favorite"
+    "textRps": 505,
+    "dbRps": 335,
+    "stars": 2,
+    "highlight": "Frontend Heavy"
   },
   {
     "name": "Laravel",
     "language": "PHP",
-    "textRps": 0,
-    "dbRps": 0,
+    "textRps": 91514,
+    "dbRps": 90775,
     "stars": 2,
-    "highlight": "Failed under heavy load"
+    "highlight": "Failed Stress Test"
   }
 ]

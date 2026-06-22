@@ -83,6 +83,7 @@ The frameworks are grouped into batches to manage system resources during testin
 | Leptos | 0.7.x | 99700.15 | 10316.37 | 2.57ms | 22.09MiB | 26.28MiB | Passed |
 | Poem | 3.x | 107099.23 | 12711.57 | 2.75ms | 17.54MiB | 23.01MiB | Passed |
 | Salvo | 0.93.x | 99028.92 | 8296.87 | 2.92ms | 16.53MiB | 22.02MiB | Passed |
+| **Rullst** | **4.0.1** | **79602.80** | **14324.03** | **3.37ms** | **14.68MiB** | **20.3MiB** | **Passed** |
 
 ### Batch 2: Enterprise & Scripting (Java, C#, Python, PHP, Ruby, Elixir)
 *Status: ✅ Completed*

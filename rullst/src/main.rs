@@ -94,5 +94,6 @@ async fn main() {
 
     println!("Rullst listening on 0.0.0.0:3000");
     
-    Server::new(router).run(3000).await;
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, router.into_axum()).await.unwrap();
 }
