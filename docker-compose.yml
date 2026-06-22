@@ -262,18 +262,7 @@ services:
     ports:
       - "3019:3000"
 
-  rocket:
-    build:
-      context: ./rocket
-      dockerfile: Dockerfile
-    environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
-      - PORT=3000
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "3020:3000"
+
 
   rullst:
     build:

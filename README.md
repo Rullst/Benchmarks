@@ -91,7 +91,7 @@ We have updated our test suite to target the latest stable versions of all 25 fr
 | 18 | **Dioxus** | Rust | `0.7.x` |
 | 19 | **Leptos** | Rust | `0.7.x` |
 | 20 | **Poem** | Rust | `3.x` |
-| 21 | **Rocket** | Rust | `0.5.x` |
+
 | 22 | **Salvo** | Rust | `0.93.x` |
 | 23 | **Warp** | Rust | `0.3.x` |
 | 24 | **Next.js** | JS/TS (Node) | `15.x` |
