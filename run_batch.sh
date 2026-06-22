@@ -31,7 +31,7 @@ for FRAMEWORK in "${FRAMEWORKS[@]}"; do
     PORT=$(docker compose port $FRAMEWORK 3000 | cut -d ':' -f 2 || echo "8000")
     if [ -z "$PORT" ] || [ "$PORT" == "8000" ]; then
         # Fallback to hardcoded mapping or grep if docker compose port fails
-        PORT=$(grep -A 5 " $FRAMEWORK:" docker-compose.yml | grep "-" | grep ":" | grep 3000 | head -1 | awk -F'"' '{print $2}' | cut -d':' -f1 || echo "8000")
+        PORT=$(grep -A 15 " $FRAMEWORK:" docker-compose.yml | grep "-" | grep ":" | grep 3000 | head -1 | awk -F'"' '{print $2}' | cut -d':' -f1 || echo "8000")
         if [ -z "$PORT" ]; then PORT=8000; fi
     fi
     echo "Detected $FRAMEWORK running on port $PORT"

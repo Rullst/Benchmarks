@@ -1,4 +1,4 @@
-FROM rust:1.88-slim as builder
+FROM rust:1.94-slim as builder
 WORKDIR /app
 
 # Install build dependencies
@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y pkg-config libssl-dev
 COPY . .
 
 # Build with maximum optimization
-RUN cargo build --release --manifest-path benchmark/salvo/Cargo.toml
+RUN cargo build --release
 
 # Production image
 FROM debian:bookworm-slim

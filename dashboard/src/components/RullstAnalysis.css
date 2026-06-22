@@ -1,0 +1,92 @@
+.analysis-section {
+  margin-top: 4rem;
+  padding: 3rem;
+  margin-bottom: 4rem;
+}
+
+.analysis-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.analysis-header h2 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.analysis-card {
+  padding: 2rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: transform 0.3s ease;
+}
+
+.analysis-card:hover {
+  transform: translateY(-5px);
+}
+
+.win-card {
+  border-top: 3px solid #10b981;
+}
+
+.trade-card {
+  border-top: 3px solid #f59e0b;
+}
+
+.icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.analysis-card h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+}
+
+.analysis-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.analysis-list li {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.win-card .analysis-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #10b981;
+  font-weight: bold;
+}
+
+.trade-card .analysis-list li::before {
+  content: "⚠";
+  position: absolute;
+  left: 0;
+  color: #f59e0b;
+  font-weight: bold;
+}
+
+.analysis-list strong {
+  color: var(--text-primary);
+}
