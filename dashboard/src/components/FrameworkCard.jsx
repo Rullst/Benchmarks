@@ -1,7 +1,7 @@
 import React from 'react';
 import './FrameworkCard.css';
 
-export function FrameworkCard({ rank, name, language, jsonRps, dbRps, latency, peakRam, stars, highlight, status }) {
+export function FrameworkCard({ rank, name, language, jsonRps, dbRps, latency, peakRam, efficiencyScore, stars, highlight, status }) {
   const renderStars = () => {
     return Array.from({ length: 5 }).map((_, i) => (
       <span key={i} className={`star ${i < stars ? 'filled' : 'empty'}`}>★</span>
@@ -22,20 +22,20 @@ export function FrameworkCard({ rank, name, language, jsonRps, dbRps, latency, p
 
       <div className="stats-container">
         <div className="stat-row">
+          <span className="stat-label">Efficiency (RPS/MB):</span>
+          <span className="stat-value" style={{ color: '#10b981' }}>{efficiencyScore.toLocaleString()}</span>
+        </div>
+        <div className="stat-row">
           <span className="stat-label">JSON (Req/sec):</span>
           <span className="stat-value">{jsonRps.toLocaleString()}</span>
         </div>
         <div className="stat-row">
-          <span className="stat-label">DB Single (Req/sec):</span>
-          <span className="stat-value">{dbRps.toLocaleString()}</span>
-        </div>
-        <div className="stat-row">
-          <span className="stat-label">Latency (P99):</span>
-          <span className="stat-value">{latency}</span>
-        </div>
-        <div className="stat-row">
           <span className="stat-label">Peak RAM:</span>
           <span className="stat-value">{peakRam}</span>
+        </div>
+        <div className="stat-row">
+          <span className="stat-label">Tier 4 Status:</span>
+          <span className={`stat-value ${status === 'Passed' ? 'passed' : 'failed'}`}>{status}</span>
         </div>
       </div>
 

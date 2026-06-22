@@ -1,111 +1,47 @@
-# Web Frameworks Benchmark 2026 (4-Tier Architecture)
+# 🏆 Rullst Benchmarks 2026: The Ultimate Results
 
-## Overview
+> **Last Updated:** June 22, 2026
+> **Interactive Dashboard:** [View Web Dashboard](https://your-github-username.github.io/Benchmarks/)
 
-This repository contains a comprehensive, robust, and highly standardized 4-tier benchmark suite designed to evaluate the performance, resilience, and resource efficiency of **25 modern web frameworks** across multiple languages (Rust, Go, Node.js, Python, PHP, Ruby, Java, and Elixir). 
+Welcome to the consolidated, high-performance benchmarking results. We pit **23 modern web frameworks** against each other in a rigorous, containerized 4-tier stress test.
 
-The ultimate goal of this benchmark is to objectively measure how the **Rullst** framework (Rust) performs against industry standards in both raw speed and memory footprint.
+## 🎯 The Ultimate Ranking (By Efficiency)
 
-## Methodology
+In modern cloud environments, pure speed means nothing if it costs thousands of dollars in RAM. The ranking below is sorted by the **Efficiency Score** (JSON Requests Per Second divided by Peak RAM usage). 
 
-To ensure fairness, all frameworks are containerized using `docker-compose` and connected to a dedicated PostgreSQL 15 instance. Network latency is minimized by using host networking for the load generation tool (`bombardier`).
+*The higher the score, the more performant and cheaper the framework is to host.*
 
-The benchmark is divided into four distinct "Tiers" to simulate different real-world scenarios:
+| 🏆 Rank | Framework | Language | Efficiency (RPS/MB) | JSON RPS | DB Single RPS | Avg Latency | Peak RAM | Status |
+|:---:|---|---|---:|---:|---:|---:|---:|:---:|
+| 🥇 1st | Laravel | PHP | **91.515** | 91.514,97 | 90.775,91 | 3.13ms | 0B | ❌ Failed |
+| 🥈 2nd | Axum | Rust | **56.230** | 89.406 | 101.950,26 | 2.95ms | 1.59MiB | ✅ Passed |
+| 🥉 3rd | Actix-Web | Rust | **33.241** | 79.844,83 | 77.687,94 | 3.76ms | 2.402MiB | ✅ Passed |
+| 4 | Poem | Rust | **4.654** | 107.099,23 | 12.711,57 | 2.75ms | 23.01MiB | ✅ Passed |
+| 5 | Salvo | Rust | **4.497** | 99.028,92 | 8.296,87 | 2.92ms | 22.02MiB | ✅ Passed |
+| 6 | Go-Fiber | Go | **4.407** | 102.904,17 | 16.021,92 | 2.66ms | 23.35MiB | ✅ Passed |
+| 7 | **Rullst** 👑 | Rust | **3.921** | 79.602,8 | 14.324,03 | 3.37ms | 20.3MiB | ✅ Passed |
+| 8 | Leptos | Rust | **3.794** | 99.700,15 | 10.316,37 | 2.57ms | 26.28MiB | ✅ Passed |
+| 9 | Dioxus | Rust | **3.452** | 88.542,41 | 9.523,73 | 2.70ms | 25.65MiB | ✅ Passed |
+| 10 | Go-Gin | Go | **2.863** | 69.575,28 | 21.474,06 | 3.73ms | 24.3MiB | ✅ Passed |
+| 11 | Symfony | PHP | **1.240** | 82.987,04 | 88.186,31 | 3.80ms | 66.91MiB | ✅ Passed |
+| 12 | Django | Python | **859** | 106.248,37 | 103.591,46 | 2.63ms | 123.7MiB | ✅ Passed |
+| 13 | ASP.NET Core | C# | **706** | 81.610,33 | 11.908,18 | 3.44ms | 115.6MiB | ✅ Passed |
+| 14 | Quarkus | Java | **474** | 99.240,5 | 97.228,41 | 2.99ms | 209.4MiB | ✅ Passed |
+| 15 | FastAPI | Python | **449** | 107.841,78 | 100.160,49 | 3.06ms | 240.4MiB | ✅ Passed |
+| 16 | Spring Boot | Java | **327** | 99.507,43 | 96.305,4 | 2.96ms | 304.2MiB | ✅ Passed |
+| 17 | Fastify | Node.js | **96** | 8.642,38 | 755,57 | 32.28ms | 89.92MiB | ✅ Passed |
+| 18 | Phoenix | Elixir | **67** | 14.801,11 | 2.480,69 | 15.84ms | 220MiB | ✅ Passed |
+| 19 | Hono | TypeScript | **48** | 4.202,99 | 557,18 | 63.43ms | 87.75MiB | ✅ Passed |
+| 20 | Express | Node.js | **23** | 2.216,46 | 590,25 | 140.71ms | 97.55MiB | ✅ Passed |
+| 21 | NestJS | Node.js | **17** | 2.461,05 | 689,01 | 121.79ms | 146.7MiB | ✅ Passed |
+| 22 | Next.js | TypeScript | **4** | 505,66 | 335,9 | 719.64ms | 124.1MiB | ✅ Passed |
+| 23 | Ruby on Rails | Ruby | **3** | 286,87 | 134,44 | 1.00s | 100.1MiB | ✅ Passed |
 
-### Tier 1: Fast Load (Baseline Performance)
-- **Goal:** Establish a baseline for raw Requests Per Second (RPS) and basic latency.
-- **Load:** 125 concurrent connections for 10 seconds.
-- **Endpoints Tested:** 
-  - `/text` (Plain text response)
-  - `/json` (JSON serialization)
-  - `/db-single` (Single database query fetching one record)
-  - `/html` (HTML template rendering)
-
-### Tier 2: Concurrency & Latency (High Traffic)
-- **Goal:** Evaluate how the framework handles sudden traffic spikes and measure the P99 latency (the time it takes for the slowest 1% of requests).
-- **Load:** 300 concurrent connections for 30 seconds.
-- **Endpoints Tested:** `/json`
-
-### Tier 3: Resource Efficiency (Idle vs. Peak)
-- **Goal:** Measure CPU and RAM utilization to identify "greedy" vs. "efficient" architectures.
-- **Methodology:** 
-  - **Idle State:** Captured using `docker stats` after the framework is fully booted but receiving 0 traffic.
-  - **Peak State:** Captured while sustaining a load of 200 concurrent connections for 30 seconds.
-
-### Tier 4: Stress & Resilience (Memory Leak Detection)
-- **Goal:** Ensure the framework does not crash or leak memory under prolonged stress.
-- **Load:** 500 concurrent connections for a sustained duration of 2 minutes (Marathon Test).
-- **Endpoints Tested:** `/json`
-
-### Official Tested Hardware
-*The tests were executed on the following isolated environment:*
-- **Processor (CPU):** `AMD Ryzen 7 5700U (8 Cores / 16 Threads)`
-- **Memory (RAM):** `8GB`
-- **Operating System:** `Windows 11 (Docker with WSL2)`
 
 ---
 
-## Tested Frameworks (Total: 25)
+## 📈 Methodology Explained
 
-The frameworks are grouped into batches to manage system resources during testing:
+If you want to understand the Tiers (Tier 1 to 4) and how we measure database throughput, latency, and idle resources, please refer to the detailed methodology in our [README.md](./README.md).
 
-- **Batch 1 (JS/TS & Go):** Express, Fastify, NestJS, Hono, Go-Fiber, Go-Gin
-- **Batch 2 (Java, Ruby, Python, PHP, Elixir):** Django, FastAPI, Laravel, Symfony, Rails, Phoenix, Quarkus, Spring Boot, ASP.NET Core
-- **Batch 3 (Rust Core):** Actix, Axum, Dioxus, Leptos
-- **Batch 4 (Rust Extras & Rullst):** Poem, Rocket, Salvo, Warp, **Rullst**
-
----
-
-## Benchmark Results
-
-> **Date:** June 21, 2026
-
-### Batch 1: Fast Interpreted & Compiled (JS/TS & Go)
-*Status: ✅ Completed*
-
-| Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (Avg Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
-|-----------|---------|-------------------|-----------------|----------------------|-------------------|-------------------|-----------------|
-| Express   | 5.1.0   | 2216.46           | 590.25          | 140.71ms             | 44.79MiB          | 97.55MiB          | Passed          |
-| Fastify   | 5.8.0   | 8642.38           | 755.57          | 32.28ms              | 85.57MiB          | 89.92MiB          | Passed          |
-| NestJS    | latest  | 2461.05           | 689.01          | 121.79ms             | 145.5MiB          | 146.7MiB          | Passed          |
-| Hono      | 4.12.0  | 4202.99           | 557.18          | 63.43ms              | 82.17MiB          | 87.75MiB          | Passed          |
-| Go-Fiber  | v3.0.0  | 102904.17         | 16021.92        | 2.66ms               | 21.56MiB          | 23.35MiB          | Passed          |
-| Go-Gin    | v1.12.0 | 69575.28          | 21474.06        | 3.73ms               | 23.6MiB           | 24.3MiB           | Passed          |
-
-### Batch 3 & 4: Rust Ecosystem
-*Status: ✅ Completed (Batch 3)*
-
-| Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (Avg Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
-|-----------|---------|-------------------|-----------------|----------------------|-------------------|-------------------|-----------------|
-| Actix-Web | 4.x | 79844.83 | 77687.94 | 3.76ms | 2.402MiB | 2.402MiB | Passed |
-| Axum | 0.8.x | 89406.00 | 101950.26 | 2.95ms | 1.59MiB | 1.59MiB | Passed |
-| Dioxus | 0.7.x | 88542.41 | 9523.73 | 2.70ms | 20.48MiB | 25.65MiB | Passed |
-| Leptos | 0.7.x | 99700.15 | 10316.37 | 2.57ms | 22.09MiB | 26.28MiB | Passed |
-| Poem | 3.x | 107099.23 | 12711.57 | 2.75ms | 17.54MiB | 23.01MiB | Passed |
-| Salvo | 0.93.x | 99028.92 | 8296.87 | 2.92ms | 16.53MiB | 22.02MiB | Passed |
-| **Rullst** | **4.0.1** | **79602.80** | **14324.03** | **3.37ms** | **14.68MiB** | **20.3MiB** | **Passed** |
-
-### Batch 2: Enterprise & Scripting (Java, C#, Python, PHP, Ruby, Elixir)
-*Status: ✅ Completed*
-
-| Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (Avg Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
-|-----------|---------|-------------------|-----------------|----------------------|-------------------|-------------------|-----------------|
-| Django | 6.0.0 | 106248.37 | 103591.46 | 2.63ms | 123.7MiB | 123.7MiB | Passed |
-| FastAPI | 0.138.0 | 107841.78 | 100160.49 | 3.06ms | 239.2MiB | 240.4MiB | Passed |
-| Laravel | 13.x | 91514.97 | 90775.91 | 3.13ms | 0B | 0B | Failed |
-| Symfony | 7.4.x | 82987.04 | 88186.31 | 3.80ms | 66.91MiB | 66.91MiB | Passed |
-| Ruby on Rails | 7.2.x | 286.87 | 134.44 | 1.00s | 97.26MiB | 100.1MiB | Passed |
-| Phoenix | 1.8.x | 14801.11 | 2480.69 | 15.84ms | 217.4MiB | 220MiB | Passed |
-| Quarkus | 3.36.x | 99240.50 | 97228.41 | 2.99ms | 209.4MiB | 209.4MiB | Passed |
-| Spring Boot | 4.0.x | 99507.43 | 96305.40 | 2.96ms | 303.6MiB | 304.2MiB | Passed |
-| ASP.NET Core | 10.0.x | 81610.33 | 11908.18 | 3.44ms | 110.2MiB | 115.6MiB | Passed |
-
-### Batch 4: Fullstack & SSR (Next.js)
-*Status: ✅ Completed*
-
-| Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (Avg Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
-|-----------|---------|-------------------|-----------------|----------------------|-------------------|-------------------|-----------------|
-| Next.js | 15.5.x | 505.66 | 335.90 | 719.64ms | 120.9MiB | 124.1MiB | Passed |
-
----
-*Generated by the automated Rullst benchmarking suite.*
+*Generated automatically by the Rullst Benchmark Suite.*

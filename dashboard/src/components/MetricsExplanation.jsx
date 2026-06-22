@@ -13,25 +13,31 @@ export function MetricsExplanation() {
         <div className="metric-card">
           <span className="metric-icon">⚡</span>
           <h4>JSON (Req/sec)</h4>
-          <p><strong>Requests Per Second (Tier 1 & 2):</strong> Measures raw throughput when serializing and serving JSON responses. Higher is better, indicating the framework can handle more simultaneous users without queuing.</p>
+          <p><strong>Raw Throughput (Tier 1):</strong> Measures how many requests per second the framework handles when serving JSON. Higher is better.</p>
         </div>
 
         <div className="metric-card">
           <span className="metric-icon">🗄️</span>
           <h4>DB Single (Req/sec)</h4>
-          <p><strong>Database Throughput (Tier 1):</strong> Tests the ORM/Query Builder overhead. It measures how fast the framework can fetch a single record from PostgreSQL. Higher is better.</p>
+          <p><strong>Database Throughput:</strong> Tests the ORM/Query Builder overhead fetching a single record from PostgreSQL. Higher is better.</p>
         </div>
 
         <div className="metric-card">
           <span className="metric-icon">⏱️</span>
           <h4>Avg Latency</h4>
-          <p><strong>Responsiveness (Tier 2):</strong> The average time it takes for the server to respond under heavy load (300 concurrent connections). Lower is better, meaning less waiting time for the user.</p>
+          <p><strong>Responsiveness (Tier 2):</strong> The average time to respond under heavy load (300 concurrent connections). Lower is better.</p>
         </div>
 
         <div className="metric-card">
           <span className="metric-icon">🧠</span>
           <h4>Peak RAM</h4>
-          <p><strong>Memory Footprint (Tier 3):</strong> The maximum amount of RAM consumed during a stress test. Lower is better, meaning you can run the server on cheaper hardware (like a $5 VPS).</p>
+          <p><strong>Memory Footprint (Tier 3):</strong> The maximum RAM consumed during a stress test. Lower means cheaper hardware hosting.</p>
+        </div>
+
+        <div className="metric-card">
+          <span className="metric-icon">🛡️</span>
+          <h4>Status</h4>
+          <p><strong>Resilience (Tier 4):</strong> Did the framework survive the 2-minute marathon with 500 connections? "Passed" means no memory leaks or crashes.</p>
         </div>
       </div>
     </section>

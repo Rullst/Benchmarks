@@ -4,9 +4,12 @@
 
 **The official performance, resilience, and load-testing suite for the Rullst Framework.**
 
-[![Rust](https://img.shields.io/badge/Rust-1.85+-orange.svg?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg?style=for-the-badge&logo=docker)](https://www.docker.com/)
-[![Benchmarks](https://img.shields.io/badge/Benchmarks-Bombardier%20%7C%20Criterion-success.svg?style=for-the-badge)]()
+[![Rullst](https://img.shields.io/badge/Framework-Rullst-orange.svg)](#)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](#)
+[![Rust](https://img.shields.io/badge/Rust-1.85%2B-black.svg)](#)
+
+> 🌟 **[View the Interactive Web Dashboard](https://your-github-username.github.io/Benchmarks/)**
+> 📊 **[View the Full Benchmark Results Table](./benchmarks_results.md)**
 
 *Rullst is built to give you the extreme productivity of full-stack frameworks combined with the memory safety and blistering high throughput of Rust.*
 

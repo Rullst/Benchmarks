@@ -118,3 +118,11 @@
 .star.empty {
   color: rgba(255, 255, 255, 0.1);
 }
+
+.passed {
+  color: #10b981;
+}
+
+.failed {
+  color: #ef4444;
+}
