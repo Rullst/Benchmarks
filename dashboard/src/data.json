@@ -134,11 +134,11 @@
   {
     "name": "Rullst",
     "language": "Rust",
-    "jsonRps": 0,
-    "dbRps": 0,
-    "latency": "**3.37ms**",
-    "peakRam": "**20.3MiB**",
-    "status": "**Passed**",
+    "jsonRps": 79602.8,
+    "dbRps": 14324.03,
+    "latency": "3.37ms",
+    "peakRam": "20.3MiB",
+    "status": "Passed",
     "stars": 5,
     "highlight": "The Challenger 👑"
   },

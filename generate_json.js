@@ -25,11 +25,11 @@ for (const line of lines) {
     
     // | Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (Avg Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
     const fw = parts[1].replace(/\*/g, '');
-    let jsonRps = parseFloat(parts[3].replace(/,/g, ''));
-    let dbRps = parseFloat(parts[4].replace(/,/g, ''));
-    const latencyStr = parts[5];
-    const peakRamStr = parts[7];
-    const status = parts[8];
+    let jsonRps = parseFloat(parts[3].replace(/[,*]/g, ''));
+    let dbRps = parseFloat(parts[4].replace(/[,*]/g, ''));
+    const latencyStr = parts[5].replace(/\*/g, '');
+    const peakRamStr = parts[7].replace(/\*/g, '');
+    const status = parts[8].replace(/\*/g, '');
 
     if (isNaN(jsonRps)) jsonRps = 0;
     if (isNaN(dbRps)) dbRps = 0;
