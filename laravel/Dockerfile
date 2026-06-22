@@ -21,9 +21,9 @@ RUN echo "opcache.enable=1" >> $PHP_INI_DIR/conf.d/docker-php-ext-opcache.ini &&
 
 # Start octance with swoole if we were to use it, but standard php-fpm is default or artisan serve
 # Since we want max perf, Laravel Octane with swoole is best.
-RUN apk add --no-cache autoconf gcc g++ make linux-headers && \
+RUN apk add --no-cache autoconf gcc g++ make linux-headers brotli-dev && \
     pecl install swoole && docker-php-ext-enable swoole && \
-    apk del autoconf gcc g++ make linux-headers
+    apk del autoconf gcc g++ make linux-headers brotli-dev
 
 RUN composer require laravel/octane
 RUN php artisan octane:install --server=swoole

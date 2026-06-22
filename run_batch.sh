@@ -58,13 +58,13 @@ for FRAMEWORK in "${FRAMEWORKS[@]}"; do
     echo " [4/4] TIER 3: Resource Efficiency (Idle vs Peak)"
     echo "----------------------------------------------------------"
     echo "> Capturing Idle Stats (10s)..."
-    docker stats --no-stream "benchmark-$FRAMEWORK-1" > "results/${FRAMEWORK}_tier3_idle.txt" || echo "Failed idle stats"
+    docker stats --no-stream "benchmarks-$FRAMEWORK-1" > "results/${FRAMEWORK}_tier3_idle.txt" || echo "Failed idle stats"
     
     echo "> Applying 200 conn load for 30s to capture Peak Stats..."
     docker run --rm --network host alpine/bombardier -c 200 -d 30s "http://127.0.0.1:$PORT/json" > /dev/null &
     BOMB_PID=$!
     sleep 15
-    docker stats --no-stream "benchmark-$FRAMEWORK-1" > "results/${FRAMEWORK}_tier3_peak.txt" || echo "Failed peak stats"
+    docker stats --no-stream "benchmarks-$FRAMEWORK-1" > "results/${FRAMEWORK}_tier3_peak.txt" || echo "Failed peak stats"
     wait $BOMB_PID || true
 
     echo ""

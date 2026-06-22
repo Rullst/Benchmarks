@@ -7,15 +7,15 @@
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
-    "@nestjs/common": "^11.1.0",
-    "@nestjs/core": "^11.1.0",
-    "@nestjs/platform-express": "^11.1.0",
+    "@nestjs/common": "latest",
+    "@nestjs/core": "latest",
+    "@nestjs/platform-express": "latest",
     "@prisma/client": "^5.0.0",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
-    "@nestjs/cli": "^11.1.0",
+    "@nestjs/cli": "latest",
     "@types/express": "^4.17.17",
     "@types/node": "^20.3.1",
     "prisma": "^5.0.0",

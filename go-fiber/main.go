@@ -19,9 +19,7 @@ func (World) TableName() string {
 }
 
 func main() {
-	app := fiber.New(fiber.Config{
-		DisableStartupMessage: true,
-	})
+	app := fiber.New()
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {

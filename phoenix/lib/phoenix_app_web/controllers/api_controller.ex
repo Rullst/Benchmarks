@@ -3,7 +3,7 @@ defmodule PhoenixAppWeb.ApiController do
   alias PhoenixApp.Repo
   alias PhoenixApp.Record
 
-  def text(conn, _params) do
+  def text_resp(conn, _params) do
     text(conn, "Hello World")
   end
 

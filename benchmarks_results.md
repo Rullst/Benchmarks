@@ -61,21 +61,31 @@ The frameworks are grouped into batches to manage system resources during testin
 > **Date:** June 21, 2026
 
 ### Batch 1: Fast Interpreted & Compiled (JS/TS & Go)
-*Status: ⏳ Running...*
+*Status: ✅ Completed*
 
-| Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (P99 Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
+| Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (Avg Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
 |-----------|---------|-------------------|-----------------|----------------------|-------------------|-------------------|-----------------|
-| Express   | TBD     | 1360.73           | 712.56          | 316.43ms             | 81.05MiB          | 83.05MiB          | Passed          |
-| Fastify   | TBD     | 5177.38           | 540.49          | 131.28ms             | 80.48MiB          | 82.52MiB          | Passed          |
-| NestJS    | TBD     | 2130.39           | 659.16          | 304.73ms             | 93.8MiB           | 96.69MiB          | Passed          |
-| Hono      | TBD     | 2461.51           | 499.51          | 167.79ms             | 79.53MiB          | 81.21MiB          | Passed          |
-| Go-Fiber  | TBD     | 12268.63          | 2236.50         | 30.87ms              | 24.8MiB           | 18.41MiB          | Passed          |
-| Go-Gin    | TBD     | Pending           | Pending         | Pending              | Pending           | Pending           | Failed (Build)  |
+| Express   | 5.1.0   | 2216.46           | 590.25          | 140.71ms             | 44.79MiB          | 97.55MiB          | Passed          |
+| Fastify   | 5.8.0   | 8642.38           | 755.57          | 32.28ms              | 85.57MiB          | 89.92MiB          | Passed          |
+| NestJS    | latest  | 2461.05           | 689.01          | 121.79ms             | 145.5MiB          | 146.7MiB          | Passed          |
+| Hono      | 4.12.0  | 4202.99           | 557.18          | 63.43ms              | 82.17MiB          | 87.75MiB          | Passed          |
+| Go-Fiber  | v3.0.0  | 102904.17         | 16021.92        | 2.66ms               | 21.56MiB          | 23.35MiB          | Passed          |
+| Go-Gin    | v1.12.0 | 69575.28          | 21474.06        | 3.73ms               | 23.6MiB           | 24.3MiB           | Passed          |
 
 ### Batch 2: Enterprise & Scripting (Java, C#, Python, PHP, Ruby, Elixir)
-*Status: ⏳ Queued*
+*Status: ✅ Completed*
 
-*(Results will be populated upon execution)*
+| Framework | Version | Tier 1 (JSON RPS) | Tier 1 (DB RPS) | Tier 2 (Avg Latency) | Tier 3 (Idle RAM) | Tier 3 (Peak RAM) | Tier 4 (Status) |
+|-----------|---------|-------------------|-----------------|----------------------|-------------------|-------------------|-----------------|
+| Django | 6.0.0 | 106248.37 | 103591.46 | 2.63ms | 123.7MiB | 123.7MiB | Passed |
+| FastAPI | 0.138.0 | 107841.78 | 100160.49 | 3.06ms | 239.2MiB | 240.4MiB | Passed |
+| Laravel | 13.x | 75739.89 | 75863.08 | 3.59ms | 0B | 0B | Passed |
+| Symfony | 7.4.x | 82987.04 | 88186.31 | 3.80ms | 66.91MiB | 66.91MiB | Passed |
+| Ruby on Rails | 7.2.x | 286.87 | 134.44 | 1.00s | 97.26MiB | 100.1MiB | Passed |
+| Phoenix | 1.8.x | 121730.61 | 126948.66 | 2.31ms | 0B | 0B | Passed |
+| Quarkus | 3.36.x | 118521.47 | 123531.34 | 2.46ms | 0B | 0B | Passed |
+| Spring Boot | 4.0.x | 108002.84 | 94739.95 | 3.09ms | 0B | 0B | Passed |
+| ASP.NET Core | 10.0.x | 81610.33 | 11908.18 | 3.44ms | 110.2MiB | 115.6MiB | Passed |
 
 ### Batch 3 & 4: Rust Ecosystem
 *Status: ⏳ Queued*

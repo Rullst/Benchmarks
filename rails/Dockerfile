@@ -4,7 +4,7 @@ RUN apt-get update -y && apt-get install -y build-essential libpq-dev tzdata nod
 
 WORKDIR /app
 
-COPY Gemfile Gemfile.lock ./
+COPY Gemfile ./
 RUN bundle config set --local without 'development test' && bundle install
 
 COPY . .

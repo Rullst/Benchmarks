@@ -18,7 +18,7 @@ defmodule PhoenixAppWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
-    get "/text", ApiController, :text
+    get "/text", ApiController, :text_resp
     get "/json", ApiController, :json_resp
     get "/db-single", ApiController, :db_single
     get "/html", ApiController, :html_resp

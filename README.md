@@ -80,7 +80,7 @@ We have updated our test suite to target the latest stable versions of all 25 fr
 | 7 | **Django** | Python | `6.0.x` |
 | 8 | **FastAPI** | Python | `0.138.x` |
 | 9 | **Laravel** | PHP | `13.x` |
-| 10 | **Symfony** | PHP | `8.1.x` |
+| 10 | **Symfony** | PHP | `7.4.x` |
 | 11 | **Ruby on Rails** | Ruby | `7.2.x` |
 | 12 | **Phoenix** | Elixir | `1.8.x` |
 | 13 | **Quarkus** | Java | `3.36.x` |
