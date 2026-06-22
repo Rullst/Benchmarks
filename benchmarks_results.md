@@ -23,7 +23,7 @@ The benchmark is divided into four distinct "Tiers" to simulate different real-w
 
 ### Tier 2: Concurrency & Latency (High Traffic)
 - **Goal:** Evaluate how the framework handles sudden traffic spikes and measure the P99 latency (the time it takes for the slowest 1% of requests).
-- **Load:** 500 concurrent connections for 30 seconds.
+- **Load:** 300 concurrent connections for 30 seconds.
 - **Endpoints Tested:** `/json`
 
 ### Tier 3: Resource Efficiency (Idle vs. Peak)
@@ -34,14 +34,14 @@ The benchmark is divided into four distinct "Tiers" to simulate different real-w
 
 ### Tier 4: Stress & Resilience (Memory Leak Detection)
 - **Goal:** Ensure the framework does not crash or leak memory under prolonged stress.
-- **Load:** 1000 concurrent connections for a sustained duration of 2 minutes (Marathon Test).
+- **Load:** 500 concurrent connections for a sustained duration of 2 minutes (Marathon Test).
 - **Endpoints Tested:** `/json`
 
-### Hardware Specifications
+### Official Tested Hardware
 *The tests were executed on the following isolated environment:*
-- **Processor (CPU):** `[Enter CPU, e.g., Apple M3 Max / AMD Ryzen 9]`
-- **Memory (RAM):** `[Enter RAM, e.g., 64GB Unified Memory]`
-- **Operating System:** `[Enter OS, e.g., macOS Sonoma / Ubuntu 24.04]`
+- **Processor (CPU):** `AMD Ryzen 7 5700U (8 Cores / 16 Threads)`
+- **Memory (RAM):** `8GB`
+- **Operating System:** `Windows 11 (Docker with WSL2)`
 
 ---
 

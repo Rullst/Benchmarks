@@ -47,11 +47,11 @@ for FRAMEWORK in "${FRAMEWORKS[@]}"; do
 
     echo ""
     echo "----------------------------------------------------------"
-    echo " [3/4] TIER 2: Concurrency & Latency (500 conn, 30s)"
+    echo " [3/4] TIER 2: Concurrency & Latency (300 conn, 30s)"
     echo "----------------------------------------------------------"
     # We just test JSON for high concurrency
     echo "> Benchmarking /json with high concurrency..."
-    docker run --rm --network host alpine/bombardier -c 500 -d 30s "http://127.0.0.1:$PORT/json" > "results/${FRAMEWORK}_tier2_json.txt" || echo "Failed json"
+    docker run --rm --network host alpine/bombardier -c 300 -d 30s "http://127.0.0.1:$PORT/json" > "results/${FRAMEWORK}_tier2_json.txt" || echo "Failed json"
 
     echo ""
     echo "----------------------------------------------------------"
@@ -69,10 +69,10 @@ for FRAMEWORK in "${FRAMEWORKS[@]}"; do
 
     echo ""
     echo "----------------------------------------------------------"
-    echo " [5/4] TIER 4: Stress / Resilience (1000 conn, 2m)"
+    echo " [5/4] TIER 4: Stress / Resilience (500 conn, 2m)"
     echo "----------------------------------------------------------"
     echo "> Stress testing /json for 2 minutes..."
-    docker run --rm --network host alpine/bombardier -c 1000 -d 2m "http://127.0.0.1:$PORT/json" > "results/${FRAMEWORK}_tier4_json.txt" || echo "Failed stress test"
+    docker run --rm --network host alpine/bombardier -c 500 -d 2m "http://127.0.0.1:$PORT/json" > "results/${FRAMEWORK}_tier4_json.txt" || echo "Failed stress test"
 
     echo ""
     echo "----------------------------------------------------------"

@@ -33,7 +33,7 @@ To simulate different real-world scenarios, our testing approach is divided into
 
 ### ⚡ Tier 2: Concurrency & Latency (High Traffic)
 * **Goal:** Evaluate behavior under sudden traffic spikes and measure P99 latency.
-* **Load:** 500 concurrent connections for 30 seconds.
+* **Load:** 300 concurrent connections for 30 seconds.
 * **Endpoints:** `/json`
 
 ### 🧠 Tier 3: Resource Efficiency (Idle vs. Peak)
@@ -42,15 +42,21 @@ To simulate different real-world scenarios, our testing approach is divided into
 
 ### 🔥 Tier 4: Stress & Resilience (Memory Leak Detection)
 * **Goal:** Ensure frameworks don't crash or leak memory under prolonged stress.
-* **Load:** 1000 concurrent connections for a sustained 2 minutes.
+* **Load:** 500 concurrent connections for a sustained 2 minutes.
 * **Endpoints:** `/json`
 
-### 💻 Hardware Specifications
+### 💻 Minimum Hardware Requirements
+To run these benchmarks locally without skewing the results due to resource starvation (especially during the 500-connection Tier 4 tests), we recommend the following minimum specifications:
+* **CPU:** 4 Cores / 8 Threads (8+ Cores recommended)
+* **RAM:** 8GB Minimum (16GB+ recommended)
+* **OS:** Linux, macOS, or Windows (WSL2)
+* **Docker Engine:** Ensure Docker is allocated at least 4 CPUs and 8GB of RAM.
+
+### 📊 Official Tested Hardware
 *All benchmark results listed in this repository were run on the following environment to ensure consistency:*
-* **CPU:** `[Enter CPU, e.g., Apple M3 Max / AMD Ryzen 9]`
-* **RAM:** `[Enter RAM, e.g., 64GB Unified Memory]`
-* **OS:** `[Enter OS, e.g., macOS Sonoma / Ubuntu 24.04]`
-* **Docker Engine:** `[Enter Docker resources, e.g., 8 CPUs, 16GB RAM limit]`
+* **CPU:** `AMD Ryzen 7 5700U (8 Cores / 16 Threads)`
+* **RAM:** `8GB`
+* **OS:** `Windows 11 (Docker with WSL2)`
 
 ### 🗄️ Database Architecture
 All frameworks connect to a dedicated **PostgreSQL 15** container. 
