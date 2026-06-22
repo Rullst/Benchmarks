@@ -1,0 +1,341 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bench
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  actix:
+    build:
+      context: ./actix
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+
+  aspnet-core:
+    build:
+      context: ./aspnet-core
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3002:3000"
+
+  axum:
+    build:
+      context: ./axum
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3003:3000"
+
+  dioxus:
+    build:
+      context: ./dioxus
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3004:3000"
+
+  django:
+    build:
+      context: ./django
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3005:3000"
+
+  express:
+    build:
+      context: ./express
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3006:3000"
+
+  fastapi:
+    build:
+      context: ./fastapi
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3007:3000"
+
+  fastify:
+    build:
+      context: ./fastify
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3008:3000"
+
+  go-fiber:
+    build:
+      context: ./go-fiber
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3009:3000"
+
+  go-gin:
+    build:
+      context: ./go-gin
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3010:3000"
+
+  hono:
+    build:
+      context: ./hono
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3011:3000"
+
+  laravel:
+    build:
+      context: ./laravel
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3012:3000"
+
+  leptos:
+    build:
+      context: ./leptos
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3013:3000"
+
+  nestjs:
+    build:
+      context: ./nestjs
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3014:3000"
+
+  nextjs:
+    build:
+      context: ./nextjs
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3015:3000"
+
+  phoenix:
+    build:
+      context: ./phoenix
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3016:3000"
+
+  poem:
+    build:
+      context: ./poem
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3017:3000"
+
+  quarkus:
+    build:
+      context: ./quarkus
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3018:3000"
+
+  rails:
+    build:
+      context: ./rails
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3019:3000"
+
+  rocket:
+    build:
+      context: ./rocket
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3020:3000"
+
+  rullst:
+    build:
+      context: ..
+      dockerfile: benchmark/rullst/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3021:3000"
+
+  salvo:
+    build:
+      context: ./salvo
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3022:3000"
+
+  springboot:
+    build:
+      context: ./springboot
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3023:3000"
+
+  symfony:
+    build:
+      context: ./symfony
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3024:3000"
+
+  warp:
+    build:
+      context: ./warp
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/bench
+      - PORT=3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3025:3000"
