@@ -8,7 +8,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](#)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-black.svg)](#)
 
-> 🌟 **[View the Interactive Web Dashboard](https://your-github-username.github.io/Benchmarks/)**
+> 🌟 **[View the Interactive Web Dashboard](https://rullst.github.io/Benchmarks/)**
 > 📊 **[View the Full Benchmark Results Table](./benchmarks_results.md)**
 
 *Rullst is built to give you the extreme productivity of full-stack frameworks combined with the memory safety and blistering high throughput of Rust.*

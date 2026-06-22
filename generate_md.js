@@ -4,11 +4,13 @@ const data = JSON.parse(fs.readFileSync('dashboard/src/data.json', 'utf8'));
 
 // Calculate Efficiency
 data.forEach(fw => {
-  let ramMB = 1;
-  if (fw.peakRam.includes("MiB")) ramMB = parseFloat(fw.peakRam);
-  if (fw.peakRam.includes("GiB")) ramMB = parseFloat(fw.peakRam) * 1024;
-  if (ramMB === 0 || isNaN(ramMB)) ramMB = 9999;
-  fw.efficiencyScore = Math.round(fw.jsonRps / ramMB);
+  if (fw.status === 'Failed') {
+    fw.efficiencyScore = 0;
+  } else {
+    let ramMB = parseFloat(fw.peakRam) || 1;
+    if (fw.peakRam.includes("GiB")) ramMB *= 1024;
+    fw.efficiencyScore = Math.round(fw.jsonRps / ramMB);
+  }
 });
 
 // Sort by Efficiency descending
@@ -17,7 +19,7 @@ data.sort((a, b) => b.efficiencyScore - a.efficiencyScore);
 let md = `# 🏆 Rullst Benchmarks 2026: The Ultimate Results
 
 > **Last Updated:** June 22, 2026
-> **Interactive Dashboard:** [View Web Dashboard](https://your-github-username.github.io/Benchmarks/)
+> **Interactive Dashboard:** [View Web Dashboard](https://rullst.github.io/Benchmarks/)
 
 Welcome to the consolidated, high-performance benchmarking results. We pit **23 modern web frameworks** against each other in a rigorous, containerized 4-tier stress test.
 
@@ -44,6 +46,10 @@ data.forEach((fw, index) => {
 });
 
 md += `
+
+> [!WARNING]
+> **Why do some frameworks Fail?**
+> Frameworks that show a **Failed** status (like Laravel) collapsed during the *Tier 4 Stress Test* (500 concurrent connections for 2 minutes). While they may achieve high RPS in short 10-second bursts, their underlying worker architecture or garbage collection could not sustain a prolonged heavy load without crashing or running out of memory.
 
 ---
 

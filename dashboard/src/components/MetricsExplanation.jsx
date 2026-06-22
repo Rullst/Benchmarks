@@ -6,7 +6,9 @@ export function MetricsExplanation() {
     <section className="glass-panel metrics-section animate-fade-in delay-2">
       <div className="metrics-header">
         <h2>What Do These Metrics Mean?</h2>
-        <p>Understanding the numbers behind the ranking.</p>
+        <p>
+          <strong>How the Ranking Works:</strong> Frameworks are sorted by their <strong>Efficiency Score</strong>, which is calculated by dividing their <em>JSON Requests Per Second</em> by their <em>Peak RAM</em> in Megabytes. This means the highest-ranked frameworks are those that serve the most traffic while consuming the least amount of memory. Frameworks that fail the Stress Test receive a score of 0.
+        </p>
       </div>
 
       <div className="metrics-grid">
