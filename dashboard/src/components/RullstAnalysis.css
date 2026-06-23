@@ -42,8 +42,8 @@
   border-top: 3px solid #10b981;
 }
 
-.trade-card {
-  border-top: 3px solid #f59e0b;
+.ai-card {
+  border-top: 3px solid #8b5cf6;
 }
 
 .icon {
@@ -79,11 +79,11 @@
   font-weight: bold;
 }
 
-.trade-card .analysis-list li::before {
-  content: "⚠";
+.ai-card .analysis-list li::before {
+  content: "✨";
   position: absolute;
   left: 0;
-  color: #f59e0b;
+  color: #8b5cf6;
   font-weight: bold;
 }
 

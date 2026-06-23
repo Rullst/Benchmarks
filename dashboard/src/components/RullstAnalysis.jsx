@@ -26,18 +26,18 @@ export function RullstAnalysis() {
           </ul>
         </div>
 
-        <div className="analysis-card trade-card">
-          <div className="icon">⚖️</div>
-          <h3>Trade-offs & Challenges</h3>
+        <div className="analysis-card ai-card">
+          <div className="icon">🤖</div>
+          <h3>AI-First & Modern Features</h3>
           <ul className="analysis-list">
             <li>
-              <strong>Ecosystem Maturity:</strong> Unlike Spring Boot or Next.js, Rullst's ecosystem is still nascent. You might need to write custom middleware for edge cases.
+              <strong>AI-First Architecture:</strong> Rullst is fundamentally designed for the AI era. It natively supports deep integration with LLMs and AI agents to write, refactor, and maintain your codebase seamlessly.
             </li>
             <li>
-              <strong>Learning Curve:</strong> Adopting Rullst requires understanding Rust's ownership model, which can be challenging for teams migrating from Python or JavaScript.
+              <strong>Memory Safety:</strong> Leveraging Rust's absolute ownership model, Rullst completely eliminates entire classes of bugs (like null pointer dereferences and data races) at compile-time.
             </li>
             <li>
-              <strong>Compilation Times:</strong> Building the project from scratch (especially with SQLx macros) takes significantly longer than hot-reloading in Next.js.
+              <strong>Uncompromising Ergonomics:</strong> Despite being a powerhouse, it prioritizes a gorgeous Developer Experience. You get lightning-fast speeds without fighting the compiler, allowing for rapid iteration.
             </li>
           </ul>
         </div>
