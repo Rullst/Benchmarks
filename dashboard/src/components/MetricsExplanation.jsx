@@ -41,6 +41,12 @@ export function MetricsExplanation() {
           <h4>Status</h4>
           <p><strong>Resilience (Tier 4):</strong> Did the framework survive the 2-minute marathon with 500 connections? "Passed" means no memory leaks or crashes.</p>
         </div>
+
+        <div className="metric-card">
+          <span className="metric-icon">⭐</span>
+          <h4>Star Rating</h4>
+          <p><strong>Raw Speed Tier:</strong> 5 Stars for Elite throughput (&gt;80k RPS), 4 Stars for High, and 3 for Standard. <br/><br/><em>Note: A framework can earn 5 stars for being incredibly fast, but still get a "Failed" status if its architecture breaks under heavy pressure!</em></p>
+        </div>
       </div>
     </section>
   );
