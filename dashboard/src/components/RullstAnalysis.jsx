@@ -37,7 +37,7 @@ export function RullstAnalysis() {
               <strong>Memory Safety:</strong> Leveraging Rust's absolute ownership model, Rullst completely eliminates entire classes of bugs (like null pointer dereferences and data races) at compile-time.
             </li>
             <li>
-              <strong>Uncompromising Ergonomics:</strong> Despite being a powerhouse, it prioritizes a gorgeous Developer Experience. You get lightning-fast speeds without fighting the compiler, allowing for rapid iteration.
+              <strong>Zero-Cost Abstractions:</strong> Rullst provides expressive, high-level web components that compile down to blazing-fast, optimal machine code without adding any runtime overhead.
             </li>
           </ul>
         </div>
