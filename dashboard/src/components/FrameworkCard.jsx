@@ -1,7 +1,7 @@
 import React from 'react';
 import './FrameworkCard.css';
 
-export function FrameworkCard({ rank, name, language, jsonRps, dbRps, latency, peakRam, efficiencyScore, stars, highlight, status }) {
+export function FrameworkCard({ rank, name, language, version, jsonRps, dbRps, latency, peakRam, efficiencyScore, stars, highlight, status }) {
   const renderStars = () => {
     return Array.from({ length: 5 }).map((_, i) => (
       <span key={i} className={`star ${i < stars ? 'filled' : 'empty'}`}>★</span>
@@ -15,7 +15,10 @@ export function FrameworkCard({ rank, name, language, jsonRps, dbRps, latency, p
           <span className="rank-badge">#{rank}</span>
           <h3>{name}</h3>
         </div>
-        <span className="language-badge">{language}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+          <span className="language-badge">{language}</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>v{version}</span>
+        </div>
       </div>
       
       {highlight && <div className="highlight-badge">{highlight}</div>}

@@ -48,8 +48,10 @@ data.forEach((fw, index) => {
 md += `
 
 > [!WARNING]
-> **Why do some frameworks Fail?**
-> Frameworks that show a **Failed** status (like Laravel) collapsed during the *Tier 4 Stress Test* (500 concurrent connections for 2 minutes). While they may achieve high RPS in short 10-second bursts, their underlying worker architecture or garbage collection could not sustain a prolonged heavy load without crashing or running out of memory.
+> **Why is my favorite framework ranked last with 0 points?**
+> If a framework has ❌ Failed status, it means it failed the **Tier 4 Stress Test** (500 concurrent connections for 2 minutes) by returning \`connection refused\` or \`timeout\` errors. 
+> Some frameworks (like synchronous Python or PHP setups) may also experience catastrophic latency degradation (measured in minutes instead of milliseconds) before eventually timing out.
+> Frameworks that drop connections or crash under extreme concurrency are automatically disqualified from the efficiency ranking to ensure we only reward truly resilient architectures.
 
 ---
 

@@ -48,12 +48,15 @@ function App() {
 
       <MetricsExplanation />
 
-      <div className="glass-panel" style={{ marginTop: '2rem', padding: '1.5rem', borderLeft: '4px solid #ef4444', backgroundColor: 'rgba(239, 68, 68, 0.05)' }}>
-        <h3 style={{ color: '#ef4444', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          ⚠️ About "Failed" Frameworks
+      <div className="glass-panel" style={{ marginTop: '2rem', padding: '1.5rem', borderLeft: '4px solid #3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.05)' }}>
+        <h3 style={{ color: '#3b82f6', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          💡 Why do famous frameworks "Fail" this benchmark? Are they bad?
         </h3>
+        <p style={{ color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '1rem' }}>
+          Absolutely not! Frameworks like <strong>Django, Laravel, and Express</strong> power some of the largest companies in the world (Instagram, Spotify, Netflix). The reason they "fail" our extreme Tier 4 stress test is because their default architectures (single-threaded Node.js, synchronous blocking Python/PHP workers) are not built to hold hundreds of long-lived, concurrent connections on a single machine out-of-the-box.
+        </p>
         <p style={{ color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-          Frameworks that show a <strong>Failed</strong> status (like Laravel or Next.js) usually collapsed during the <strong>Tier 4 Stress Test</strong> (500 concurrent connections for 2 minutes). While they may achieve high Request-Per-Second numbers in short bursts, their underlying worker architecture or garbage collection could not sustain a prolonged heavy load without crashing the container or leaking memory.
+          In the real world, big tech companies resolve this by spending heavily on <strong>Horizontal Scaling</strong> (hundreds of servers), Load Balancers, and advanced Caching. However, frameworks built with <strong>Rust (like Rullst) or Go</strong> utilize asynchronous event loops and micro-threads (goroutines) natively. This allows them to juggle thousands of connections simultaneously on a cheap, $5/month server with almost zero RAM penalty, resulting in significantly lower cloud costs and rock-solid resilience.
         </p>
       </div>
 
@@ -64,6 +67,7 @@ function App() {
             rank={index + 1}
             name={fw.name}
             language={fw.language}
+            version={fw.version}
             jsonRps={fw.jsonRps}
             dbRps={fw.dbRps}
             latency={fw.latency}

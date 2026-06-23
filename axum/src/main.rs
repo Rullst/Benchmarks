@@ -103,7 +103,8 @@ async fn main() {
     let state = Arc::new(AppState { db: pool });
     let app = app_router(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
-    println!("Axum listening on 0.0.0.0:8000");
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
+    println!("Axum listening on 0.0.0.0:{}", port);
     axum::serve(listener, app).await.unwrap();
 }

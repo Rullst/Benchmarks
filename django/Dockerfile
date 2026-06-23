@@ -14,5 +14,5 @@ COPY . .
 # According to tech empower, gunicorn + meinheld or uvloop is best. We'll use gunicorn + gevent or standard workers.
 RUN pip install gunicorn gevent
 
-CMD ["gunicorn", "django_bench.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--worker-class", "gevent"]
-EXPOSE 8000
+CMD ["gunicorn", "django_bench.wsgi:application", "--bind", "0.0.0.0:3000", "--workers", "4", "--worker-class", "gevent"]
+EXPOSE 3000

@@ -14,6 +14,6 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/benchmark-go-gin .
 
-EXPOSE 8080
+EXPOSE 3000
 
 CMD ["./benchmark-go-gin"]

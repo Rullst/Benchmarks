@@ -13,34 +13,36 @@ In modern cloud environments, pure speed means nothing if it costs thousands of 
 
 | 🏆 Rank | Framework | Language | Efficiency (RPS/MB) | JSON RPS | DB Single RPS | Avg Latency | Peak RAM | Status |
 |:---:|---|---|---:|---:|---:|---:|---:|:---:|
-| 🥇 1st | Poem | Rust | **4.654** | 107.099,23 | 12.711,57 | 2.75ms | 23.01MiB | ✅ Passed |
-| 🥈 2nd | Salvo | Rust | **4.497** | 99.028,92 | 8.296,87 | 2.92ms | 22.02MiB | ✅ Passed |
-| 🥉 3rd | Go-Fiber | Go | **4.407** | 102.904,17 | 16.021,92 | 2.66ms | 23.35MiB | ✅ Passed |
-| 4 | **Rullst** 👑 | Rust | **3.921** | 79.602,8 | 14.324,03 | 3.37ms | 20.3MiB | ✅ Passed |
-| 5 | Leptos | Rust | **3.794** | 99.700,15 | 10.316,37 | 2.57ms | 26.28MiB | ✅ Passed |
-| 6 | Dioxus | Rust | **3.452** | 88.542,41 | 9.523,73 | 2.70ms | 25.65MiB | ✅ Passed |
-| 7 | Go-Gin | Go | **2.863** | 69.575,28 | 21.474,06 | 3.73ms | 24.3MiB | ✅ Passed |
-| 8 | ASP.NET Core | C# | **706** | 81.610,33 | 11.908,18 | 3.44ms | 115.6MiB | ✅ Passed |
-| 9 | Phoenix | Elixir | **67** | 14.801,11 | 2.480,69 | 15.84ms | 220MiB | ✅ Passed |
-| 10 | Ruby on Rails | Ruby | **3** | 286,87 | 134,44 | 1.00s | 100.1MiB | ✅ Passed |
-| 11 | Actix-Web | Rust | **0** | 79.844,83 | 77.687,94 | 3.76ms | 2.402MiB | ❌ Failed |
-| 12 | Axum | Rust | **0** | 89.406 | 101.950,26 | 2.95ms | 1.59MiB | ❌ Failed |
-| 13 | Django | Python | **0** | 106.248,37 | 103.591,46 | 2.63ms | 123.7MiB | ❌ Failed |
-| 14 | Express | Node.js | **0** | 2.216,46 | 590,25 | 140.71ms | 97.55MiB | ❌ Failed |
-| 15 | FastAPI | Python | **0** | 107.841,78 | 100.160,49 | 3.06ms | 240.4MiB | ❌ Failed |
-| 16 | Fastify | Node.js | **0** | 8.642,38 | 755,57 | 32.28ms | 89.92MiB | ❌ Failed |
-| 17 | Hono | TypeScript | **0** | 4.202,99 | 557,18 | 63.43ms | 87.75MiB | ❌ Failed |
-| 18 | Laravel | PHP | **0** | 120.191,43 | 126.516,48 | 2.19ms | 0B | ❌ Failed |
-| 19 | NestJS | Node.js | **0** | 2.461,05 | 689,01 | 121.79ms | 146.7MiB | ❌ Failed |
-| 20 | Next.js | TypeScript | **0** | 505,66 | 335,9 | 719.64ms | 124.1MiB | ❌ Failed |
-| 21 | Quarkus | Java | **0** | 99.240,5 | 97.228,41 | 2.99ms | 209.4MiB | ❌ Failed |
-| 22 | Spring Boot | Java | **0** | 99.507,43 | 96.305,4 | 2.96ms | 304.2MiB | ❌ Failed |
-| 23 | Symfony | PHP | **0** | 82.987,04 | 88.186,31 | 3.80ms | 66.91MiB | ❌ Failed |
+| 🥇 1st | Actix-Web | Rust | **6.778** | 128.654,31 | 12.366,9 | 2.34ms | 18.98MiB | ✅ Passed |
+| 🥈 2nd | Axum | Rust | **4.580** | 100.620,33 | 18.033,16 | 2.61ms | 21.97MiB | ✅ Passed |
+| 🥉 3rd | Poem | Rust | **4.346** | 98.795,48 | 12.405,22 | 2.68ms | 22.73MiB | ✅ Passed |
+| 4 | **Rullst** 👑 | Rust | **4.344** | 90.485,67 | 16.186,7 | 3.14ms | 20.83MiB | ✅ Passed |
+| 5 | Salvo | Rust | **4.141** | 92.218,37 | 7.465,66 | 2.96ms | 22.27MiB | ✅ Passed |
+| 6 | Go-Fiber | Go | **4.032** | 99.803,89 | 16.026,64 | 2.68ms | 24.75MiB | ✅ Passed |
+| 7 | Dioxus | Rust | **3.448** | 87.638,05 | 9.431,99 | 2.79ms | 25.42MiB | ✅ Passed |
+| 8 | Leptos | Rust | **3.024** | 77.135,01 | 8.009 | 2.94ms | 25.51MiB | ✅ Passed |
+| 9 | Go-Gin | Go | **2.898** | 70.219,4 | 13.627,19 | 4.14ms | 24.23MiB | ✅ Passed |
+| 10 | ASP.NET Core | C# | **718** | 75.723,47 | 11.181,52 | 3.63ms | 105.5MiB | ✅ Passed |
+| 11 | Phoenix | Elixir | **73** | 16.243,87 | 2.400,09 | 15.82ms | 223.4MiB | ✅ Passed |
+| 12 | Quarkus | Java | **62** | 27.789,39 | 2.867,81 | 4.49ms | 449.6MiB | ✅ Passed |
+| 13 | FastAPI | Python | **27** | 7.568,21 | 2,49 | 48.12ms | 282MiB | ✅ Passed |
+| 14 | Spring Boot | Java | **15** | 7.648,31 | 260,65 | 11.98ms | 508.4MiB | ✅ Passed |
+| 15 | Ruby on Rails | Ruby | **3** | 298,56 | 144,6 | 0.99s | 100.3MiB | ✅ Passed |
+| 16 | Django | Python | **0** | 4.733,45 | 3,82 | 1.26m | 139.3MiB | ❌ Failed |
+| 17 | Express | Node.js | **0** | 3.804,97 | 1.051,43 | 86.05ms | 101.1MiB | ❌ Failed |
+| 18 | Fastify | Node.js | **0** | 11.544,78 | 1.364,58 | 26.11ms | 92.84MiB | ❌ Failed |
+| 19 | Hono | TypeScript | **0** | 7.959,06 | 898,71 | 42.63ms | 88.43MiB | ❌ Failed |
+| 20 | Laravel | PHP | **0** | 97.957,06 | 82.542,81 | 3.37ms | 0B | ❌ Failed |
+| 21 | NestJS | Node.js | **0** | 2.855,24 | 857,72 | 109.53ms | 120.2MiB | ❌ Failed |
+| 22 | Next.js | TypeScript | **0** | 510,52 | 358,1 | 677.85ms | 129.8MiB | ❌ Failed |
+| 23 | Symfony | PHP | **0** | 102.008,3 | 102.971,02 | 3.25ms | 70.17MiB | ❌ Failed |
 
 
 > [!WARNING]
-> **Why do some frameworks Fail?**
-> Frameworks that show a **Failed** status (like Laravel) collapsed during the *Tier 4 Stress Test* (500 concurrent connections for 2 minutes). While they may achieve high RPS in short 10-second bursts, their underlying worker architecture or garbage collection could not sustain a prolonged heavy load without crashing or running out of memory.
+> **Why is my favorite framework ranked last with 0 points?**
+> If a framework has ❌ Failed status, it means it failed the **Tier 4 Stress Test** (500 concurrent connections for 2 minutes) by returning `connection refused` or `timeout` errors. 
+> Some frameworks (like synchronous Python or PHP setups) may also experience catastrophic latency degradation (measured in minutes instead of milliseconds) before eventually timing out.
+> Frameworks that drop connections or crash under extreme concurrency are automatically disqualified from the efficiency ranking to ensure we only reward truly resilient architectures.
 
 ---
 

@@ -21,6 +21,6 @@ RUN echo "opcache.enable=1" >> $PHP_INI_DIR/conf.d/docker-php-ext-opcache.ini &&
     echo "opcache.preload_user=root" >> $PHP_INI_DIR/conf.d/docker-php-ext-opcache.ini
 
 # Start frankenphp as worker for best perf
-ENV SERVER_NAME=":8000"
+ENV SERVER_NAME=":3000"
 CMD ["frankenphp", "php-server", "-r", "public"]
-EXPOSE 8000
+EXPOSE 3000

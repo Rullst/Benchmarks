@@ -34,13 +34,14 @@ async fn main() -> std::io::Result<()> {
 
     let state = web::Data::new(AppState { db: pool });
 
-    println!("Actix-web listening on 0.0.0.0:8000");
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string()).parse::<u16>().unwrap();
+    println!("Actix-web listening on 0.0.0.0:{}", port);
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
             .configure(configure_app)
     })
-    .bind(("0.0.0.0", 8000))?
+    .bind(("0.0.0.0", port))?
     .run()
     .await
 }
