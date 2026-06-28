@@ -19,7 +19,7 @@
 
 ## 🎯 What is this?
 
-This repository contains a **comprehensive 4-tier benchmark suite** designed to rigorously evaluate the performance, resilience, and resource efficiency of **25 modern web frameworks** across multiple languages. 
+This repository contains a **comprehensive 4-tier benchmark suite** designed to rigorously evaluate the performance, resilience, and resource efficiency of **23 modern web frameworks** across multiple languages. 
 
 We don't just guess; we measure. 📊
 
