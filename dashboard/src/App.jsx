@@ -1,88 +1,127 @@
-import React, { useState, useEffect } from 'react';
-import { FrameworkCard } from './components/FrameworkCard';
-import { RullstAnalysis } from './components/RullstAnalysis';
-import { MetricsExplanation } from './components/MetricsExplanation';
-import { Methodology } from './components/Methodology';
-import resultsData from './data.json';
+import { useEffect, useState } from 'react';
+import { History } from './components/History';
+import { Implementations, NotMeasured, SummaryTable, TierTables } from './components/Tables';
+import { date, num } from './format';
+import './App.css';
 
-function App() {
-  const [results, setResults] = useState([]);
+const DATA = `${import.meta.env.BASE_URL}data/`;
+const REPO = 'https://github.com/Rullst/Benchmarks';
 
-  useEffect(() => {
-    // Parse Peak RAM to MB and calculate Efficiency Score (RPS / MB)
-    const processedData = resultsData.map(fw => {
-      if (fw.status === 'Failed') return { ...fw, efficiencyScore: 0 };
-      
-      let ramMB = parseFloat(fw.peakRam) || 1;
-      if (fw.peakRam.includes("GiB")) ramMB *= 1024;
+async function load(name) {
+  const response = await fetch(DATA + name, { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
+  return response.json();
+}
 
-      const efficiency = fw.jsonRps / ramMB;
-      return { ...fw, efficiencyScore: Math.round(efficiency) };
-    });
+// Backtick-quoted parts of a note render as code.
+function inlineCode(text) {
+  return text.split('`').map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part));
+}
 
-    // Sort by Efficiency Score descending as the true modern ranking metric
-    const sorted = processedData.sort((a, b) => b.efficiencyScore - a.efficiencyScore);
-    setResults(sorted);
-  }, []);
-
+function Notice({ data }) {
+  const env = data.environment ?? {};
   return (
-    <div className="container">
-      <header className="header animate-fade-in">
-        <h1>
-          Rullst <span className="text-gradient">Benchmarks</span>
-        </h1>
+    <section className="notice" aria-label="About these results">
+      <p>
+        Measured on <strong>{date(data.measured_from || data.generated_at)}</strong> with{' '}
+        <strong>Rullst {data.rullst_version || 'unknown'}</strong> on GitHub-hosted runners ({env.cpu_model ?? 'CPU unknown'},{' '}
+        {env.cpu_count} vCPUs, {num((env.memory_total_mib ?? 0) / 1024)} GiB RAM); each server was limited to 2 vCPUs
+        and 2 GiB. Values are medians of {data.run?.rounds} rounds.
+      </p>
+      <p>
+        &quot;vs Axum&quot; is the ratio to the Axum baseline measured in alternating rounds on the same runner, which
+        cancels most of the difference between runners: compare ratios rather than absolute numbers across runs.
+        &quot;client-bound&quot; means the load generator&apos;s vCPUs were saturated, so close results at the top are ties.
+      </p>
+      <p>
+        These results update automatically when a new Rullst version is published on crates.io. Last update:{' '}
+        <strong>{date(data.generated_at)}</strong>
+        {data.run?.url && (
+          <>
+            {' '}(<a href={data.run.url}>workflow run</a>)
+          </>
+        )}
+        .
+      </p>
+      {data.note && (
         <p>
-          A comprehensive performance analysis comparing Rullst against the industry's most popular web frameworks.
+          <strong>Note:</strong> {inlineCode(data.note)}
         </p>
-        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-          <a href="https://github.com/Rullst/Benchmarks/blob/main/benchmarks_results.md" target="_blank" rel="noreferrer" className="btn-primary">
-            📄 View Raw Data (Markdown)
-          </a>
-          <a href="https://github.com/Rullst/Benchmarks/" target="_blank" rel="noreferrer" className="btn-secondary">
-            ⭐ Star the Repo
-          </a>
-        </div>
-      </header>
-
-      <Methodology />
-
-      <MetricsExplanation />
-
-      <div className="glass-panel" style={{ marginTop: '2rem', padding: '1.5rem', borderLeft: '4px solid #3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.05)' }}>
-        <h3 style={{ color: '#3b82f6', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          💡 Why do famous frameworks "Fail" this benchmark? Are they bad?
-        </h3>
-        <p style={{ color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '1rem' }}>
-          Absolutely not! Frameworks like <strong>Django, Laravel, and Express</strong> power some of the largest companies in the world (Instagram, Spotify, Netflix). The reason they "fail" our extreme Tier 4 stress test is because their default architectures (single-threaded Node.js, synchronous blocking Python/PHP workers) are not built to hold hundreds of long-lived, concurrent connections on a single machine out-of-the-box.
-        </p>
-        <p style={{ color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-          In the real world, big tech companies resolve this by spending heavily on <strong>Horizontal Scaling</strong> (hundreds of servers), Load Balancers, and advanced Caching. However, frameworks built with <strong>Rust (like Rullst) or Go</strong> utilize asynchronous event loops and micro-threads (goroutines) natively. This allows them to juggle thousands of connections simultaneously on a cheap, $5/month server with almost zero RAM penalty, resulting in significantly lower cloud costs and rock-solid resilience.
-        </p>
-      </div>
-
-      <div className="framework-grid" style={{ marginTop: '3rem' }}>
-        {results.map((fw, index) => (
-          <FrameworkCard 
-            key={fw.name}
-            rank={index + 1}
-            name={fw.name}
-            language={fw.language}
-            version={fw.version}
-            jsonRps={fw.jsonRps}
-            dbRps={fw.dbRps}
-            latency={fw.latency}
-            peakRam={fw.peakRam}
-            efficiencyScore={fw.efficiencyScore}
-            stars={fw.stars}
-            highlight={fw.highlight}
-            status={fw.status}
-          />
-        ))}
-      </div>
-
-      <RullstAnalysis />
-    </div>
+      )}
+    </section>
   );
 }
 
-export default App;
+export default function App() {
+  const [state, setState] = useState({ status: 'loading' });
+
+  useEffect(() => {
+    Promise.all([load('latest.json'), load('versions.json')])
+      // `results` holds the measured implementations, `not_measured` the others
+      // (shape rullst.benchmarks.latest.v1, see the README).
+      .then(([data, index]) =>
+        setState({ status: 'ready', data, index, rows: [...(data.results ?? []), ...(data.not_measured ?? [])] }),
+      )
+      .catch((error) => setState({ status: 'empty', error: String(error) }));
+  }, []);
+
+  return (
+    <main className="container">
+      <header>
+        <h1>Rullst Benchmarks</h1>
+        <p className="lede">
+          HTTP benchmarks of Rullst and other web frameworks, measured by a GitHub Actions workflow that anyone can
+          rerun. Four endpoints (<code>/text</code>, <code>/json</code>, <code>/db-single</code>, <code>/html</code>),
+          four load tiers, conformance-checked responses.
+        </p>
+        <nav className="links">
+          <a href={`${REPO}#method`}>Method and limitations</a>
+          <a href={`${REPO}/blob/main/benchmarks_results.md`}>Results (Markdown)</a>
+          <a href={`${DATA}latest.json`}>latest.json</a>
+          <a href={REPO}>Source</a>
+        </nav>
+      </header>
+
+      {state.status === 'loading' && <p className="note">Loading results…</p>}
+      {state.status === 'empty' && (
+        <p className="note">
+          No results have been published yet. Results from before the suite was rebuilt are kept, for the record only, in{' '}
+          <a href={`${REPO}/blob/main/history/2026-06-22-laptop.md`}>the history folder</a>.
+        </p>
+      )}
+      {state.status === 'ready' && (
+        <>
+          <Notice data={state.data} />
+          <section>
+            <h2>Summary</h2>
+            <SummaryTable rows={state.rows} />
+            <NotMeasured rows={state.rows} />
+          </section>
+          <section>
+            <h2>Tiers</h2>
+            <TierTables data={state.data} rows={state.rows} />
+          </section>
+          <section>
+            <h2>Rullst across versions</h2>
+            <History index={state.index} />
+          </section>
+          <section>
+            <h2>Implementations</h2>
+            <p className="note">
+              Each folder under <a href={`${REPO}/tree/main/frameworks`}>frameworks/</a> has a README with its
+              configuration and the reasons for it.
+            </p>
+            <Implementations rows={state.rows} />
+          </section>
+        </>
+      )}
+      <footer>
+        <p>
+          Results published before the rebuild (22 June 2026, a laptop, not reproducible) are kept in{' '}
+          <a href={`${REPO}/blob/main/history/2026-06-22-laptop.md`}>history/2026-06-22-laptop.md</a>; they are not
+          comparable.
+        </p>
+      </footer>
+    </main>
+  );
+}

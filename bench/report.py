@@ -103,7 +103,8 @@ def notice(data: dict) -> str:
             "measured in alternating rounds on the same runner, which cancels most of the difference between "
             "runners; compare ratios rather than absolute numbers across runs. These results update "
             "automatically when a new Rullst version is published on crates.io. "
-            f"Last update: {data['generated_at'][:10]}.")
+            f"Last update: {data['generated_at'][:10]}."
+            + (f"\n>\n> **Note:** {data['note']}" if data.get("note") else ""))
 
 
 def summary_table(rows: list[dict]) -> str:

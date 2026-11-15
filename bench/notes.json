@@ -1,0 +1,4 @@
+{
+  "_comment": "A note shown on every results surface for one Rullst version. {slug:metric} is replaced by that implementation's median ratio to Axum.",
+  "13.0.0-alpha.5": "This measurement found a throughput problem in the production stack that `cargo rullst new` generates: Rullst as generated reached {rullst:tier1.json.rps}× Axum's requests/s on /json, while the minimal configuration reached {rullst-minimal:tier1.json.rps}×. A fix is planned for Rullst 13.0.0-alpha.6. These results update automatically when a new Rullst version is published."
+}
