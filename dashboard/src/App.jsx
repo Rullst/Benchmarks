@@ -95,6 +95,13 @@ export default function App() {
           <section>
             <h2>Summary</h2>
             <SummaryTable rows={state.rows} />
+            {state.rows
+              .filter((row) => row.excluded?.length)
+              .map((row) => (
+                <p key={row.slug} className="note">
+                  <strong>Correction, {row.name}:</strong> {row.problem} Left-out results are shown as –.
+                </p>
+              ))}
             <NotMeasured rows={state.rows} />
           </section>
           <section>

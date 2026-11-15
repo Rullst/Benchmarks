@@ -126,6 +126,11 @@ def summary_table(rows: list[dict]) -> str:
     return _table(header, lines)
 
 
+def _corrections(rows: list[dict]) -> str:
+    fixed = [r for r in rows if r.get("excluded")]
+    return "\n".join(f"- **{_label(r)}**: {r['problem']}" for r in fixed)
+
+
 def _not_measured(rows: list[dict]) -> str:
     failed = [r for r in rows if r["status"] not in ("measured", "crashed")]
     if not failed:
@@ -165,6 +170,8 @@ def render_results(data: dict) -> str:
                   f"{(env.get('load_generator') or {}).get('version')}. Full details per job are in "
                   "`results/raw/`.", ""]
     parts += ["## Summary", "", summary_table(rows), ""]
+    if _corrections(rows):
+        parts += ["Corrections (left-out results are shown as –):", "", _corrections(rows), ""]
 
     t1 = tiers.get("tier1", {})
     parts += [f"## Tier 1: {t1.get('connections')} connections, {t1.get('duration_s')} s per endpoint", ""]
@@ -233,6 +240,8 @@ def render_readme_table(data: dict) -> str:
              f"Source: {ref}. Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); "
              "dashboard: <https://rullst.win/Benchmarks/>.", "",
              summary_table(data["implementations"])]
+    if _corrections(data["implementations"]):
+        lines += ["", "Corrections (left-out results are shown as –):", "", _corrections(data["implementations"])]
     failed = [r for r in data["implementations"] if r["status"] not in ("measured", "crashed")]
     if failed:
         lines += ["", "Not measured in this run: " + ", ".join(f"{_label(r)} ({r['status']})" for r in failed) + "."]

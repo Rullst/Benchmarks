@@ -1,0 +1,9 @@
+{
+  "_comment": "Corrections to published results, by Rullst version and implementation: metric prefixes to leave out and the reason shown with the results. Applied by bench/aggregate.py.",
+  "13.0.0-alpha.5": {
+    "fastapi": {
+      "exclude": ["tier1.db-single"],
+      "problem": "/db-single is not measured in this run: under load every request timed out because of a defect in this implementation (the session dependency's cleanup waited for a thread-pool slot held by requests waiting for a database connection), so the number says nothing about FastAPI. Fixed in Rullst/Benchmarks#8; the next run (Rullst 13.0.0-alpha.6) measures it again."
+    }
+  }
+}

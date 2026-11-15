@@ -228,6 +228,22 @@ class AggregateTests(unittest.TestCase):
         self.assertIn("avg_latency_ms", rullst)
         self.assertNotIn("implementations", doc)
 
+    def test_corrections_leave_out_metrics(self):
+        combined = aggregate.combine([fake_job("fastapi", 1.0)], ["fastapi"])
+        row = next(r for r in combined["implementations"] if r["slug"] == "fastapi")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "corrections.json"
+            path.write_text('{"13.0.0-alpha.5": {"fastapi": {"exclude": ["tier1.db-single"], "problem": "broken"}}}')
+            aggregate.apply_corrections("13.0.0-alpha.5", [row], path)
+        self.assertNotIn("tier1.db-single.rps", row["metrics"])
+        self.assertIn("tier1.json.rps", row["metrics"])
+        self.assertNotIn("tier1.db-single.rps", row["ratios"])
+        self.assertEqual(row["problem"], "broken")
+        entry = next(r for r in aggregate.site_document(combined)["results"] if r["slug"] == "fastapi")
+        self.assertNotIn("db_single_rps", entry)
+        self.assertNotIn("db_single_rps", entry["vs_axum"])
+        self.assertIn("broken", report.render_results(combined))
+
     def test_version_note(self):
         rows = [{"slug": "rullst", "ratios": {"tier1.json.rps": {"median": 0.214}}}]
         with tempfile.TemporaryDirectory() as tmp:

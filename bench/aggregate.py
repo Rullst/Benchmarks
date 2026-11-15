@@ -201,6 +201,7 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
         if row["slug"] in RULLST_SLUGS and row["versions"].get("rullst"):
             rullst_version = row["versions"]["rullst"]
             break
+    apply_corrections(rullst_version, rows)
     note = version_note(rullst_version, rows)
     started = sorted(j.get("started_at", "") for j in jobs if j.get("started_at"))
     finished = sorted(j.get("finished_at", "") for j in jobs if j.get("finished_at"))
@@ -226,6 +227,29 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
 
 
 NOTES = Path(__file__).resolve().parent / "notes.json"
+CORRECTIONS = Path(__file__).resolve().parent / "corrections.json"
+
+
+def apply_corrections(version: str, rows: list[dict], path: Path = CORRECTIONS) -> None:
+    """Leave out metrics that bench/corrections.json marks as invalid for this version."""
+    corrections = json.loads(path.read_text()).get(version, {}) if path.is_file() else {}
+    for row in rows:
+        fix = corrections.get(row["slug"])
+        if not fix:
+            continue
+        prefixes = fix.get("exclude", [])
+
+        def kept(key: str) -> bool:
+            return not any(key == p or key.startswith(p + ".") for p in prefixes)
+
+        row["metrics"] = {k: v for k, v in row["metrics"].items() if kept(k)}
+        row["ratios"] = {k: v for k, v in row["ratios"].items() if kept(k)}
+        bound = row.get("flags", {}).get("client_bound_rounds")
+        if bound:
+            # A copy: row["flags"] is the job's own summary, written back to results/raw.
+            row["flags"] = dict(row["flags"], client_bound_rounds={k: v for k, v in bound.items() if kept(k)})
+        row["excluded"] = prefixes
+        row["problem"] = fix.get("problem", "")
 
 
 def version_note(version: str, rows: list[dict], notes_path: Path = NOTES) -> str:

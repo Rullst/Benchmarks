@@ -33,9 +33,13 @@ Runner: INTEL(R) XEON(R) PLATINUM 8573C (4 vCPUs), 15.6 GiB RAM, Ubuntu 26.04.1 
 | Phoenix | 1.8.16 | Elixir | 26,831 | 0.17 | 12,930 | 0.88 | 20,294 | 13.39 | 135.9 | 153.7 | 0 | 174.6 |
 | Ruby on Rails | 8.1.4.1 | Ruby | 1,682 | 0.02 | 1,441 | 0.14 | 1,511 | 416.58 | 102.5 | 369.3 | 0 | 4.6 |
 | Spring Boot | 4.1.2 | Java | 32,571 | 0.21 | 8,965 | 0.59 | 16,279 | 12.49 | 213.9 | 377.2 | 0 | 86.3 |
-| FastAPI | 0.163.0 | Python | 17,577 | 0.07 | 0 | 0.00 | 14,292 | 20.09 | 167.7 | 225.2 | 0 | 78.1 |
+| FastAPI | 0.163.0 | Python | 17,577 | 0.07 | – | – | 14,292 | 20.09 | 167.7 | 225.2 | 0 | 78.1 |
 | Fastify | 5.12.8 | JavaScript | 154,630 | 0.59 | 22,840 | 0.78 | 117,739 | 3.16 | 72.8 | 165.0 | 0 | 937.1 |
 | Gin | 1.12.0 | Go | 78,542 | 0.51 | 19,765 | 1.32 | 76,162 | 9.50 | 3.5 | 19.8 | 0 | 3,966.8 |
+
+Corrections (left-out results are shown as –):
+
+- **FastAPI**: /db-single is not measured in this run: under load every request timed out because of a defect in this implementation (the session dependency's cleanup waited for a thread-pool slot held by requests waiting for a database connection), so the number says nothing about FastAPI. Fixed in Rullst/Benchmarks#8; the next run (Rullst 13.0.0-alpha.6) measures it again.
 
 ## Tier 1: 125 connections, 10 s per endpoint
 
@@ -98,7 +102,7 @@ Runner: INTEL(R) XEON(R) PLATINUM 8573C (4 vCPUs), 15.6 GiB RAM, Ubuntu 26.04.1 
 | Phoenix | 12,930 (12,754–13,596) | 0.88 | 9.58 | 11.41 | 0 | 2.00 |  |
 | Ruby on Rails | 1,441 (1,418–1,457) | 0.14 | 77.48 | 225.08 | 0 | 2.00 |  |
 | Spring Boot | 8,965 (8,554–9,159) | 0.59 | 4.69 | 83.47 | 0 | 2.00 |  |
-| FastAPI | 0 (0–0) | 0.00 | 25,007.99 | 25,010.23 | 100.00% | 0.03 |  |
+| FastAPI | – | – | – | – | – | – |  |
 | Fastify | 22,840 (22,812–23,129) | 0.78 | 5.36 | 8.68 | 0 | 1.11 | client-bound 5/5 |
 | Gin | 19,765 (19,676–19,806) | 1.32 | 4.68 | 25.74 | 0 | 1.48 | client-bound 5/5 |
 
