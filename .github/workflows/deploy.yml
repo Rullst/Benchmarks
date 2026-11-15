@@ -1,4 +1,12 @@
-name: Deploy Dashboard to GitHub Pages
+name: Deploy dashboard
+
+# Builds the dashboard and publishes it with the results data to GitHub Pages:
+#   https://rullst.win/Benchmarks/                       dashboard
+#   https://rullst.win/Benchmarks/data/latest.json       newest published results
+#   https://rullst.win/Benchmarks/data/versions.json     index of measured Rullst versions
+#   https://rullst.win/Benchmarks/data/rullst/<v>.json   results for one Rullst version
+# The benchmark workflow starts this workflow after it commits new results
+# (pushes made with GITHUB_TOKEN do not trigger `push` workflows).
 
 on:
   push:
@@ -7,45 +15,53 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./dashboard
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: './dashboard/package-lock.json'
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ./dashboard/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Copy the results data
+        run: |
+          mkdir -p public/data
+          if [ -f ../results/latest.json ]; then
+            cp ../results/latest.json ../results/versions.json public/data/
+            cp -R ../results/rullst public/data/rullst
+          fi
       - name: Build
         run: npm run build
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ./dashboard/dist
 
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    needs: build
-    runs-on: ubuntu-latest
-    name: Deploy
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

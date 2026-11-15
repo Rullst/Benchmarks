@@ -1,0 +1,18 @@
+[package]
+name = "actix-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+actix-web = "4.19"
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
+askama = "0.16"
+
+# The same release profile for every Rust implementation (the one
+# `cargo rullst new` generates), so compiler settings are not a variable.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
