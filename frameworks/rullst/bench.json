@@ -1,0 +1,20 @@
+{
+  "name": "Rullst",
+  "variant": "as generated",
+  "language": "Rust",
+  "group": "rust",
+  "framework": "rullst",
+  "framework_version": "13.0.0-alpha.5",
+  "version_package": "rullst",
+  "runtime": "Rust 1.99.1 (release build, thin LTO)",
+  "server": "rullst::Server (production stack)",
+  "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
+  "database_layer": "rullst-orm (#[derive(Orm)], SQLx PostgreSQL pool)",
+  "template_engine": "html! macro",
+  "logging": "Rullst's access log (one stdout line per request; Server has no switch to turn it off)",
+  "build_args_from_env": [
+    "RULLST_VERSION"
+  ],
+  "startup_timeout_s": 120,
+  "notes": "Router, layers and production settings as cargo rullst new and cargo rullst deploy generate them."
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Axum",
+  "language": "Rust",
+  "group": "rust",
+  "framework": "axum",
+  "framework_version": "0.8.9",
+  "version_package": "axum",
+  "runtime": "Rust 1.99.1 (release build, thin LTO)",
+  "server": "Hyper via axum::serve",
+  "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
+  "database_layer": "SQLx 0.9 (Axum has no ORM; its examples use SQLx)",
+  "template_engine": "Askama 0.16",
+  "logging": "none",
+  "startup_timeout_s": 120,
+  "notes": "Baseline: every job measures it on the same runner as the framework under test."
+}

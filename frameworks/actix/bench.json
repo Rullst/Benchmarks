@@ -1,0 +1,15 @@
+{
+  "name": "Actix Web",
+  "language": "Rust",
+  "group": "rust",
+  "framework": "actix-web",
+  "framework_version": "4.19.0",
+  "version_package": "actix-web",
+  "runtime": "Rust 1.99.1 (release build, thin LTO)",
+  "server": "actix-web HttpServer",
+  "workers": "Default: one worker per available CPU (2)",
+  "database_layer": "SQLx 0.9 (Actix Web has no ORM)",
+  "template_engine": "Askama 0.16",
+  "logging": "none",
+  "startup_timeout_s": 120
+}

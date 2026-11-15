@@ -1,4 +1,8 @@
-rails/vendor/
-phoenix/deps/
-phoenix/_build/
-results/
+# Harness output (the Benchmark workflow publishes results/ itself)
+job-results/
+out/
+report.md
+__pycache__/
+*.pyc
+# Rust build output
+target/

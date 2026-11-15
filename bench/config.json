@@ -1,0 +1,41 @@
+{
+  "baseline": "axum",
+  "server": {
+    "port": 8080,
+    "cpus": 2,
+    "memory": "2g",
+    "pool_size": 16,
+    "settle_s": 5,
+    "cooldown_s": 2,
+    "recovery_s": 10
+  },
+  "min_runner_cpus": 4,
+  "load_generator": {
+    "name": "bombardier",
+    "version": "2.0.2",
+    "url": "https://github.com/codesenberg/bombardier/releases/download/v2.0.2/bombardier-linux-amd64",
+    "sha256": "d3dc4a9ecec3f8bd43f8c196ad533cb4b79ca55b11fc74c3184231e00a95bc0b",
+    "client": "fasthttp",
+    "timeout_s": 5,
+    "saturation_threshold": 0.9
+  },
+  "database": {
+    "image": "postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b",
+    "user": "bench",
+    "password": "bench",
+    "name": "bench",
+    "port": 5432,
+    "max_connections": 200,
+    "rows": 10000,
+    "row_id": 1
+  },
+  "sampling_interval_s": 0.1,
+  "warmup": {"connections": 125, "duration_s": 5},
+  "tiers": {
+    "tier1": {"connections": 125, "duration_s": 10, "endpoints": ["text", "json", "db-single", "html"]},
+    "tier2": {"connections": 300, "duration_s": 30, "endpoint": "json"},
+    "tier3": {"connections": 200, "duration_s": 15, "endpoint": "json", "idle_s": 10},
+    "tier4": {"connections": 500, "duration_s": 120, "endpoint": "json"}
+  },
+  "leak": {"min_growth_mib": 8, "min_growth_ratio": 0.1}
+}

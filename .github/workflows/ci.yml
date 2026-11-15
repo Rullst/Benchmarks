@@ -1,0 +1,72 @@
+name: CI
+
+# Fast checks for every pull request, plus a conformance check (build the
+# image, start PostgreSQL, check the four endpoints) of each framework folder
+# the pull request changes.
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      changed: ${{ steps.changed.outputs.frameworks }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Unit tests
+        run: python3 -m unittest discover -s bench/tests -v
+      - name: Validate framework folders
+        run: python3 bench/harness.py validate
+      - name: Changed framework folders
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          changed='[]'
+          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            changed="$(git diff --name-only "$BASE_SHA"...HEAD -- frameworks | cut -d/ -f2 | sort -u \
+              | while read -r slug; do [ -f "frameworks/$slug/bench.json" ] && echo "$slug"; done \
+              | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')"
+          fi
+          echo "frameworks=$changed" >> "$GITHUB_OUTPUT"
+          echo "changed: $changed"
+
+  conformance:
+    needs: harness
+    if: github.event_name == 'pull_request' && needs.harness.outputs.changed != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        framework: ${{ fromJson(needs.harness.outputs.changed) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and check ${{ matrix.framework }}
+        env:
+          FRAMEWORK: ${{ matrix.framework }}
+        run: python3 bench/harness.py conformance --framework "$FRAMEWORK" --out "conformance-$FRAMEWORK.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: conformance-${{ matrix.framework }}
+          path: conformance-*.json
+          if-no-files-found: ignore

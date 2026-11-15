@@ -1,0 +1,20 @@
+{
+  "name": "Rullst",
+  "variant": "minimal",
+  "language": "Rust",
+  "group": "rust",
+  "framework": "rullst",
+  "framework_version": "13.0.0-alpha.5",
+  "version_package": "rullst",
+  "runtime": "Rust 1.99.1 (release build, thin LTO)",
+  "server": "Hyper via axum::serve (no rullst::Server)",
+  "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
+  "database_layer": "rullst-orm (#[derive(Orm)], SQLx PostgreSQL pool)",
+  "template_engine": "html! macro",
+  "logging": "none",
+  "build_args_from_env": [
+    "RULLST_VERSION"
+  ],
+  "startup_timeout_s": 120,
+  "notes": "Rullst router, ORM and html! without the Server middleware stack; comparable to the Axum app."
+}
