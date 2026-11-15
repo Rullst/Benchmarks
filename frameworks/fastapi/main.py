@@ -7,9 +7,8 @@ one SQLModel engine, a session per request from a dependency, and a plain
 
 import os
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -42,13 +41,6 @@ POOL_SIZE = max(1, int(os.environ.get("DB_POOL_SIZE", "16")) // int(os.environ.g
 engine = create_engine(database_url(), pool_size=POOL_SIZE, max_overflow=0)
 
 
-def get_session():
-    with Session(engine) as session:
-        yield session
-
-
-SessionDep = Annotated[Session, Depends(get_session)]
-
 app = FastAPI()
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
@@ -64,8 +56,14 @@ async def json() -> Message:
 
 
 @app.get("/db-single")
-def db_single(session: SessionDep) -> WorldOut:
-    world = session.exec(select(World).where(World.id == 1)).one()
+def db_single() -> WorldOut:
+    # The session is opened and closed in the path operation's own thread. With
+    # the tutorial's `yield` dependency, the session's cleanup needs another
+    # thread-pool slot; under more concurrent requests than pool connections,
+    # every slot is taken by requests waiting for a connection and the cleanup
+    # that would return one never runs (all requests time out).
+    with Session(engine) as session:
+        world = session.exec(select(World).where(World.id == 1)).one()
     return WorldOut(id=world.id, randomNumber=world.randomnumber)
 
 
