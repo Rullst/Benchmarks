@@ -1,6 +1,7 @@
 {
   "name": "Rullst",
   "variant": "as generated",
+  "default_variant": true,
   "language": "Rust",
   "group": "rust",
   "framework": "rullst",

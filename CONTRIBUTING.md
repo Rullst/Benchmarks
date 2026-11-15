@@ -98,7 +98,8 @@ must build from the committed lockfile.
 ```
 
 `group` is `rust`, `full-stack` or `reference`. Optional fields: `variant`
-(a label when a framework has more than one implementation), `env` (extra
+(a label when a framework has more than one implementation), `default_variant`
+(`true` for the variant the published results name after the framework alone), `env` (extra
 environment variables for the container), `build_args_from_env` (environment
 variables passed to `docker build` as build arguments, such as
 `RULLST_VERSION`), `maturity_note` (shown with the results, for example for

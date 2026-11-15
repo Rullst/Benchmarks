@@ -15,7 +15,8 @@ from stats import get_path, ratio, summary, window_median
 # every metric except error counts and rates.
 METRICS = [
     *(f"tier1.{ep}.{m}" for ep in ("text", "json", "db-single", "html")
-      for m in ("rps", "latency_ms.p50", "latency_ms.p99", "error_rate", "server_cpu_cores")),
+      for m in ("rps", "latency_ms.mean", "latency_ms.p50", "latency_ms.p99", "error_rate",
+                "server_cpu_cores")),
     "tier2.rps", "tier2.latency_ms.p50", "tier2.latency_ms.p99", "tier2.error_rate", "tier2.timeouts",
     "tier3.idle_ram_mib", "tier3.idle_cpu_cores", "tier3.load_ram_peak_mib", "tier3.load_cpu_cores",
     "tier3.rps",
