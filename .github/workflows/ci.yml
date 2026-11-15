@@ -60,6 +60,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Export a regenerated lockfile
+        # A Dockerfile may have a `lockfile` stage that resolves the
+        # dependencies and writes the lockfile to /; its output is uploaded
+        # so ecosystems without a local toolchain can update their lockfile.
+        env:
+          FRAMEWORK: ${{ matrix.framework }}
+        run: |
+          if grep -qiE '^FROM .* AS lockfile$' "frameworks/$FRAMEWORK/Dockerfile"; then
+            docker build --target lockfile --output "type=local,dest=lockfiles/$FRAMEWORK" "frameworks/$FRAMEWORK"
+            ls -la "lockfiles/$FRAMEWORK"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lockfile-${{ matrix.framework }}
+          path: lockfiles/
+          if-no-files-found: ignore
       - name: Build and check ${{ matrix.framework }}
         env:
           FRAMEWORK: ${{ matrix.framework }}

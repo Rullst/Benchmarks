@@ -69,6 +69,14 @@ Use the framework's own production recommendations for everything else:
 The Dockerfile may write `name version` lines to `/bench/versions.txt` in the
 image; the results then show the resolved versions instead of the manifest's.
 
+If you cannot run the ecosystem's dependency resolver locally, give the
+Dockerfile a stage named `lockfile` (`FROM ... AS lockfile`) that resolves the
+dependencies and ends with the lockfile at `/` (for example
+`FROM scratch AS lockfile` + `COPY --from=resolve /app/Gemfile.lock /`). The
+pull request check builds that stage and uploads its output as the
+`lockfile-<name>` artifact; commit the file it contains. The image itself
+must build from the committed lockfile.
+
 ### bench.json
 
 ```json
