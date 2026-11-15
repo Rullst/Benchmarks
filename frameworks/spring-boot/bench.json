@@ -1,0 +1,15 @@
+{
+  "name": "Spring Boot",
+  "language": "Java",
+  "group": "full-stack",
+  "framework": "spring-boot",
+  "framework_version": "4.1.2",
+  "version_package": "spring-boot",
+  "runtime": "Java 25 (Eclipse Temurin 25.0.5 JRE), layered executable jar, no JVM flags",
+  "server": "Spring MVC on embedded Tomcat 11 (the starter's default)",
+  "workers": "Tomcat's default request thread pool (up to 200 threads); JVM ergonomics for 2 vCPUs and 2 GiB",
+  "database_layer": "Spring Data JPA (Hibernate 7.4), HikariCP pool of 16 connections",
+  "template_engine": "Thymeleaf 3.1",
+  "logging": "none per request (Tomcat's access log is off by default); start-up log at INFO",
+  "startup_timeout_s": 120
+}
