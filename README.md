@@ -231,6 +231,21 @@ empty. New fields may be added within schema 1; a breaking change increases
 | Rust | Rullst, as generated | [frameworks/rullst](frameworks/rullst) |
 | Rust | Rullst, minimal | [frameworks/rullst-minimal](frameworks/rullst-minimal) |
 | Rust | Actix Web | [frameworks/actix](frameworks/actix) |
+| Rust | Loco | [frameworks/loco](frameworks/loco) |
+| Rust | Topcoat (early 0.x) | [frameworks/topcoat](frameworks/topcoat) |
+| Full-stack frameworks | Ruby on Rails | [frameworks/rails](frameworks/rails) |
+| Full-stack frameworks | Laravel | [frameworks/laravel](frameworks/laravel) |
+| Full-stack frameworks | Django | [frameworks/django](frameworks/django) |
+| Full-stack frameworks | Phoenix | [frameworks/phoenix](frameworks/phoenix) |
+| Full-stack frameworks | Spring Boot | [frameworks/spring-boot](frameworks/spring-boot) |
+| Full-stack frameworks | ASP.NET Core | [frameworks/aspnet-core](frameworks/aspnet-core) |
+| Full-stack frameworks | NestJS | [frameworks/nestjs](frameworks/nestjs) |
+| Popular references | FastAPI | [frameworks/fastapi](frameworks/fastapi) |
+| Popular references | Fastify | [frameworks/fastify](frameworks/fastify) |
+| Popular references | Gin | [frameworks/gin](frameworks/gin) |
+
+Each folder's README describes its configuration. The results list the exact
+versions that were measured.
 
 ## Reproduce
 

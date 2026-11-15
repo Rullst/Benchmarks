@@ -118,6 +118,18 @@ to run a one-round measurement of the changed frameworks.
 
 Add the folder to the implementations table in the README.
 
+Per-runtime conventions, so that implementations on the same runtime are
+configured alike:
+
+- Node.js: the active LTS release, `NODE_ENV=production`, one process per
+  vCPU with the built-in `node:cluster` module (`BENCH_WORKERS`), and
+  `DB_POOL_SIZE / BENCH_WORKERS` database connections per process.
+- Python: `BENCH_WORKERS` server processes, threads or event loop per the
+  server's documentation, and the pool divided across processes.
+- Ruby and PHP: `BENCH_WORKERS` processes where the server sizes processes
+  by CPU; otherwise its documented production default, explained in the
+  folder README.
+
 ## Changing the harness
 
 The harness is Python (standard library only) under `bench/`. Run the unit
