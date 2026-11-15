@@ -201,11 +201,13 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
         if row["slug"] in RULLST_SLUGS and row["versions"].get("rullst"):
             rullst_version = row["versions"]["rullst"]
             break
+    note = version_note(rullst_version, rows)
     started = sorted(j.get("started_at", "") for j in jobs if j.get("started_at"))
     finished = sorted(j.get("finished_at", "") for j in jobs if j.get("finished_at"))
     return {
         "schema": SCHEMA,
         "rullst_version": rullst_version,
+        "note": note,
         "measured_from": started[0] if started else "",
         "measured_to": finished[-1] if finished else "",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -223,6 +225,22 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
     }
 
 
+NOTES = Path(__file__).resolve().parent / "notes.json"
+
+
+def version_note(version: str, rows: list[dict], notes_path: Path = NOTES) -> str:
+    """The note for a Rullst version from bench/notes.json, with {slug:metric} ratios filled in."""
+    notes = json.loads(notes_path.read_text()) if notes_path.is_file() else {}
+    template = notes.get(version, "")
+    by_slug = {r["slug"]: r for r in rows}
+
+    def ratio(match: re.Match) -> str:
+        stat = by_slug.get(match.group(1), {}).get("ratios", {}).get(match.group(2))
+        return f"{stat['median']:.2f}" if stat else "–"
+
+    return re.sub(r"\{([a-z0-9-]+):([a-z0-9._-]+)\}", ratio, template)
+
+
 def history_entry(combined: dict) -> dict:
     """The few numbers per Rullst version that the dashboard plots over time."""
     rows = {r["slug"]: r for r in combined["implementations"]}
@@ -232,6 +250,7 @@ def history_entry(combined: dict) -> dict:
         "generated_at": combined["generated_at"],
         "run_url": combined["run"]["url"],
         "file": f"rullst/{combined['rullst_version']}.json",
+        "note": combined.get("note", ""),
         "implementations": {},
     }
     for slug in (*RULLST_SLUGS, combined["baseline"]):

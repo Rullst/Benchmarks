@@ -13,6 +13,11 @@ async function load(name) {
   return response.json();
 }
 
+// Backtick-quoted parts of a note render as code.
+function inlineCode(text) {
+  return text.split('`').map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part));
+}
+
 function Notice({ data }) {
   const env = data.environment ?? {};
   return (
@@ -38,6 +43,11 @@ function Notice({ data }) {
         )}
         .
       </p>
+      {data.note && (
+        <p>
+          <strong>Note:</strong> {inlineCode(data.note)}
+        </p>
+      )}
     </section>
   );
 }

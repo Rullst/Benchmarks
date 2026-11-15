@@ -228,6 +228,18 @@ class AggregateTests(unittest.TestCase):
         self.assertIn("avg_latency_ms", rullst)
         self.assertNotIn("implementations", doc)
 
+    def test_version_note(self):
+        rows = [{"slug": "rullst", "ratios": {"tier1.json.rps": {"median": 0.214}}}]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "notes.json"
+            path.write_text('{"1.0.0": "as generated {rullst:tier1.json.rps}x, minimal {rullst-minimal:tier1.json.rps}x"}')
+            self.assertEqual(aggregate.version_note("1.0.0", rows, path), "as generated 0.21x, minimal –x")
+            self.assertEqual(aggregate.version_note("2.0.0", rows, path), "")
+        combined = aggregate.combine([fake_job("rullst", 0.5)], ["rullst"])
+        self.assertIn("0.50", combined["note"])
+        self.assertIn("**Note:**", report.render_results(combined))
+        self.assertEqual(aggregate.site_document(combined)["note"], combined["note"])
+
     def test_write_outputs_keeps_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

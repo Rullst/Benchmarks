@@ -210,6 +210,8 @@ Fields are only ever added to it:
   "metrics": { "<field>": "<definition>" },
   "auto_update": "...",
   "rullst_version": "13.0.0-alpha.5",
+  "note": "...",                               a note about this Rullst version
+                                               (bench/notes.json), or ""
   "measured_from", "measured_to", "generated_at",   ISO 8601 UTC
   "run": { "id", "url", "sha", "event", "rounds" },
   "baseline": "axum",
