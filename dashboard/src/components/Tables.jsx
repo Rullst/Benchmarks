@@ -112,8 +112,8 @@ const TIER_COLUMNS = {
   ],
 };
 
-export function TierTables({ data }) {
-  const rows = data.implementations.filter(isMeasured);
+export function TierTables({ data, rows: all }) {
+  const rows = all.filter(isMeasured);
   const tiers = data.config?.tiers ?? {};
   const t1 = tiers.tier1 ?? { endpoints: [] };
   const t2 = tiers.tier2 ?? {};

@@ -47,7 +47,11 @@ export default function App() {
 
   useEffect(() => {
     Promise.all([load('latest.json'), load('versions.json')])
-      .then(([data, index]) => setState({ status: 'ready', data, index }))
+      // `results` holds the measured implementations, `not_measured` the others
+      // (shape rullst.benchmarks.latest.v1, see the README).
+      .then(([data, index]) =>
+        setState({ status: 'ready', data, index, rows: [...(data.results ?? []), ...(data.not_measured ?? [])] }),
+      )
       .catch((error) => setState({ status: 'empty', error: String(error) }));
   }, []);
 
@@ -80,12 +84,12 @@ export default function App() {
           <Notice data={state.data} />
           <section>
             <h2>Summary</h2>
-            <SummaryTable rows={state.data.implementations} />
-            <NotMeasured rows={state.data.implementations} />
+            <SummaryTable rows={state.rows} />
+            <NotMeasured rows={state.rows} />
           </section>
           <section>
             <h2>Tiers</h2>
-            <TierTables data={state.data} />
+            <TierTables data={state.data} rows={state.rows} />
           </section>
           <section>
             <h2>Rullst across versions</h2>
@@ -97,7 +101,7 @@ export default function App() {
               Each folder under <a href={`${REPO}/tree/main/frameworks`}>frameworks/</a> has a README with its
               configuration and the reasons for it.
             </p>
-            <Implementations rows={state.data.implementations} />
+            <Implementations rows={state.rows} />
           </section>
         </>
       )}
