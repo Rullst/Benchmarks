@@ -17,5 +17,9 @@ sed "s/@PORT@/${PORT:-8080}/" /etc/nginx/laravel-site.conf > /etc/nginx/sites-en
 # counts the host's online CPUs, not the CPUs the container may use.
 sed -i "s/^worker_processes .*;/worker_processes ${BENCH_WORKERS:-auto};/" /etc/nginx/nginx.conf
 
+# PHP-FPM children: one database connection each, so as many as the suite's
+# connection pool size (docker/php-fpm-pool.conf).
+export PHP_FPM_MAX_CHILDREN="${DB_POOL_SIZE:-16}"
+
 php-fpm --daemonize
 exec nginx -g 'daemon off;'

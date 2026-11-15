@@ -9,9 +9,9 @@ describes: Nginx with the documented server block in front of PHP-FPM, and
 | --- | --- |
 | Version | laravel/framework 13.42.0 on PHP 8.5.12 (exact versions in `composer.lock`); Nginx from Debian trixie (version in the results) |
 | Build | `composer install --no-dev`, optimized autoloader; `php artisan optimize` (configuration, events, routes and views cached) when the container starts |
-| Server | Nginx with the server block from the deployment documentation (`docker/nginx-site.conf`), passing requests to PHP-FPM over a Unix socket; OPcache on (part of PHP 8.5) with the production `php.ini` |
-| Workers | Nginx: `BENCH_WORKERS` (2) worker processes. PHP-FPM: the pool's defaults, `pm = dynamic` with at most 5 processes (`pm.max_children`); PHP-FPM does not size its pool by CPU |
-| Database | Eloquent, `World::findOrFail(1)`. Each PHP-FPM process handles one request at a time and opens its database connection for each request (Laravel's default, no persistent PDO connections), so at most 5 connections are open |
+| Server | Nginx with the server block from the deployment documentation (`docker/nginx-site.conf`), passing requests to PHP-FPM over a Unix socket; the production `php.ini` and OPcache with the PHP manual's recommended production settings (`docker/opcache.ini`) |
+| Workers | Nginx: `BENCH_WORKERS` (2) worker processes. PHP-FPM: `pm = static` with `pm.max_children` = `DB_POOL_SIZE` (16) processes |
+| Database | Eloquent, `World::findOrFail(1)`. Each PHP-FPM process handles one request at a time and opens its database connection for each request (Laravel's default, no persistent PDO connections), so at most 16 connections are open, the suite's pool size |
 | Templates | Blade (`resources/views/hello.blade.php`), compiled by `php artisan optimize` |
 | Logging | none: Nginx's and PHP-FPM's access logs are off; Laravel logs warnings and errors to stderr (`LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`) |
 | Image | `php:8.5.12-fpm-trixie` (runtime), `php:8.5.12-cli-trixie` and `composer:2.11.2` (build) |
@@ -45,8 +45,19 @@ Changes from the skeleton and the documented setup, and why:
   `nginx.conf` is otherwise unchanged, except `worker_processes`, which is
   `BENCH_WORKERS`: Debian's `auto` counts the host's CPUs, not the CPUs the
   container may use.
-- **PHP-FPM**: the image's pool configuration with the Unix socket instead of
-  TCP port 9000 and without the access log the image enables.
+- **PHP-FPM**: the Unix socket instead of TCP port 9000, no access log, and
+  production sizing instead of the example values in the image's `www.conf`
+  (`pm = dynamic`, at most 5 children). The PHP-FPM manual sizes
+  `pm.max_children` by the memory available to the pool; a Laravel worker
+  uses about 30-50 MiB beside the shared OPcache, so the 2 GiB container
+  could hold more than 30. The pool is capped at `DB_POOL_SIZE` (16) because
+  every child opens its own database connection, which keeps the connection
+  count equal to every other implementation's pool. `pm = static` keeps all
+  children running, the mode for a dedicated server with known memory.
+- **OPcache**: the PHP manual's recommended settings, with
+  `max_accelerated_files` raised above the number of PHP files in the
+  application and its vendor directory and `validate_timestamps` off because
+  the code in the image never changes.
 - **Skeleton**: the `config/` files, `bootstrap/`, `public/index.php`,
   `artisan` and `routes/console.php` are the skeleton's; frontend assets,
   tests, migrations, factories, the `User` model and the development
@@ -55,6 +66,7 @@ Changes from the skeleton and the documented setup, and why:
 Why: Nginx and PHP-FPM is the first server setup in Laravel's deployment
 documentation, and `php artisan optimize` and `APP_DEBUG=false` are the
 production steps it lists. Laravel's documentation does not size PHP-FPM, so
-the pool keeps PHP-FPM's shipped defaults. FrankenPHP and Octane are
+the pool follows the PHP-FPM manual's memory-based sizing, capped at the
+suite's connection count. FrankenPHP and Octane are
 documented alternatives that keep the application in memory between
 requests; this implementation measures the classic PHP-FPM setup.

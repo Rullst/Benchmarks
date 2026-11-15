@@ -55,6 +55,7 @@ RUN sed -i '/^access\.log/d' /usr/local/etc/php-fpm.d/docker.conf \
     && rm -f /etc/nginx/sites-enabled/default \
     && ln -sf /dev/stderr /var/log/nginx/error.log
 COPY docker/php-fpm-pool.conf /usr/local/etc/php-fpm.d/zzz-bench.conf
+COPY docker/opcache.ini "$PHP_INI_DIR/conf.d/zz-opcache.ini"
 COPY docker/nginx-site.conf /etc/nginx/laravel-site.conf
 COPY docker/start.sh /usr/local/bin/start-laravel
 WORKDIR /var/www/html
