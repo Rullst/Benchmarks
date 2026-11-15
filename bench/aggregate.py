@@ -33,6 +33,18 @@ from release_check import semver_key  # noqa: E402
 from report import render_readme_table, render_results, replace_between_markers  # noqa: E402
 
 SCHEMA = 1
+# The published files follow the shape the Rullst site reads
+# (Rullst/Rullst docs/src/website-maintenance.md); fields are only added to it.
+SITE_SCHEMA = "rullst.benchmarks.latest.v1"
+VERSIONS_SCHEMA = "rullst.benchmarks.versions.v1"
+SITE_METRICS = {
+    "json_rps": "tier1.json.rps",
+    "db_single_rps": "tier1.db-single.rps",
+    "avg_latency_ms": "tier1.json.latency_ms.mean",
+    "peak_ram_mib": "tier3.load_ram_peak_mib",
+}
+SITE_RUNS = {"json_rps": "tier1.json", "db_single_rps": "tier1.db-single", "avg_latency_ms": "tier1.json",
+             "peak_ram_mib": "tier3_load"}
 RESULTS = ROOT / "results"
 RULLST_SLUGS = ("rullst", "rullst-minimal")
 HISTORY_METRICS = ("tier1.json.rps", "tier1.db-single.rps", "tier1.html.rps", "tier1.text.rps",
@@ -69,7 +81,8 @@ def _row(slug: str, manifest: dict, entry: dict | None) -> dict:
         "variant": manifest.get("variant", ""),
         "language": manifest.get("language", ""),
         "group": manifest.get("group", ""),
-        "framework": manifest.get("framework", ""),
+        "package": manifest.get("framework", ""),
+        "default_variant": bool(manifest.get("default_variant")),
         "framework_version": manifest.get("framework_version", ""),
         "runtime": manifest.get("runtime", ""),
         "server": manifest.get("server", ""),
@@ -233,6 +246,51 @@ def history_entry(combined: dict) -> dict:
     return entry
 
 
+def display_name(row: dict) -> str:
+    """The `framework` name the site matches: the variant is added unless it is the default one."""
+    if row.get("variant") and not row.get("default_variant"):
+        return f"{row['name']} ({row['variant']})"
+    return row["name"]
+
+
+def site_document(combined: dict) -> dict:
+    """The published JSON: the site's `rullst.benchmarks.latest.v1` fields plus the full details."""
+    measured, not_measured = [], []
+    for row in combined["implementations"]:
+        entry = {"framework": display_name(row), "version": row["framework_version"]}
+        for key, path in SITE_METRICS.items():
+            stat = row["metrics"].get(path)
+            if stat:
+                entry[key] = stat["median"]
+        ratios = {key: row["ratios"][path]["median"] for key, path in SITE_METRICS.items() if path in row["ratios"]}
+        if row.get("is_baseline"):
+            ratios = {key: 1.0 for key in SITE_METRICS if key in entry}
+        entry["vs_axum"] = ratios
+        bound = row.get("flags", {}).get("client_bound_rounds", {})
+        entry["load_generator_bound_rounds"] = {key: bound.get(run, 0) for key, run in SITE_RUNS.items()}
+        entry.update(row)
+        has_metric = any(key in entry for key in SITE_METRICS)
+        (measured if row["status"] in ("measured", "crashed") and has_metric else not_measured).append(entry)
+    document = {
+        "schema": SITE_SCHEMA,
+        "measured_on": (combined["measured_from"] or combined["generated_at"])[:10],
+        "results": measured,
+        "not_measured": not_measured,
+        "metrics": {
+            "json_rps": "Tier 1 /json, 125 connections: successful responses per second (median of rounds)",
+            "db_single_rps": "Tier 1 /db-single, 125 connections: successful responses per second",
+            "avg_latency_ms": "Tier 1 /json, 125 connections: mean latency in milliseconds",
+            "peak_ram_mib": "Tier 3, 200 connections on /json: peak RAM of the server container in MiB",
+            "vs_axum": "median of per-round ratios to Axum measured on the same runner (1.0 = Axum)",
+            "load_generator_bound_rounds": "rounds in which the load generator's CPUs were at least 90% busy",
+        },
+        "auto_update": "updated automatically when a new rullst version is published on crates.io",
+    }
+    document.update({k: v for k, v in combined.items() if k not in ("schema", "implementations")})
+    document["results_schema"] = SCHEMA
+    return document
+
+
 def _safe_version(version: str) -> str:
     if not re.fullmatch(r"[0-9A-Za-z.+-]+", version or ""):
         raise ValueError(f"unexpected Rullst version '{version}'")
@@ -241,8 +299,9 @@ def _safe_version(version: str) -> str:
 
 def write_outputs(combined: dict, jobs: list[dict]) -> None:
     version = _safe_version(combined["rullst_version"])
-    write_json(RESULTS / "latest.json", combined)
-    write_json(RESULTS / "rullst" / f"{version}.json", combined)
+    document = site_document(combined)
+    write_json(RESULTS / "latest.json", document)
+    write_json(RESULTS / "rullst" / f"{version}.json", document)
     raw = RESULTS / "raw" / version
     if raw.exists():
         shutil.rmtree(raw)
@@ -250,10 +309,10 @@ def write_outputs(combined: dict, jobs: list[dict]) -> None:
         write_json(raw / f"{job['framework']}.json", job)
 
     index_path = RESULTS / "versions.json"
-    index = json.loads(index_path.read_text()) if index_path.is_file() else {"schema": SCHEMA, "versions": []}
+    index = json.loads(index_path.read_text()) if index_path.is_file() else {"versions": []}
     entries = [e for e in index["versions"] if e["version"] != version] + [history_entry(combined)]
     entries.sort(key=lambda e: semver_key(e["version"]))
-    write_json(index_path, {"schema": SCHEMA, "latest": version, "updated_at": combined["generated_at"],
+    write_json(index_path, {"schema": VERSIONS_SCHEMA, "latest": version, "updated_at": combined["generated_at"],
                             "versions": entries})
 
     (ROOT / "benchmarks_results.md").write_text(render_results(combined))

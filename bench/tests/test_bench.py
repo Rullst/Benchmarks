@@ -33,7 +33,8 @@ BOMBARDIER = {
 
 
 def fake_round(scale: float, number: int = 1) -> dict:
-    run = {"rps": 1000 * scale, "latency_ms": {"p50": 1.0 / scale, "p99": 4.0 / scale}, "error_rate": 0.0,
+    run = {"rps": 1000 * scale, "latency_ms": {"mean": 1.2 / scale, "p50": 1.0 / scale, "p99": 4.0 / scale},
+           "error_rate": 0.0,
            "server_cpu_cores": 1.9, "client_bound": scale > 1, "timeouts": 0, "transport_errors": 0}
     return {
         "round": number, "crashed": None, "startup_s": 0.5,
@@ -89,6 +90,23 @@ class LoadgenTests(unittest.TestCase):
         del raw["result"]["latency"]
         raw["result"]["errors"] = []
         self.assertIsNone(parse_result(raw)["latency_ms"]["p99"])
+
+
+class SamplerTests(unittest.TestCase):
+    def test_sampler_thread_runs(self):
+        import time
+        from loadgen import RamSampler
+
+        class Fake:
+            def ram_bytes(self):
+                return 5 * MIB
+
+        sampler = RamSampler(Fake(), 0.005)
+        sampler.start()
+        time.sleep(0.05)
+        samples = sampler.stop()
+        self.assertGreater(len(samples), 2)
+        self.assertEqual(samples[-1][1], 5 * MIB)
 
 
 class SystemTests(unittest.TestCase):
@@ -179,6 +197,36 @@ class AggregateTests(unittest.TestCase):
         entry = aggregate.history_entry(combined)
         self.assertEqual(entry["file"], "rullst/13.0.0-alpha.5.json")
         self.assertIn("tier1.json.rps", entry["implementations"]["rullst"]["ratios"])
+
+    def test_site_document_matches_the_site_contract(self):
+        import datetime
+        import math
+        import re
+        jobs = [fake_job("rullst", 0.9), fake_job("rullst-minimal", 1.0), fake_job("loco", 1.0)]
+        jobs[1]["implementations"]["rullst-minimal"]["manifest"].update(name="Rullst", variant="minimal")
+        jobs[0]["implementations"]["rullst"]["manifest"].update(variant="as generated", default_variant=True)
+        jobs[2]["implementations"]["loco"].update(status="failed-conformance", rounds=[], summary=None,
+                                                  conformance={"passed": False, "checks": [
+                                                      {"endpoint": "/html", "ok": False, "problem": "x"}]})
+        doc = aggregate.site_document(aggregate.combine(jobs, ["rullst", "rullst-minimal", "loco"]))
+        # The checks the site's assembler applies (Rullst/Rullst .github/assemble-organization-site.py).
+        self.assertEqual(doc["schema"], "rullst.benchmarks.latest.v1")
+        datetime.date.fromisoformat(doc["measured_on"])
+        version = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,39}")
+        names = [r["framework"] for r in doc["results"]]
+        self.assertIn("Rullst", names)
+        self.assertIn("Rullst (minimal)", names)
+        self.assertNotIn("loco", [n.lower() for n in names])
+        self.assertEqual([r["slug"] for r in doc["not_measured"]], ["loco"])
+        for row in doc["results"]:
+            self.assertTrue(version.fullmatch(str(row["version"])))
+            metrics = [row[k] for k in ("json_rps", "db_single_rps", "avg_latency_ms", "peak_ram_mib") if k in row]
+            self.assertTrue(metrics)
+            self.assertTrue(all(math.isfinite(v) and v >= 0 for v in metrics))
+        rullst = next(r for r in doc["results"] if r["framework"] == "Rullst")
+        self.assertAlmostEqual(rullst["vs_axum"]["json_rps"], 0.9)
+        self.assertIn("avg_latency_ms", rullst)
+        self.assertNotIn("implementations", doc)
 
     def test_write_outputs_keeps_history(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -175,40 +175,56 @@ with the `force` input.
 The same files are in this repository under `results/`, with each job's full
 output (every round) under `results/raw/<version>/`.
 
-`latest.json` (schema 1):
+`latest.json` and the per-version files use the shape
+`rullst.benchmarks.latest.v1`, which the Rullst website reads at build time
+([website-maintenance.md](https://github.com/Rullst/Rullst/blob/main/docs/src/website-maintenance.md)).
+Fields are only ever added to it:
 
 ```text
 {
-  "schema": 1,
+  "schema": "rullst.benchmarks.latest.v1",
+  "measured_on": "2026-11-15",                 date the measurement started (UTC)
+  "results": [                                 implementations that were measured
+    {
+      "framework": "Rullst",                   display name; a non-default variant is appended,
+                                               e.g. "Rullst (minimal)"
+      "version": "13.0.0-alpha.5",             measured framework version
+      "json_rps": 90485.7,                     Tier 1 /json req/s (median of rounds)
+      "db_single_rps": 16186.7,                Tier 1 /db-single req/s
+      "avg_latency_ms": 1.21,                  Tier 1 /json mean latency
+      "peak_ram_mib": 20.8,                    Tier 3 peak RAM
+      "vs_axum": { "json_rps": 0.93, ... },    ratios to Axum on the same runner
+      "load_generator_bound_rounds": { "json_rps": 5, ... },
+      "slug", "name", "variant", "default_variant", "language", "group", "package",
+      "framework_version", "versions": { "<package>": "<version>" },
+      "runtime", "server", "workers", "database_layer", "template_engine", "logging",
+      "maturity_note", "status", "problem", "is_baseline" (Axum only),
+      "metrics": { "<metric>": { "median", "min", "max", "spread", "n" } },
+      "ratios":  { "<metric>": { "median", "min", "max", "spread", "n" } },
+      "flags": { "rounds", "crashed_rounds", "ram_growing_rounds", "client_bound_rounds": { ... } },
+      "rps_per_mib", "build", "environment"
+    }
+  ],
+  "not_measured": [ same fields, no metrics; "status" is failed-conformance,
+                    build-failed or missing and "problem" says why ],
+  "metrics": { "<field>": "<definition>" },
+  "auto_update": "...",
   "rullst_version": "13.0.0-alpha.5",
-  "measured_from": "2026-11-15T04:00:00Z",   first job start (UTC)
-  "measured_to": "2026-11-15T09:30:00Z",     last job end
-  "generated_at": "2026-11-15T09:35:00Z",    publication time
+  "measured_from", "measured_to", "generated_at",   ISO 8601 UTC
   "run": { "id", "url", "sha", "event", "rounds" },
   "baseline": "axum",
   "config": { tiers, server limits, pool size, load generator, database },
   "environment": { "cpu_model", "cpu_count", "memory_total_mib", "kernel", "os",
                    "runner_image", "docker", "load_generator", "postgres", "cpu_split" },
-  "implementations": [
-    {
-      "slug": "rullst", "name": "Rullst", "variant": "as generated",
-      "language": "Rust", "group": "rust" | "full-stack" | "reference",
-      "framework_version": "13.0.0-alpha.5", "versions": { "<package>": "<version>" },
-      "runtime", "server", "workers", "database_layer", "template_engine", "logging",
-      "status": "measured" | "crashed" | "failed-conformance" | "build-failed" | "missing",
-      "problem": "",
-      "is_baseline": true,                      Axum only
-      "metrics": { "<metric>": { "median", "min", "max", "spread", "n" } },
-      "ratios":  { "<metric>": { "median", "min", "max", "spread", "n" } },
-      "flags": { "rounds", "crashed_rounds", "ram_growing_rounds",
-                 "client_bound_rounds": { "tier1.json": 0, ... } },
-      "rps_per_mib": 1234.5
-    }
-  ]
+  "results_schema": 1
 }
 ```
 
-Metric names: `tier1.<endpoint>.rps`, `tier1.<endpoint>.latency_ms.p50`,
+`versions.json` (`rullst.benchmarks.versions.v1`) lists every measured Rullst
+version with its date, run, file name and the headline medians and ratios of
+the Rullst variants and Axum.
+
+Metric names: `tier1.<endpoint>.rps`, `tier1.<endpoint>.latency_ms.mean`, `tier1.<endpoint>.latency_ms.p50`,
 `tier1.<endpoint>.latency_ms.p99`, `tier1.<endpoint>.error_rate`,
 `tier1.<endpoint>.server_cpu_cores` (endpoints `text`, `json`, `db-single`,
 `html`); `tier2.rps`, `tier2.latency_ms.p50`, `tier2.latency_ms.p99`,
@@ -220,8 +236,7 @@ Metric names: `tier1.<endpoint>.rps`, `tier1.<endpoint>.latency_ms.p50`,
 `after.ram_mib`, `after.memory_peak_mib`. RAM is in MiB, latency in
 milliseconds, CPU in cores, error rates as fractions. `ratios` has no entries
 for error counts and rates; for Axum, whose ratios are 1 by definition, it is
-empty. New fields may be added within schema 1; a breaking change increases
-`schema`.
+empty. New fields may be added; a breaking change gets a new `schema` name.
 
 ## Implementations
 
