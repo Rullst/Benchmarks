@@ -147,8 +147,10 @@ The Rullst organization shares one pool of GitHub-hosted runners between
 Rullst/Rullst and this repository, so long benchmark runs can delay Rullst's
 pull request checks and releases:
 
-- measurements use at most 3 runners at a time and Linux runners only (no
-  macOS runners);
+- measurements use Linux runners only (no macOS runners) and at most 8 at a
+  time: the yield guard (`bench/yield_check.py`) allows 8 while Rullst/Rullst
+  has at most 2 queued and 8 running jobs and 3 otherwise; the `max_parallel`
+  input (`auto` by default) can set 1-8 for a manual run;
 - one measurement runs at a time; a new trigger waits instead of cancelling
   a running one;
 - scheduled and manual runs do not start while Rullst/Rullst runs a release,
