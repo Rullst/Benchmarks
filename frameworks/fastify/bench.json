@@ -1,0 +1,15 @@
+{
+  "name": "Fastify",
+  "language": "JavaScript",
+  "group": "reference",
+  "framework": "fastify",
+  "framework_version": "5.12.8",
+  "version_package": "fastify",
+  "runtime": "Node.js 26.13.1 (active LTS), NODE_ENV=production",
+  "server": "Fastify (node:http)",
+  "workers": "node:cluster with BENCH_WORKERS worker processes (2)",
+  "database_layer": "@fastify/postgres 6.1 (node-postgres 8.23 pool), DB_POOL_SIZE / BENCH_WORKERS connections per process",
+  "template_engine": "@fastify/view 12 with EJS 7",
+  "logging": "none (Fastify's logger is off by default)",
+  "startup_timeout_s": 120
+}

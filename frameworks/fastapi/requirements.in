@@ -1,0 +1,9 @@
+# Direct dependencies, pinned. requirements.txt is generated from this file:
+#   uv pip compile requirements.in --python-version 3.14 \
+#     --python-platform x86_64-manylinux_2_28 --generate-hashes -o requirements.txt
+fastapi==0.163.0
+uvicorn[standard]==0.54.0
+sqlmodel==0.0.50
+sqlalchemy==2.1.8
+psycopg[binary]==3.3.9
+jinja2==3.1.6
