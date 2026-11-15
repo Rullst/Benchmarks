@@ -1,0 +1,29 @@
+# The production.yaml `loco new` generates, without the static-assets and
+# mailer sections this app does not use. Values come from the environment the
+# harness sets (PORT, DATABASE_URL, DB_POOL_SIZE) and from the Dockerfile
+# (LOG_LEVEL=warn: no per-request logs, as for every implementation).
+logger:
+  enable: true
+  pretty_backtrace: false
+  level: {{ get_env(name="LOG_LEVEL", default="info") }}
+  format: json
+server:
+  port: {{ get_env(name="PORT", default="5150") }}
+  binding: {{ get_env(name="BINDING", default="0.0.0.0") }}
+  host: {{ get_env(name="HOST", default="http://localhost") }}
+database:
+  uri: {{ get_env(name="DATABASE_URL") }}
+  enable_logging: false
+  connect_timeout: {{ get_env(name="DB_CONNECT_TIMEOUT", default="500") }}
+  idle_timeout: {{ get_env(name="DB_IDLE_TIMEOUT", default="500") }}
+  min_connections: {{ get_env(name="DB_MIN_CONNECTIONS", default="1") }}
+  max_connections: {{ get_env(name="DB_POOL_SIZE", default="10") }}
+  # The harness creates the `world` table; there is nothing to migrate.
+  auto_migrate: false
+  dangerously_truncate: false
+  dangerously_recreate: false
+auth:
+  jwt:
+    # Unused by this app (no auth routes); required by the `auth` feature.
+    secret: {{ get_env(name="JWT_SECRET", default="benchmark-only-not-a-secret") }}
+    expiration: 604800
