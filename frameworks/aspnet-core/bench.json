@@ -1,0 +1,15 @@
+{
+  "name": "ASP.NET Core",
+  "language": "C#",
+  "group": "full-stack",
+  "framework": "aspnetcore",
+  "framework_version": "10.0.15",
+  "version_package": "Microsoft.AspNetCore.App",
+  "runtime": ".NET 10.0.15 (Release build, framework-dependent publish)",
+  "server": "Kestrel",
+  "workers": ".NET thread pool sized by the runtime for 2 vCPUs; Server GC (the ASP.NET Core default)",
+  "database_layer": "Entity Framework Core 10.0 with the Npgsql provider, pool of 16 connections",
+  "template_engine": "Razor Pages",
+  "logging": "none per request (Microsoft.AspNetCore and EF Core command logs at Warning); start-up log at Information",
+  "startup_timeout_s": 120
+}
