@@ -5,7 +5,7 @@
 | Version | fastapi 0.163.0, Starlette 1.10, Pydantic 2.14 (exact versions and hashes in `requirements.txt`, compiled from `requirements.in`) |
 | Build | `pip install --require-hashes --only-binary=:all:` on `python:3.14.10-slim-trixie` (CPython 3.14.10) |
 | Server | Uvicorn 0.54 with `--workers $BENCH_WORKERS` (2 processes) and `--no-access-log`; Uvicorn picks uvloop and httptools, installed by `uvicorn[standard]` |
-| Database | SQLModel 0.0.50 (SQLAlchemy 2.1) with psycopg 3.3, sync engine and one `Session` per request from a dependency, `select(World).where(World.id == 1)` in a `def` path operation; each process has a pool of `DB_POOL_SIZE / BENCH_WORKERS` connections (8, no overflow) |
+| Database | SQLModel 0.0.50 (SQLAlchemy 2.1) with psycopg 3.3, sync engine and one `Session` per request, opened in the `def` path operation (`with Session(engine)`), `select(World).where(World.id == 1)`; each process has a pool of `DB_POOL_SIZE / BENCH_WORKERS` connections (8, no overflow) |
 | Templates | Jinja2 3.1 through `Jinja2Templates` (`templates/hello.html`) |
 | Logging | none: Uvicorn's access log is off; startup messages only |
 | Image | `python:3.14.10-slim-trixie` |
@@ -22,7 +22,13 @@ Why: this follows the FastAPI documentation.
   tutorial uses SQLModel with a sync engine, a session dependency and `def`
   path operations, which FastAPI runs in its thread pool. The official
   [full-stack template](https://github.com/fastapi/full-stack-fastapi-template)
-  uses the same setup with psycopg 3 on PostgreSQL. SQLAlchemy's defaults are
+  uses the same setup with psycopg 3 on PostgreSQL. The session is opened
+  with `with Session(engine)` inside the path operation, as in the SQLModel
+  tutorial, instead of the tutorial's `yield` dependency: FastAPI runs that
+  dependency's cleanup in the thread pool too, and with more concurrent
+  requests than pool connections every pool thread waits for a connection
+  that only a pending cleanup would return, so the server stops answering
+  `/db-single` (the 2026-11-15 run timed out on every request). SQLAlchemy's defaults are
   kept (a transaction per session, rolled back when the session closes); only
   the pool size is set, so the 16 connections are split between the two
   processes.
