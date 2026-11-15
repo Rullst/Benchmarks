@@ -33,9 +33,13 @@ Source: [workflow run 43731095115](https://github.com/Rullst/Benchmarks/actions/
 | Phoenix | 1.8.16 | Elixir | 26,831 | 0.17 | 12,930 | 0.88 | 20,294 | 13.39 | 135.9 | 153.7 | 0 | 174.6 |
 | Ruby on Rails | 8.1.4.1 | Ruby | 1,682 | 0.02 | 1,441 | 0.14 | 1,511 | 416.58 | 102.5 | 369.3 | 0 | 4.6 |
 | Spring Boot | 4.1.2 | Java | 32,571 | 0.21 | 8,965 | 0.59 | 16,279 | 12.49 | 213.9 | 377.2 | 0 | 86.3 |
-| FastAPI | 0.163.0 | Python | 17,577 | 0.07 | 0 | 0.00 | 14,292 | 20.09 | 167.7 | 225.2 | 0 | 78.1 |
+| FastAPI | 0.163.0 | Python | 17,577 | 0.07 | – | – | 14,292 | 20.09 | 167.7 | 225.2 | 0 | 78.1 |
 | Fastify | 5.12.8 | JavaScript | 154,630 | 0.59 | 22,840 | 0.78 | 117,739 | 3.16 | 72.8 | 165.0 | 0 | 937.1 |
 | Gin | 1.12.0 | Go | 78,542 | 0.51 | 19,765 | 1.32 | 76,162 | 9.50 | 3.5 | 19.8 | 0 | 3,966.8 |
+
+Corrections (left-out results are shown as –):
+
+- **FastAPI**: /db-single is not measured in this run: under load every request timed out because of a defect in this implementation (the session dependency's cleanup waited for a thread-pool slot held by requests waiting for a database connection), so the number says nothing about FastAPI. Fixed in Rullst/Benchmarks#8; the next run (Rullst 13.0.0-alpha.6) measures it again.
 <!-- results:end -->
 
 ## What is measured
@@ -236,6 +240,7 @@ Fields are only ever added to it:
   "rullst_version": "13.0.0-alpha.5",
   "note": "...",                               a note about this Rullst version
                                                (bench/notes.json), or ""
+  "note_pt_br": "...",                         the same note in Brazilian Portuguese, or ""
   "measured_from", "measured_to", "generated_at",   ISO 8601 UTC
   "run": { "id", "url", "sha", "event", "rounds" },
   "baseline": "axum",

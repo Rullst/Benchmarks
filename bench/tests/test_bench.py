@@ -228,6 +228,22 @@ class AggregateTests(unittest.TestCase):
         self.assertIn("avg_latency_ms", rullst)
         self.assertNotIn("implementations", doc)
 
+    def test_corrections_leave_out_metrics(self):
+        combined = aggregate.combine([fake_job("fastapi", 1.0)], ["fastapi"])
+        row = next(r for r in combined["implementations"] if r["slug"] == "fastapi")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "corrections.json"
+            path.write_text('{"13.0.0-alpha.5": {"fastapi": {"exclude": ["tier1.db-single"], "problem": "broken"}}}')
+            aggregate.apply_corrections("13.0.0-alpha.5", [row], path)
+        self.assertNotIn("tier1.db-single.rps", row["metrics"])
+        self.assertIn("tier1.json.rps", row["metrics"])
+        self.assertNotIn("tier1.db-single.rps", row["ratios"])
+        self.assertEqual(row["problem"], "broken")
+        entry = next(r for r in aggregate.site_document(combined)["results"] if r["slug"] == "fastapi")
+        self.assertNotIn("db_single_rps", entry)
+        self.assertNotIn("db_single_rps", entry["vs_axum"])
+        self.assertIn("broken", report.render_results(combined))
+
     def test_version_note(self):
         rows = [{"slug": "rullst", "ratios": {"tier1.json.rps": {"median": 0.214}}}]
         with tempfile.TemporaryDirectory() as tmp:
@@ -235,8 +251,16 @@ class AggregateTests(unittest.TestCase):
             path.write_text('{"1.0.0": "as generated {rullst:tier1.json.rps}x, minimal {rullst-minimal:tier1.json.rps}x"}')
             self.assertEqual(aggregate.version_note("1.0.0", rows, path), "as generated 0.21x, minimal –x")
             self.assertEqual(aggregate.version_note("2.0.0", rows, path), "")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "notes.json"
+            path.write_text('{"1.0.0": {"en": "at {rullst:tier1.json.rps}x", "pt_br": "a {rullst:tier1.json.rps}x"}}')
+            self.assertEqual(aggregate.version_note("1.0.0", rows, path), "at 0.21x")
+            self.assertEqual(aggregate.version_note("1.0.0", rows, path, lang="pt_br"), "a 0,21x")
         combined = aggregate.combine([fake_job("rullst", 0.5)], ["rullst"])
         self.assertIn("0.50", combined["note"])
+        self.assertIn("0,50×", combined["note_pt_br"])
+        self.assertTrue(combined["note_pt_br"].startswith("Esta medição"))
+        self.assertEqual(aggregate.site_document(combined)["note_pt_br"], combined["note_pt_br"])
         self.assertIn("**Note:**", report.render_results(combined))
         self.assertEqual(aggregate.site_document(combined)["note"], combined["note"])
 
