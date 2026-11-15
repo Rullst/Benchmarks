@@ -32,12 +32,12 @@ class RamSampler(threading.Thread):
         self.interval_s = interval_s
         self.samples: list[tuple[float, int]] = []
         self._halt = threading.Event()
-        self._started = time.monotonic()
+        self._t0 = time.monotonic()
 
     def run(self) -> None:
         while not self._halt.is_set():
             try:
-                self.samples.append((time.monotonic() - self._started, self.server.ram_bytes()))
+                self.samples.append((time.monotonic() - self._t0, self.server.ram_bytes()))
             except (OSError, ValueError, BenchError):
                 pass  # the container may have exited; the caller checks
             self._halt.wait(self.interval_s)
