@@ -1,0 +1,7687 @@
+{
+  "schema": 1,
+  "framework": "laravel",
+  "baseline": "axum",
+  "started_at": "2026-11-15T17:17:21Z",
+  "rounds_requested": 5,
+  "config": {
+    "baseline": "axum",
+    "server": {
+      "port": 8080,
+      "cpus": 2,
+      "memory": "2g",
+      "pool_size": 16,
+      "settle_s": 5,
+      "cooldown_s": 2,
+      "recovery_s": 10
+    },
+    "min_runner_cpus": 4,
+    "load_generator": {
+      "name": "bombardier",
+      "version": "2.0.2",
+      "url": "https://github.com/codesenberg/bombardier/releases/download/v2.0.2/bombardier-linux-amd64",
+      "sha256": "d3dc4a9ecec3f8bd43f8c196ad533cb4b79ca55b11fc74c3184231e00a95bc0b",
+      "client": "fasthttp",
+      "timeout_s": 5,
+      "saturation_threshold": 0.9
+    },
+    "database": {
+      "image": "postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b",
+      "user": "bench",
+      "password": "bench",
+      "name": "bench",
+      "port": 5432,
+      "max_connections": 200,
+      "rows": 10000,
+      "row_id": 1
+    },
+    "sampling_interval_s": 0.1,
+    "warmup": {
+      "connections": 125,
+      "duration_s": 5
+    },
+    "tiers": {
+      "tier1": {
+        "connections": 125,
+        "duration_s": 10,
+        "endpoints": [
+          "text",
+          "json",
+          "db-single",
+          "html"
+        ]
+      },
+      "tier2": {
+        "connections": 300,
+        "duration_s": 30,
+        "endpoint": "json"
+      },
+      "tier3": {
+        "connections": 200,
+        "duration_s": 15,
+        "endpoint": "json",
+        "idle_s": 10
+      },
+      "tier4": {
+        "connections": 500,
+        "duration_s": 120,
+        "endpoint": "json"
+      }
+    },
+    "leak": {
+      "min_growth_mib": 8,
+      "min_growth_ratio": 0.1
+    }
+  },
+  "environment": {
+    "runner": {
+      "name": "GitHub Actions 1000114512",
+      "image_os": "ubuntu26",
+      "image_version": "20261111.196.1",
+      "github_run_id": "43731095115",
+      "github_sha": "63653064bc311a873d20ef746be94e4c51ddda23"
+    },
+    "os": "Ubuntu 26.04.1 LTS",
+    "kernel": "7.0.0-1019-azure",
+    "cpu_count": 4,
+    "cpu_model": "AMD EPYC 9V45 96-Core Processor",
+    "cpu_split": {
+      "all": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "server": [
+        0,
+        1
+      ],
+      "client": [
+        2,
+        3
+      ],
+      "core_groups": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    "memory_total_mib": 15983.0,
+    "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           48 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  4\nOn-line CPU(s) list:                     0-3\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 9V45 96-Core Processor\nCPU family:                              26\nModel:                                   2\nThread(s) per core:                      2\nCore(s) per socket:                      2\nSocket(s):                               1\nStepping:                                1\nBogoMIPS:                                5192.24\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy svm cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx_vnni avx512_bf16 clzero xsaveerptr rdpru arat npt nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload avx512vbmi umip avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid fsrm avx512_vp2intersect\nVirtualization:                          AMD-V\nHypervisor vendor:                       Microsoft\nVirtualization type:                     full\nL1d cache:                               96 KiB (2 instances)\nL1i cache:                               64 KiB (2 instances)\nL2 cache:                                2 MiB (2 instances)\nL3 cache:                                32 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-3\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Vulnerable\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected",
+    "lscpu_topology": "CPU CORE SOCKET NODE MAXMHZ\n  0    0      0    0      -\n  1    0      0    0      -\n  2    1      0    0      -\n  3    1      0    0      -",
+    "docker": "client 29.4.2, server 29.4.2",
+    "python": "3.14.4",
+    "load_generator": {
+      "name": "bombardier",
+      "version": "2.0.2",
+      "client": "fasthttp",
+      "sha256": "d3dc4a9ecec3f8bd43f8c196ad533cb4b79ca55b11fc74c3184231e00a95bc0b"
+    }
+  },
+  "implementations": {
+    "laravel": {
+      "manifest": {
+        "name": "Laravel",
+        "language": "PHP",
+        "group": "full-stack",
+        "framework": "laravel",
+        "framework_version": "13.42.0",
+        "version_package": "laravel/framework",
+        "runtime": "PHP 8.5.12 with OPcache",
+        "server": "Nginx with PHP-FPM, as in Laravel's deployment documentation",
+        "workers": "Nginx: BENCH_WORKERS (2) workers; PHP-FPM: the default pool (pm = dynamic, at most 5 processes)",
+        "database_layer": "Eloquent (pdo_pgsql); one connection per PHP-FPM process, opened for each request (at most 5)",
+        "template_engine": "Blade",
+        "logging": "none (Nginx and PHP-FPM access logs off; Laravel logs warnings and errors to stderr)",
+        "startup_timeout_s": 120,
+        "notes": "php artisan optimize runs at start-up; the HTML page uses the web middleware group with the cookie session driver.",
+        "slug": "laravel"
+      },
+      "status": "measured",
+      "build": {
+        "image_id": "sha256:0685a2830b3145b951f5b1a521545dc4c154160824a8179097a1d4941043ed9a",
+        "image_size_mib": 181.1,
+        "build_seconds": 25.1,
+        "build_args": {},
+        "base_images": {
+          "php:8.5.12-cli-trixie": "sha256:50956f094e90a716d43bea28087d447555ad80510e386ab8c9c10d8c70d781a9",
+          "composer:2.11.2": "sha256:5bcb28b8d0edc4091125f8218f9d088f998bdfc843f8fbb9a4beb4dcd8625684",
+          "php:8.5.12-fpm-trixie": "sha256:baf3ea13a8207fa18e1011bad1016e8b5e59fc974c6966d0efa6f36a16f875f0"
+        },
+        "versions": "laravel/framework 13.42.0\nsymfony/http-foundation 8.1.11\nsymfony/http-kernel 8.1.11\nphp 8.5.12\nnginx 1.26.3"
+      },
+      "conformance": {
+        "passed": true,
+        "checks": [
+          {
+            "endpoint": "/text",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "text/plain; charset=utf-8",
+            "body_bytes": 11
+          },
+          {
+            "endpoint": "/json",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "application/json",
+            "body_bytes": 25
+          },
+          {
+            "endpoint": "/html",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "text/html; charset=utf-8",
+            "body_bytes": 99
+          },
+          {
+            "endpoint": "/db-single",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "application/json",
+            "body_bytes": 29
+          }
+        ],
+        "startup_s": 0.41
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "implementation": "laravel",
+          "crashed": null,
+          "startup_s": 0.4,
+          "idle": {
+            "ram_mib": 37.2,
+            "cpu_cores": 0.0,
+            "tasks": 20,
+            "processes": 20
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.102,
+              "requests_ok": 12417,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1229.15,
+              "latency_ms": {
+                "mean": 101.188,
+                "p50": 101.332,
+                "p99": 116.88,
+                "max": 128.176
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.019,
+              "loadgen_cpu_share": 0.021,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 74.2
+            },
+            "json": {
+              "duration_s": 10.098,
+              "requests_ok": 12539,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1241.79,
+              "latency_ms": {
+                "mean": 100.164,
+                "p50": 100.25,
+                "p99": 116.089,
+                "max": 126.081
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.022,
+              "loadgen_cpu_share": 0.021,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 74.2
+            },
+            "db-single": {
+              "duration_s": 10.346,
+              "requests_ok": 3559,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 344.0,
+              "latency_ms": {
+                "mean": 357.501,
+                "p50": 361.203,
+                "p99": 406.447,
+                "max": 424.263
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.996,
+              "loadgen_cpu_share": 0.013,
+              "client_bound": true,
+              "server_cpu_cores": 0.93,
+              "server_ram_peak_mib": 75.3
+            },
+            "html": {
+              "duration_s": 10.126,
+              "requests_ok": 9759,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 963.71,
+              "latency_ms": {
+                "mean": 128.9,
+                "p50": 129.194,
+                "p99": 150.361,
+                "max": 164.9
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.026,
+              "loadgen_cpu_share": 0.022,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 75.6
+            }
+          },
+          "tier2": {
+            "duration_s": 30.239,
+            "requests_ok": 37985,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1256.16,
+            "latency_ms": {
+              "mean": 237.854,
+              "p50": 237.895,
+              "p99": 267.029,
+              "max": 289.72
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.021,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.998,
+            "server_ram_peak_mib": 78.1
+          },
+          "tier3": {
+            "idle_ram_mib": 37.2,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 77.0,
+            "load_cpu_cores": 1.998,
+            "rps": 1218.46,
+            "error_rate": 0.0,
+            "client_bound": false,
+            "client_cpu_busy": 0.038
+          },
+          "tier4": {
+            "duration_s": 120.391,
+            "requests_ok": 146567,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1217.43,
+            "latency_ms": {
+              "mean": 410.002,
+              "p50": 408.728,
+              "p99": 457.365,
+              "max": 492.218
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.028,
+            "loadgen_cpu_share": 0.024,
+            "client_bound": false,
+            "server_cpu_cores": 1.999,
+            "server_ram_peak_mib": 81.0,
+            "ram_mid_mib": 80.5,
+            "ram_end_mib": 80.5,
+            "ram_growth_mib": -0.0,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                74.2
+              ],
+              [
+                1.0,
+                80.6
+              ],
+              [
+                2.0,
+                80.5
+              ],
+              [
+                3.0,
+                80.4
+              ],
+              [
+                4.0,
+                80.6
+              ],
+              [
+                5.0,
+                80.5
+              ],
+              [
+                6.0,
+                80.4
+              ],
+              [
+                7.0,
+                80.3
+              ],
+              [
+                8.0,
+                80.6
+              ],
+              [
+                9.0,
+                80.5
+              ],
+              [
+                10.0,
+                80.6
+              ],
+              [
+                11.0,
+                80.4
+              ],
+              [
+                12.0,
+                80.4
+              ],
+              [
+                13.0,
+                80.6
+              ],
+              [
+                14.0,
+                80.5
+              ],
+              [
+                15.0,
+                80.4
+              ],
+              [
+                16.1,
+                80.5
+              ],
+              [
+                17.1,
+                80.4
+              ],
+              [
+                18.1,
+                80.6
+              ],
+              [
+                19.1,
+                80.5
+              ],
+              [
+                20.1,
+                80.6
+              ],
+              [
+                21.1,
+                80.6
+              ],
+              [
+                22.1,
+                80.5
+              ],
+              [
+                23.1,
+                80.5
+              ],
+              [
+                24.1,
+                80.7
+              ],
+              [
+                25.1,
+                80.6
+              ],
+              [
+                26.1,
+                80.7
+              ],
+              [
+                27.1,
+                80.5
+              ],
+              [
+                28.1,
+                80.4
+              ],
+              [
+                29.1,
+                80.5
+              ],
+              [
+                30.1,
+                80.5
+              ],
+              [
+                31.1,
+                80.6
+              ],
+              [
+                32.1,
+                80.6
+              ],
+              [
+                33.1,
+                80.4
+              ],
+              [
+                34.1,
+                80.5
+              ],
+              [
+                35.1,
+                80.4
+              ],
+              [
+                36.1,
+                80.4
+              ],
+              [
+                37.1,
+                80.5
+              ],
+              [
+                38.1,
+                80.5
+              ],
+              [
+                39.1,
+                80.6
+              ],
+              [
+                40.1,
+                80.5
+              ],
+              [
+                41.1,
+                80.5
+              ],
+              [
+                42.1,
+                80.5
+              ],
+              [
+                43.1,
+                80.6
+              ],
+              [
+                44.1,
+                80.5
+              ],
+              [
+                45.1,
+                80.3
+              ],
+              [
+                46.1,
+                80.5
+              ],
+              [
+                47.1,
+                80.4
+              ],
+              [
+                48.1,
+                80.6
+              ],
+              [
+                49.1,
+                80.4
+              ],
+              [
+                50.2,
+                80.5
+              ],
+              [
+                51.2,
+                80.5
+              ],
+              [
+                52.2,
+                80.6
+              ],
+              [
+                53.2,
+                80.5
+              ],
+              [
+                54.2,
+                80.7
+              ],
+              [
+                55.2,
+                80.6
+              ],
+              [
+                56.2,
+                80.7
+              ],
+              [
+                57.2,
+                80.4
+              ],
+              [
+                58.2,
+                80.5
+              ],
+              [
+                59.2,
+                80.5
+              ],
+              [
+                60.2,
+                80.6
+              ],
+              [
+                61.2,
+                80.5
+              ],
+              [
+                62.2,
+                80.4
+              ],
+              [
+                63.2,
+                80.6
+              ],
+              [
+                64.2,
+                80.5
+              ],
+              [
+                65.2,
+                80.3
+              ],
+              [
+                66.2,
+                80.4
+              ],
+              [
+                67.2,
+                80.6
+              ],
+              [
+                68.2,
+                80.5
+              ],
+              [
+                69.2,
+                80.6
+              ],
+              [
+                70.2,
+                80.5
+              ],
+              [
+                71.2,
+                80.4
+              ],
+              [
+                72.2,
+                80.6
+              ],
+              [
+                73.2,
+                80.4
+              ],
+              [
+                74.2,
+                80.6
+              ],
+              [
+                75.2,
+                80.5
+              ],
+              [
+                76.2,
+                80.7
+              ],
+              [
+                77.2,
+                80.6
+              ],
+              [
+                78.2,
+                80.7
+              ],
+              [
+                79.2,
+                80.6
+              ],
+              [
+                80.2,
+                80.4
+              ],
+              [
+                81.2,
+                80.5
+              ],
+              [
+                82.2,
+                80.4
+              ],
+              [
+                83.3,
+                80.3
+              ],
+              [
+                84.3,
+                80.4
+              ],
+              [
+                85.3,
+                80.5
+              ],
+              [
+                86.3,
+                80.4
+              ],
+              [
+                87.3,
+                80.6
+              ],
+              [
+                88.3,
+                80.5
+              ],
+              [
+                89.3,
+                80.6
+              ],
+              [
+                90.3,
+                80.5
+              ],
+              [
+                91.3,
+                80.6
+              ],
+              [
+                92.3,
+                80.5
+              ],
+              [
+                93.3,
+                80.4
+              ],
+              [
+                94.3,
+                80.3
+              ],
+              [
+                95.3,
+                80.7
+              ],
+              [
+                96.3,
+                80.8
+              ],
+              [
+                97.3,
+                80.8
+              ],
+              [
+                98.3,
+                80.8
+              ],
+              [
+                99.3,
+                80.8
+              ],
+              [
+                100.3,
+                80.9
+              ],
+              [
+                101.3,
+                80.8
+              ],
+              [
+                102.3,
+                80.9
+              ],
+              [
+                103.3,
+                80.6
+              ],
+              [
+                104.3,
+                80.8
+              ],
+              [
+                105.3,
+                80.4
+              ],
+              [
+                106.3,
+                80.4
+              ],
+              [
+                107.3,
+                80.5
+              ],
+              [
+                108.3,
+                80.5
+              ],
+              [
+                109.3,
+                80.5
+              ],
+              [
+                110.3,
+                80.5
+              ],
+              [
+                111.3,
+                80.6
+              ],
+              [
+                112.3,
+                80.5
+              ],
+              [
+                113.3,
+                80.4
+              ],
+              [
+                114.3,
+                80.6
+              ],
+              [
+                115.3,
+                80.5
+              ],
+              [
+                116.3,
+                80.6
+              ],
+              [
+                117.3,
+                80.5
+              ],
+              [
+                118.4,
+                80.7
+              ],
+              [
+                119.4,
+                80.4
+              ],
+              [
+                120.4,
+                78.6
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 76.3,
+            "memory_peak_mib": 81.2
+          }
+        },
+        {
+          "round": 2,
+          "implementation": "laravel",
+          "crashed": null,
+          "startup_s": 0.41,
+          "idle": {
+            "ram_mib": 37.4,
+            "cpu_cores": 0.0,
+            "tasks": 20,
+            "processes": 20
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.111,
+              "requests_ok": 11275,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1115.17,
+              "latency_ms": {
+                "mean": 111.488,
+                "p50": 111.773,
+                "p99": 136.404,
+                "max": 153.265
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.021,
+              "loadgen_cpu_share": 0.021,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 76.8
+            },
+            "json": {
+              "duration_s": 10.115,
+              "requests_ok": 10883,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1075.92,
+              "latency_ms": {
+                "mean": 115.508,
+                "p50": 116.211,
+                "p99": 135.336,
+                "max": 147.623
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.023,
+              "loadgen_cpu_share": 0.021,
+              "client_bound": false,
+              "server_cpu_cores": 1.997,
+              "server_ram_peak_mib": 76.8
+            },
+            "db-single": {
+              "duration_s": 10.384,
+              "requests_ok": 3144,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 302.77,
+              "latency_ms": {
+                "mean": 405.297,
+                "p50": 409.69,
+                "p99": 463.327,
+                "max": 482.206
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.995,
+              "loadgen_cpu_share": 0.015,
+              "client_bound": true,
+              "server_cpu_cores": 1.013,
+              "server_ram_peak_mib": 77.8
+            },
+            "html": {
+              "duration_s": 10.136,
+              "requests_ok": 8420,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 830.73,
+              "latency_ms": {
+                "mean": 149.443,
+                "p50": 147.574,
+                "p99": 200.881,
+                "max": 219.548
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.027,
+              "loadgen_cpu_share": 0.022,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 78.4
+            }
+          },
+          "tier2": {
+            "duration_s": 30.259,
+            "requests_ok": 33333,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1101.59,
+            "latency_ms": {
+              "mean": 271.146,
+              "p50": 272.112,
+              "p99": 315.436,
+              "max": 341.686
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.026,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.998,
+            "server_ram_peak_mib": 80.9
+          },
+          "tier3": {
+            "idle_ram_mib": 37.4,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 79.4,
+            "load_cpu_cores": 1.998,
+            "rps": 1073.04,
+            "error_rate": 0.0,
+            "client_bound": false,
+            "client_cpu_busy": 0.027
+          },
+          "tier4": {
+            "duration_s": 120.403,
+            "requests_ok": 142514,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1183.64,
+            "latency_ms": {
+              "mean": 421.688,
+              "p50": 416.83,
+              "p99": 494.071,
+              "max": 538.195
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.026,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.999,
+            "server_ram_peak_mib": 83.7,
+            "ram_mid_mib": 83.2,
+            "ram_end_mib": 83.2,
+            "ram_growth_mib": 0.1,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                76.9
+              ],
+              [
+                1.0,
+                83.4
+              ],
+              [
+                2.0,
+                83.3
+              ],
+              [
+                3.0,
+                83.5
+              ],
+              [
+                4.0,
+                83.6
+              ],
+              [
+                5.0,
+                83.5
+              ],
+              [
+                6.0,
+                83.4
+              ],
+              [
+                7.0,
+                83.4
+              ],
+              [
+                8.0,
+                83.3
+              ],
+              [
+                9.0,
+                83.2
+              ],
+              [
+                10.0,
+                83.5
+              ],
+              [
+                11.0,
+                83.3
+              ],
+              [
+                12.0,
+                83.4
+              ],
+              [
+                13.0,
+                83.3
+              ],
+              [
+                14.0,
+                83.5
+              ],
+              [
+                15.0,
+                83.2
+              ],
+              [
+                16.0,
+                83.4
+              ],
+              [
+                17.1,
+                83.3
+              ],
+              [
+                18.1,
+                83.3
+              ],
+              [
+                19.1,
+                83.2
+              ],
+              [
+                20.1,
+                83.2
+              ],
+              [
+                21.1,
+                83.4
+              ],
+              [
+                22.1,
+                83.3
+              ],
+              [
+                23.1,
+                83.3
+              ],
+              [
+                24.1,
+                83.2
+              ],
+              [
+                25.1,
+                83.4
+              ],
+              [
+                26.1,
+                83.1
+              ],
+              [
+                27.1,
+                83.2
+              ],
+              [
+                28.1,
+                83.1
+              ],
+              [
+                29.1,
+                83.0
+              ],
+              [
+                30.1,
+                83.2
+              ],
+              [
+                31.1,
+                83.2
+              ],
+              [
+                32.1,
+                83.0
+              ],
+              [
+                33.1,
+                83.1
+              ],
+              [
+                34.1,
+                83.1
+              ],
+              [
+                35.1,
+                83.4
+              ],
+              [
+                36.1,
+                83.2
+              ],
+              [
+                37.1,
+                83.3
+              ],
+              [
+                38.1,
+                83.2
+              ],
+              [
+                39.1,
+                83.2
+              ],
+              [
+                40.1,
+                83.1
+              ],
+              [
+                41.1,
+                83.0
+              ],
+              [
+                42.1,
+                83.2
+              ],
+              [
+                43.1,
+                82.8
+              ],
+              [
+                44.1,
+                83.2
+              ],
+              [
+                45.1,
+                83.3
+              ],
+              [
+                46.1,
+                83.4
+              ],
+              [
+                47.1,
+                83.1
+              ],
+              [
+                48.2,
+                83.3
+              ],
+              [
+                49.2,
+                83.1
+              ],
+              [
+                50.2,
+                83.2
+              ],
+              [
+                51.2,
+                82.9
+              ],
+              [
+                52.2,
+                83.1
+              ],
+              [
+                53.2,
+                83.3
+              ],
+              [
+                54.2,
+                83.2
+              ],
+              [
+                55.2,
+                83.3
+              ],
+              [
+                56.2,
+                83.2
+              ],
+              [
+                57.2,
+                83.2
+              ],
+              [
+                58.2,
+                83.0
+              ],
+              [
+                59.2,
+                83.2
+              ],
+              [
+                60.2,
+                83.1
+              ],
+              [
+                61.2,
+                83.3
+              ],
+              [
+                62.2,
+                83.0
+              ],
+              [
+                63.2,
+                83.1
+              ],
+              [
+                64.2,
+                83.3
+              ],
+              [
+                65.2,
+                83.1
+              ],
+              [
+                66.2,
+                83.1
+              ],
+              [
+                67.2,
+                83.0
+              ],
+              [
+                68.2,
+                83.2
+              ],
+              [
+                69.2,
+                83.1
+              ],
+              [
+                70.2,
+                83.4
+              ],
+              [
+                71.2,
+                83.1
+              ],
+              [
+                72.2,
+                83.1
+              ],
+              [
+                73.2,
+                83.3
+              ],
+              [
+                74.2,
+                83.1
+              ],
+              [
+                75.2,
+                83.3
+              ],
+              [
+                76.2,
+                83.2
+              ],
+              [
+                77.2,
+                83.4
+              ],
+              [
+                78.2,
+                83.2
+              ],
+              [
+                79.2,
+                83.3
+              ],
+              [
+                80.3,
+                83.2
+              ],
+              [
+                81.3,
+                83.0
+              ],
+              [
+                82.3,
+                83.2
+              ],
+              [
+                83.3,
+                83.3
+              ],
+              [
+                84.3,
+                83.3
+              ],
+              [
+                85.3,
+                83.1
+              ],
+              [
+                86.3,
+                83.0
+              ],
+              [
+                87.3,
+                83.3
+              ],
+              [
+                88.3,
+                83.1
+              ],
+              [
+                89.3,
+                83.1
+              ],
+              [
+                90.3,
+                83.2
+              ],
+              [
+                91.3,
+                83.4
+              ],
+              [
+                92.3,
+                83.2
+              ],
+              [
+                93.3,
+                83.1
+              ],
+              [
+                94.3,
+                82.9
+              ],
+              [
+                95.3,
+                83.1
+              ],
+              [
+                96.3,
+                83.0
+              ],
+              [
+                97.3,
+                83.1
+              ],
+              [
+                98.3,
+                83.3
+              ],
+              [
+                99.3,
+                83.2
+              ],
+              [
+                100.3,
+                83.3
+              ],
+              [
+                101.3,
+                83.3
+              ],
+              [
+                102.3,
+                83.3
+              ],
+              [
+                103.3,
+                83.4
+              ],
+              [
+                104.3,
+                83.4
+              ],
+              [
+                105.3,
+                83.3
+              ],
+              [
+                106.3,
+                83.5
+              ],
+              [
+                107.3,
+                83.5
+              ],
+              [
+                108.3,
+                83.4
+              ],
+              [
+                109.3,
+                83.3
+              ],
+              [
+                110.3,
+                83.5
+              ],
+              [
+                111.3,
+                83.4
+              ],
+              [
+                112.3,
+                83.3
+              ],
+              [
+                113.4,
+                83.5
+              ],
+              [
+                114.4,
+                83.0
+              ],
+              [
+                115.4,
+                83.0
+              ],
+              [
+                116.4,
+                83.1
+              ],
+              [
+                117.4,
+                83.1
+              ],
+              [
+                118.4,
+                83.2
+              ],
+              [
+                119.4,
+                83.2
+              ],
+              [
+                120.4,
+                81.2
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 79.0,
+            "memory_peak_mib": 83.9
+          }
+        },
+        {
+          "round": 3,
+          "implementation": "laravel",
+          "crashed": null,
+          "startup_s": 0.41,
+          "idle": {
+            "ram_mib": 37.2,
+            "cpu_cores": 0.0,
+            "tasks": 20,
+            "processes": 20
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.106,
+              "requests_ok": 11479,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1135.82,
+              "latency_ms": {
+                "mean": 109.477,
+                "p50": 110.116,
+                "p99": 125.638,
+                "max": 152.716
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.024,
+              "loadgen_cpu_share": 0.022,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 77.5
+            },
+            "json": {
+              "duration_s": 10.112,
+              "requests_ok": 11817,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1168.56,
+              "latency_ms": {
+                "mean": 106.36,
+                "p50": 106.106,
+                "p99": 125.619,
+                "max": 139.021
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.02,
+              "loadgen_cpu_share": 0.02,
+              "client_bound": false,
+              "server_cpu_cores": 1.997,
+              "server_ram_peak_mib": 78.0
+            },
+            "db-single": {
+              "duration_s": 10.377,
+              "requests_ok": 3239,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 312.12,
+              "latency_ms": {
+                "mean": 393.402,
+                "p50": 397.557,
+                "p99": 452.893,
+                "max": 473.197
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.995,
+              "loadgen_cpu_share": 0.014,
+              "client_bound": true,
+              "server_cpu_cores": 0.974,
+              "server_ram_peak_mib": 79.0
+            },
+            "html": {
+              "duration_s": 10.126,
+              "requests_ok": 9090,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 897.68,
+              "latency_ms": {
+                "mean": 138.366,
+                "p50": 138.362,
+                "p99": 160.288,
+                "max": 180.747
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.028,
+              "loadgen_cpu_share": 0.023,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 79.2
+            }
+          },
+          "tier2": {
+            "duration_s": 30.281,
+            "requests_ok": 33011,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1090.16,
+            "latency_ms": {
+              "mean": 273.91,
+              "p50": 273.081,
+              "p99": 315.752,
+              "max": 340.142
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.025,
+            "loadgen_cpu_share": 0.022,
+            "client_bound": false,
+            "server_cpu_cores": 1.998,
+            "server_ram_peak_mib": 81.4
+          },
+          "tier3": {
+            "idle_ram_mib": 37.2,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 80.2,
+            "load_cpu_cores": 1.997,
+            "rps": 1024.26,
+            "error_rate": 0.0,
+            "client_bound": false,
+            "client_cpu_busy": 0.034
+          },
+          "tier4": {
+            "duration_s": 120.402,
+            "requests_ok": 131435,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1091.63,
+            "latency_ms": {
+              "mean": 457.24,
+              "p50": 454.601,
+              "p99": 520.099,
+              "max": 575.75
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.026,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.999,
+            "server_ram_peak_mib": 84.2,
+            "ram_mid_mib": 83.7,
+            "ram_end_mib": 84.0,
+            "ram_growth_mib": 0.2,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                77.6
+              ],
+              [
+                1.0,
+                84.1
+              ],
+              [
+                2.0,
+                84.0
+              ],
+              [
+                3.0,
+                84.0
+              ],
+              [
+                4.0,
+                84.0
+              ],
+              [
+                5.0,
+                84.0
+              ],
+              [
+                6.0,
+                84.0
+              ],
+              [
+                7.0,
+                84.0
+              ],
+              [
+                8.0,
+                84.0
+              ],
+              [
+                9.0,
+                84.0
+              ],
+              [
+                10.0,
+                83.8
+              ],
+              [
+                11.0,
+                84.1
+              ],
+              [
+                12.0,
+                84.0
+              ],
+              [
+                13.0,
+                84.0
+              ],
+              [
+                14.0,
+                84.0
+              ],
+              [
+                15.0,
+                83.9
+              ],
+              [
+                16.1,
+                83.9
+              ],
+              [
+                17.1,
+                83.7
+              ],
+              [
+                18.1,
+                83.9
+              ],
+              [
+                19.1,
+                84.1
+              ],
+              [
+                20.1,
+                83.9
+              ],
+              [
+                21.1,
+                83.9
+              ],
+              [
+                22.1,
+                83.9
+              ],
+              [
+                23.1,
+                83.9
+              ],
+              [
+                24.1,
+                83.9
+              ],
+              [
+                25.1,
+                83.9
+              ],
+              [
+                26.1,
+                83.8
+              ],
+              [
+                27.1,
+                83.8
+              ],
+              [
+                28.1,
+                83.6
+              ],
+              [
+                29.1,
+                83.6
+              ],
+              [
+                30.1,
+                83.6
+              ],
+              [
+                31.1,
+                83.6
+              ],
+              [
+                32.1,
+                83.6
+              ],
+              [
+                33.1,
+                83.6
+              ],
+              [
+                34.1,
+                83.6
+              ],
+              [
+                35.1,
+                84.1
+              ],
+              [
+                36.1,
+                83.9
+              ],
+              [
+                37.1,
+                83.9
+              ],
+              [
+                38.1,
+                83.9
+              ],
+              [
+                39.1,
+                83.8
+              ],
+              [
+                40.1,
+                83.8
+              ],
+              [
+                41.1,
+                83.8
+              ],
+              [
+                42.1,
+                83.8
+              ],
+              [
+                43.1,
+                83.8
+              ],
+              [
+                44.1,
+                83.9
+              ],
+              [
+                45.1,
+                83.8
+              ],
+              [
+                46.1,
+                83.8
+              ],
+              [
+                47.2,
+                83.7
+              ],
+              [
+                48.2,
+                83.7
+              ],
+              [
+                49.2,
+                83.7
+              ],
+              [
+                50.2,
+                83.7
+              ],
+              [
+                51.2,
+                83.7
+              ],
+              [
+                52.2,
+                83.9
+              ],
+              [
+                53.2,
+                83.9
+              ],
+              [
+                54.2,
+                83.8
+              ],
+              [
+                55.2,
+                83.7
+              ],
+              [
+                56.2,
+                83.7
+              ],
+              [
+                57.2,
+                83.7
+              ],
+              [
+                58.2,
+                83.8
+              ],
+              [
+                59.2,
+                83.8
+              ],
+              [
+                60.2,
+                83.8
+              ],
+              [
+                61.2,
+                83.8
+              ],
+              [
+                62.2,
+                83.7
+              ],
+              [
+                63.2,
+                83.7
+              ],
+              [
+                64.2,
+                83.6
+              ],
+              [
+                65.2,
+                83.8
+              ],
+              [
+                66.2,
+                83.8
+              ],
+              [
+                67.2,
+                83.8
+              ],
+              [
+                68.2,
+                83.8
+              ],
+              [
+                69.2,
+                83.8
+              ],
+              [
+                70.2,
+                83.8
+              ],
+              [
+                71.2,
+                83.8
+              ],
+              [
+                72.2,
+                83.8
+              ],
+              [
+                73.2,
+                83.8
+              ],
+              [
+                74.2,
+                83.7
+              ],
+              [
+                75.2,
+                83.7
+              ],
+              [
+                76.2,
+                83.7
+              ],
+              [
+                77.2,
+                83.7
+              ],
+              [
+                78.2,
+                83.7
+              ],
+              [
+                79.3,
+                83.7
+              ],
+              [
+                80.3,
+                83.6
+              ],
+              [
+                81.3,
+                83.6
+              ],
+              [
+                82.3,
+                83.6
+              ],
+              [
+                83.3,
+                84.0
+              ],
+              [
+                84.3,
+                84.0
+              ],
+              [
+                85.3,
+                83.9
+              ],
+              [
+                86.3,
+                83.9
+              ],
+              [
+                87.3,
+                83.7
+              ],
+              [
+                88.3,
+                83.7
+              ],
+              [
+                89.3,
+                83.7
+              ],
+              [
+                90.3,
+                83.7
+              ],
+              [
+                91.3,
+                83.7
+              ],
+              [
+                92.3,
+                83.7
+              ],
+              [
+                93.3,
+                83.5
+              ],
+              [
+                94.3,
+                83.5
+              ],
+              [
+                95.3,
+                83.5
+              ],
+              [
+                96.3,
+                83.7
+              ],
+              [
+                97.3,
+                83.7
+              ],
+              [
+                98.3,
+                83.7
+              ],
+              [
+                99.3,
+                83.9
+              ],
+              [
+                100.3,
+                83.9
+              ],
+              [
+                101.3,
+                83.8
+              ],
+              [
+                102.3,
+                83.8
+              ],
+              [
+                103.3,
+                83.8
+              ],
+              [
+                104.3,
+                83.6
+              ],
+              [
+                105.3,
+                83.6
+              ],
+              [
+                106.3,
+                83.9
+              ],
+              [
+                107.3,
+                84.1
+              ],
+              [
+                108.3,
+                84.0
+              ],
+              [
+                109.3,
+                84.0
+              ],
+              [
+                110.4,
+                84.0
+              ],
+              [
+                111.4,
+                84.2
+              ],
+              [
+                112.4,
+                84.2
+              ],
+              [
+                113.4,
+                84.2
+              ],
+              [
+                114.4,
+                84.0
+              ],
+              [
+                115.4,
+                84.0
+              ],
+              [
+                116.4,
+                83.8
+              ],
+              [
+                117.4,
+                83.8
+              ],
+              [
+                118.4,
+                83.7
+              ],
+              [
+                119.4,
+                83.7
+              ],
+              [
+                120.4,
+                81.6
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 79.3,
+            "memory_peak_mib": 84.4
+          }
+        },
+        {
+          "round": 4,
+          "implementation": "laravel",
+          "crashed": null,
+          "startup_s": 0.4,
+          "idle": {
+            "ram_mib": 37.7,
+            "cpu_cores": 0.0,
+            "tasks": 20,
+            "processes": 20
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.092,
+              "requests_ok": 12441,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1232.76,
+              "latency_ms": {
+                "mean": 100.943,
+                "p50": 100.69,
+                "p99": 124.555,
+                "max": 166.295
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.024,
+              "loadgen_cpu_share": 0.022,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 78.5
+            },
+            "json": {
+              "duration_s": 10.1,
+              "requests_ok": 11823,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1170.62,
+              "latency_ms": {
+                "mean": 106.253,
+                "p50": 106.606,
+                "p99": 127.546,
+                "max": 142.305
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.025,
+              "loadgen_cpu_share": 0.022,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 78.5
+            },
+            "db-single": {
+              "duration_s": 10.356,
+              "requests_ok": 3437,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 331.87,
+              "latency_ms": {
+                "mean": 370.287,
+                "p50": 374.438,
+                "p99": 413.941,
+                "max": 431.595
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.994,
+              "loadgen_cpu_share": 0.014,
+              "client_bound": true,
+              "server_cpu_cores": 1.027,
+              "server_ram_peak_mib": 79.5
+            },
+            "html": {
+              "duration_s": 10.117,
+              "requests_ok": 9765,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 965.21,
+              "latency_ms": {
+                "mean": 128.764,
+                "p50": 128.991,
+                "p99": 165.967,
+                "max": 183.54
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.031,
+              "loadgen_cpu_share": 0.023,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 79.8
+            }
+          },
+          "tier2": {
+            "duration_s": 30.241,
+            "requests_ok": 37836,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1251.15,
+            "latency_ms": {
+              "mean": 238.812,
+              "p50": 238.833,
+              "p99": 271.726,
+              "max": 300.735
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.023,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.998,
+            "server_ram_peak_mib": 82.6
+          },
+          "tier3": {
+            "idle_ram_mib": 37.7,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 81.3,
+            "load_cpu_cores": 1.998,
+            "rps": 1239.51,
+            "error_rate": 0.0,
+            "client_bound": false,
+            "client_cpu_busy": 0.025
+          },
+          "tier4": {
+            "duration_s": 120.438,
+            "requests_ok": 148068,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1229.42,
+            "latency_ms": {
+              "mean": 405.976,
+              "p50": 404.872,
+              "p99": 456.215,
+              "max": 479.989
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.025,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.999,
+            "server_ram_peak_mib": 85.2,
+            "ram_mid_mib": 84.8,
+            "ram_end_mib": 84.8,
+            "ram_growth_mib": 0.1,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                78.2
+              ],
+              [
+                1.0,
+                84.6
+              ],
+              [
+                2.0,
+                84.8
+              ],
+              [
+                3.0,
+                84.7
+              ],
+              [
+                4.0,
+                84.8
+              ],
+              [
+                5.0,
+                84.7
+              ],
+              [
+                6.0,
+                84.9
+              ],
+              [
+                7.0,
+                84.8
+              ],
+              [
+                8.0,
+                85.0
+              ],
+              [
+                9.0,
+                84.7
+              ],
+              [
+                10.0,
+                84.9
+              ],
+              [
+                11.0,
+                84.8
+              ],
+              [
+                12.0,
+                84.6
+              ],
+              [
+                13.0,
+                84.9
+              ],
+              [
+                14.0,
+                84.8
+              ],
+              [
+                15.0,
+                84.8
+              ],
+              [
+                16.1,
+                84.7
+              ],
+              [
+                17.1,
+                84.8
+              ],
+              [
+                18.1,
+                84.8
+              ],
+              [
+                19.1,
+                85.0
+              ],
+              [
+                20.1,
+                84.9
+              ],
+              [
+                21.1,
+                84.9
+              ],
+              [
+                22.1,
+                84.8
+              ],
+              [
+                23.1,
+                84.9
+              ],
+              [
+                24.1,
+                84.9
+              ],
+              [
+                25.1,
+                84.7
+              ],
+              [
+                26.1,
+                84.6
+              ],
+              [
+                27.1,
+                84.7
+              ],
+              [
+                28.1,
+                84.7
+              ],
+              [
+                29.1,
+                84.8
+              ],
+              [
+                30.1,
+                84.8
+              ],
+              [
+                31.1,
+                84.9
+              ],
+              [
+                32.1,
+                84.9
+              ],
+              [
+                33.1,
+                84.5
+              ],
+              [
+                34.1,
+                84.7
+              ],
+              [
+                35.1,
+                84.7
+              ],
+              [
+                36.1,
+                84.9
+              ],
+              [
+                37.1,
+                84.8
+              ],
+              [
+                38.1,
+                84.8
+              ],
+              [
+                39.1,
+                84.9
+              ],
+              [
+                40.1,
+                84.8
+              ],
+              [
+                41.1,
+                84.7
+              ],
+              [
+                42.1,
+                84.9
+              ],
+              [
+                43.1,
+                84.7
+              ],
+              [
+                44.1,
+                84.7
+              ],
+              [
+                45.1,
+                84.8
+              ],
+              [
+                46.1,
+                84.8
+              ],
+              [
+                47.1,
+                84.8
+              ],
+              [
+                48.2,
+                84.9
+              ],
+              [
+                49.2,
+                84.9
+              ],
+              [
+                50.2,
+                84.8
+              ],
+              [
+                51.2,
+                84.7
+              ],
+              [
+                52.2,
+                84.5
+              ],
+              [
+                53.2,
+                84.7
+              ],
+              [
+                54.2,
+                84.7
+              ],
+              [
+                55.2,
+                84.9
+              ],
+              [
+                56.2,
+                84.8
+              ],
+              [
+                57.2,
+                84.8
+              ],
+              [
+                58.2,
+                84.7
+              ],
+              [
+                59.2,
+                84.9
+              ],
+              [
+                60.2,
+                84.9
+              ],
+              [
+                61.2,
+                84.8
+              ],
+              [
+                62.2,
+                84.7
+              ],
+              [
+                63.2,
+                84.7
+              ],
+              [
+                64.2,
+                84.8
+              ],
+              [
+                65.2,
+                84.8
+              ],
+              [
+                66.2,
+                84.8
+              ],
+              [
+                67.2,
+                84.9
+              ],
+              [
+                68.2,
+                84.7
+              ],
+              [
+                69.2,
+                84.7
+              ],
+              [
+                70.2,
+                84.9
+              ],
+              [
+                71.2,
+                84.8
+              ],
+              [
+                72.2,
+                84.7
+              ],
+              [
+                73.2,
+                84.9
+              ],
+              [
+                74.2,
+                84.9
+              ],
+              [
+                75.2,
+                84.8
+              ],
+              [
+                76.2,
+                84.8
+              ],
+              [
+                77.2,
+                84.9
+              ],
+              [
+                78.2,
+                84.7
+              ],
+              [
+                79.2,
+                84.7
+              ],
+              [
+                80.2,
+                84.8
+              ],
+              [
+                81.3,
+                84.8
+              ],
+              [
+                82.3,
+                84.6
+              ],
+              [
+                83.3,
+                84.8
+              ],
+              [
+                84.3,
+                84.8
+              ],
+              [
+                85.3,
+                84.7
+              ],
+              [
+                86.3,
+                84.8
+              ],
+              [
+                87.3,
+                84.8
+              ],
+              [
+                88.3,
+                84.8
+              ],
+              [
+                89.3,
+                84.8
+              ],
+              [
+                90.3,
+                84.7
+              ],
+              [
+                91.3,
+                84.8
+              ],
+              [
+                92.3,
+                84.8
+              ],
+              [
+                93.3,
+                85.0
+              ],
+              [
+                94.3,
+                85.2
+              ],
+              [
+                95.3,
+                85.0
+              ],
+              [
+                96.3,
+                85.0
+              ],
+              [
+                97.3,
+                85.0
+              ],
+              [
+                98.3,
+                85.0
+              ],
+              [
+                99.3,
+                85.0
+              ],
+              [
+                100.3,
+                85.0
+              ],
+              [
+                101.3,
+                85.0
+              ],
+              [
+                102.3,
+                85.1
+              ],
+              [
+                103.3,
+                85.1
+              ],
+              [
+                104.3,
+                85.1
+              ],
+              [
+                105.3,
+                84.7
+              ],
+              [
+                106.3,
+                84.8
+              ],
+              [
+                107.3,
+                84.8
+              ],
+              [
+                108.3,
+                85.0
+              ],
+              [
+                109.3,
+                84.9
+              ],
+              [
+                110.3,
+                84.8
+              ],
+              [
+                111.3,
+                84.7
+              ],
+              [
+                112.3,
+                84.7
+              ],
+              [
+                113.3,
+                84.9
+              ],
+              [
+                114.4,
+                84.9
+              ],
+              [
+                115.4,
+                84.7
+              ],
+              [
+                116.4,
+                84.9
+              ],
+              [
+                117.4,
+                84.9
+              ],
+              [
+                118.4,
+                84.8
+              ],
+              [
+                119.4,
+                84.9
+              ],
+              [
+                120.4,
+                83.0
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 80.3,
+            "memory_peak_mib": 85.4
+          }
+        },
+        {
+          "round": 5,
+          "implementation": "laravel",
+          "crashed": null,
+          "startup_s": 0.41,
+          "idle": {
+            "ram_mib": 37.4,
+            "cpu_cores": 0.0,
+            "tasks": 20,
+            "processes": 20
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.109,
+              "requests_ok": 11027,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1090.81,
+              "latency_ms": {
+                "mean": 113.976,
+                "p50": 114.577,
+                "p99": 134.299,
+                "max": 153.365
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.022,
+              "loadgen_cpu_share": 0.021,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 79.0
+            },
+            "json": {
+              "duration_s": 10.113,
+              "requests_ok": 10502,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 1038.42,
+              "latency_ms": {
+                "mean": 119.707,
+                "p50": 119.892,
+                "p99": 145.465,
+                "max": 165.703
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.022,
+              "loadgen_cpu_share": 0.02,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 79.1
+            },
+            "db-single": {
+              "duration_s": 10.412,
+              "requests_ok": 3077,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 295.52,
+              "latency_ms": {
+                "mean": 414.879,
+                "p50": 420.36,
+                "p99": 465.082,
+                "max": 488.448
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.995,
+              "loadgen_cpu_share": 0.015,
+              "client_bound": true,
+              "server_cpu_cores": 1.1,
+              "server_ram_peak_mib": 80.6
+            },
+            "html": {
+              "duration_s": 10.143,
+              "requests_ok": 8442,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 832.29,
+              "latency_ms": {
+                "mean": 149.153,
+                "p50": 148.312,
+                "p99": 182.393,
+                "max": 195.869
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.024,
+              "loadgen_cpu_share": 0.022,
+              "client_bound": false,
+              "server_cpu_cores": 1.998,
+              "server_ram_peak_mib": 80.9
+            }
+          },
+          "tier2": {
+            "duration_s": 30.237,
+            "requests_ok": 35555,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1175.87,
+            "latency_ms": {
+              "mean": 254.112,
+              "p50": 250.109,
+              "p99": 326.293,
+              "max": 362.07
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.024,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.999,
+            "server_ram_peak_mib": 83.0
+          },
+          "tier3": {
+            "idle_ram_mib": 37.4,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 81.9,
+            "load_cpu_cores": 1.998,
+            "rps": 1187.56,
+            "error_rate": 0.0,
+            "client_bound": false,
+            "client_cpu_busy": 0.022
+          },
+          "tier4": {
+            "duration_s": 120.44,
+            "requests_ok": 144346,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 1198.49,
+            "latency_ms": {
+              "mean": 416.391,
+              "p50": 414.16,
+              "p99": 486.453,
+              "max": 553.152
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.028,
+            "loadgen_cpu_share": 0.023,
+            "client_bound": false,
+            "server_cpu_cores": 1.999,
+            "server_ram_peak_mib": 86.1,
+            "ram_mid_mib": 85.3,
+            "ram_end_mib": 85.7,
+            "ram_growth_mib": 0.4,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                78.9
+              ],
+              [
+                1.0,
+                85.7
+              ],
+              [
+                2.0,
+                85.6
+              ],
+              [
+                3.0,
+                85.7
+              ],
+              [
+                4.0,
+                85.7
+              ],
+              [
+                5.0,
+                85.6
+              ],
+              [
+                6.0,
+                85.8
+              ],
+              [
+                7.0,
+                85.6
+              ],
+              [
+                8.0,
+                85.5
+              ],
+              [
+                9.0,
+                85.7
+              ],
+              [
+                10.0,
+                85.6
+              ],
+              [
+                11.0,
+                85.6
+              ],
+              [
+                12.0,
+                85.6
+              ],
+              [
+                13.0,
+                85.6
+              ],
+              [
+                14.0,
+                85.5
+              ],
+              [
+                15.0,
+                85.7
+              ],
+              [
+                16.0,
+                85.8
+              ],
+              [
+                17.1,
+                85.7
+              ],
+              [
+                18.1,
+                85.6
+              ],
+              [
+                19.1,
+                85.7
+              ],
+              [
+                20.1,
+                85.7
+              ],
+              [
+                21.1,
+                85.8
+              ],
+              [
+                22.1,
+                85.7
+              ],
+              [
+                23.1,
+                85.8
+              ],
+              [
+                24.1,
+                85.7
+              ],
+              [
+                25.1,
+                85.8
+              ],
+              [
+                26.1,
+                85.7
+              ],
+              [
+                27.1,
+                85.7
+              ],
+              [
+                28.1,
+                85.7
+              ],
+              [
+                29.1,
+                85.5
+              ],
+              [
+                30.1,
+                85.6
+              ],
+              [
+                31.1,
+                85.5
+              ],
+              [
+                32.1,
+                85.5
+              ],
+              [
+                33.1,
+                85.4
+              ],
+              [
+                34.1,
+                85.5
+              ],
+              [
+                35.1,
+                85.4
+              ],
+              [
+                36.1,
+                85.5
+              ],
+              [
+                37.1,
+                85.4
+              ],
+              [
+                38.1,
+                85.7
+              ],
+              [
+                39.1,
+                85.6
+              ],
+              [
+                40.1,
+                85.5
+              ],
+              [
+                41.1,
+                85.7
+              ],
+              [
+                42.1,
+                85.5
+              ],
+              [
+                43.1,
+                85.6
+              ],
+              [
+                44.1,
+                85.5
+              ],
+              [
+                45.1,
+                85.7
+              ],
+              [
+                46.1,
+                85.1
+              ],
+              [
+                47.1,
+                85.4
+              ],
+              [
+                48.1,
+                85.1
+              ],
+              [
+                49.2,
+                85.2
+              ],
+              [
+                50.2,
+                85.2
+              ],
+              [
+                51.2,
+                85.1
+              ],
+              [
+                52.2,
+                85.3
+              ],
+              [
+                53.2,
+                85.2
+              ],
+              [
+                54.2,
+                85.3
+              ],
+              [
+                55.2,
+                85.1
+              ],
+              [
+                56.2,
+                85.5
+              ],
+              [
+                57.2,
+                85.4
+              ],
+              [
+                58.2,
+                85.2
+              ],
+              [
+                59.2,
+                85.5
+              ],
+              [
+                60.2,
+                85.2
+              ],
+              [
+                61.2,
+                85.1
+              ],
+              [
+                62.2,
+                85.1
+              ],
+              [
+                63.2,
+                85.1
+              ],
+              [
+                64.2,
+                85.4
+              ],
+              [
+                65.2,
+                85.1
+              ],
+              [
+                66.2,
+                85.3
+              ],
+              [
+                67.2,
+                85.2
+              ],
+              [
+                68.2,
+                85.5
+              ],
+              [
+                69.2,
+                85.1
+              ],
+              [
+                70.2,
+                85.4
+              ],
+              [
+                71.2,
+                85.1
+              ],
+              [
+                72.2,
+                85.3
+              ],
+              [
+                73.2,
+                85.4
+              ],
+              [
+                74.2,
+                85.5
+              ],
+              [
+                75.2,
+                85.4
+              ],
+              [
+                76.2,
+                85.4
+              ],
+              [
+                77.2,
+                85.3
+              ],
+              [
+                78.2,
+                85.4
+              ],
+              [
+                79.2,
+                85.5
+              ],
+              [
+                80.2,
+                85.3
+              ],
+              [
+                81.3,
+                85.5
+              ],
+              [
+                82.3,
+                85.4
+              ],
+              [
+                83.3,
+                85.3
+              ],
+              [
+                84.3,
+                85.3
+              ],
+              [
+                85.3,
+                85.4
+              ],
+              [
+                86.3,
+                85.5
+              ],
+              [
+                87.3,
+                85.4
+              ],
+              [
+                88.3,
+                85.3
+              ],
+              [
+                89.3,
+                85.2
+              ],
+              [
+                90.3,
+                85.2
+              ],
+              [
+                91.3,
+                85.4
+              ],
+              [
+                92.3,
+                85.4
+              ],
+              [
+                93.3,
+                85.3
+              ],
+              [
+                94.3,
+                85.4
+              ],
+              [
+                95.3,
+                85.2
+              ],
+              [
+                96.3,
+                85.7
+              ],
+              [
+                97.3,
+                85.8
+              ],
+              [
+                98.3,
+                85.6
+              ],
+              [
+                99.3,
+                85.8
+              ],
+              [
+                100.3,
+                85.9
+              ],
+              [
+                101.3,
+                86.1
+              ],
+              [
+                102.3,
+                86.0
+              ],
+              [
+                103.3,
+                85.8
+              ],
+              [
+                104.3,
+                85.9
+              ],
+              [
+                105.3,
+                85.8
+              ],
+              [
+                106.3,
+                85.9
+              ],
+              [
+                107.3,
+                85.8
+              ],
+              [
+                108.3,
+                85.8
+              ],
+              [
+                109.3,
+                85.9
+              ],
+              [
+                110.3,
+                85.9
+              ],
+              [
+                111.3,
+                86.0
+              ],
+              [
+                112.3,
+                85.9
+              ],
+              [
+                113.3,
+                85.6
+              ],
+              [
+                114.4,
+                85.7
+              ],
+              [
+                115.4,
+                85.6
+              ],
+              [
+                116.4,
+                85.7
+              ],
+              [
+                117.4,
+                85.7
+              ],
+              [
+                118.4,
+                85.7
+              ],
+              [
+                119.4,
+                85.5
+              ],
+              [
+                120.4,
+                83.6
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 80.7,
+            "memory_peak_mib": 87.3
+          }
+        }
+      ],
+      "summary": {
+        "metrics": {
+          "tier1.text.rps": {
+            "median": 1135.82,
+            "min": 1090.81,
+            "max": 1232.76,
+            "spread": 0.125,
+            "n": 5
+          },
+          "tier1.text.latency_ms.mean": {
+            "median": 109.477,
+            "min": 100.943,
+            "max": 113.976,
+            "spread": 0.119,
+            "n": 5
+          },
+          "tier1.text.latency_ms.p50": {
+            "median": 110.116,
+            "min": 100.69,
+            "max": 114.577,
+            "spread": 0.1261,
+            "n": 5
+          },
+          "tier1.text.latency_ms.p99": {
+            "median": 125.638,
+            "min": 116.88,
+            "max": 136.404,
+            "spread": 0.1554,
+            "n": 5
+          },
+          "tier1.text.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.text.server_cpu_cores": {
+            "median": 1.998,
+            "min": 1.998,
+            "max": 1.998,
+            "spread": 0.0,
+            "n": 5
+          },
+          "tier1.json.rps": {
+            "median": 1168.56,
+            "min": 1038.42,
+            "max": 1241.79,
+            "spread": 0.174,
+            "n": 5
+          },
+          "tier1.json.latency_ms.mean": {
+            "median": 106.36,
+            "min": 100.164,
+            "max": 119.707,
+            "spread": 0.1837,
+            "n": 5
+          },
+          "tier1.json.latency_ms.p50": {
+            "median": 106.606,
+            "min": 100.25,
+            "max": 119.892,
+            "spread": 0.1842,
+            "n": 5
+          },
+          "tier1.json.latency_ms.p99": {
+            "median": 127.546,
+            "min": 116.089,
+            "max": 145.465,
+            "spread": 0.2303,
+            "n": 5
+          },
+          "tier1.json.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.json.server_cpu_cores": {
+            "median": 1.998,
+            "min": 1.997,
+            "max": 1.998,
+            "spread": 0.0005,
+            "n": 5
+          },
+          "tier1.db-single.rps": {
+            "median": 312.12,
+            "min": 295.52,
+            "max": 344.0,
+            "spread": 0.1553,
+            "n": 5
+          },
+          "tier1.db-single.latency_ms.mean": {
+            "median": 393.402,
+            "min": 357.501,
+            "max": 414.879,
+            "spread": 0.1459,
+            "n": 5
+          },
+          "tier1.db-single.latency_ms.p50": {
+            "median": 397.557,
+            "min": 361.203,
+            "max": 420.36,
+            "spread": 0.1488,
+            "n": 5
+          },
+          "tier1.db-single.latency_ms.p99": {
+            "median": 452.893,
+            "min": 406.447,
+            "max": 465.082,
+            "spread": 0.1295,
+            "n": 5
+          },
+          "tier1.db-single.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.db-single.server_cpu_cores": {
+            "median": 1.013,
+            "min": 0.93,
+            "max": 1.1,
+            "spread": 0.1678,
+            "n": 5
+          },
+          "tier1.html.rps": {
+            "median": 897.68,
+            "min": 830.73,
+            "max": 965.21,
+            "spread": 0.1498,
+            "n": 5
+          },
+          "tier1.html.latency_ms.mean": {
+            "median": 138.366,
+            "min": 128.764,
+            "max": 149.443,
+            "spread": 0.1495,
+            "n": 5
+          },
+          "tier1.html.latency_ms.p50": {
+            "median": 138.362,
+            "min": 128.991,
+            "max": 148.312,
+            "spread": 0.1396,
+            "n": 5
+          },
+          "tier1.html.latency_ms.p99": {
+            "median": 165.967,
+            "min": 150.361,
+            "max": 200.881,
+            "spread": 0.3044,
+            "n": 5
+          },
+          "tier1.html.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.html.server_cpu_cores": {
+            "median": 1.998,
+            "min": 1.998,
+            "max": 1.998,
+            "spread": 0.0,
+            "n": 5
+          },
+          "tier2.rps": {
+            "median": 1175.87,
+            "min": 1090.16,
+            "max": 1256.16,
+            "spread": 0.1412,
+            "n": 5
+          },
+          "tier2.latency_ms.p50": {
+            "median": 250.109,
+            "min": 237.895,
+            "max": 273.081,
+            "spread": 0.1407,
+            "n": 5
+          },
+          "tier2.latency_ms.p99": {
+            "median": 315.436,
+            "min": 267.029,
+            "max": 326.293,
+            "spread": 0.1879,
+            "n": 5
+          },
+          "tier2.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier2.timeouts": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier3.idle_ram_mib": {
+            "median": 37.4,
+            "min": 37.2,
+            "max": 37.7,
+            "spread": 0.0134,
+            "n": 5
+          },
+          "tier3.idle_cpu_cores": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier3.load_ram_peak_mib": {
+            "median": 80.2,
+            "min": 77.0,
+            "max": 81.9,
+            "spread": 0.0611,
+            "n": 5
+          },
+          "tier3.load_cpu_cores": {
+            "median": 1.998,
+            "min": 1.997,
+            "max": 1.998,
+            "spread": 0.0005,
+            "n": 5
+          },
+          "tier3.rps": {
+            "median": 1187.56,
+            "min": 1024.26,
+            "max": 1239.51,
+            "spread": 0.1813,
+            "n": 5
+          },
+          "tier4.rps": {
+            "median": 1198.49,
+            "min": 1091.63,
+            "max": 1229.42,
+            "spread": 0.115,
+            "n": 5
+          },
+          "tier4.latency_ms.p99": {
+            "median": 486.453,
+            "min": 456.215,
+            "max": 520.099,
+            "spread": 0.1313,
+            "n": 5
+          },
+          "tier4.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier4.transport_errors": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier4.timeouts": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier4.ram_mid_mib": {
+            "median": 83.7,
+            "min": 80.5,
+            "max": 85.3,
+            "spread": 0.0573,
+            "n": 5
+          },
+          "tier4.ram_end_mib": {
+            "median": 84.0,
+            "min": 80.5,
+            "max": 85.7,
+            "spread": 0.0619,
+            "n": 5
+          },
+          "tier4.ram_growth_mib": {
+            "median": 0.1,
+            "min": -0.0,
+            "max": 0.4,
+            "spread": 4.0,
+            "n": 5
+          },
+          "startup_s": {
+            "median": 0.41,
+            "min": 0.4,
+            "max": 0.41,
+            "spread": 0.0244,
+            "n": 5
+          },
+          "idle.tasks": {
+            "median": 20.0,
+            "min": 20.0,
+            "max": 20.0,
+            "spread": 0.0,
+            "n": 5
+          },
+          "after.ram_mib": {
+            "median": 79.3,
+            "min": 76.3,
+            "max": 80.7,
+            "spread": 0.0555,
+            "n": 5
+          },
+          "after.memory_peak_mib": {
+            "median": 84.4,
+            "min": 81.2,
+            "max": 87.3,
+            "spread": 0.0723,
+            "n": 5
+          }
+        },
+        "flags": {
+          "rounds": 5,
+          "crashed_rounds": 0,
+          "ram_growing_rounds": 0,
+          "client_bound_rounds": {
+            "tier1.text": 0,
+            "tier1.json": 0,
+            "tier1.db-single": 5,
+            "tier1.html": 0,
+            "tier2": 0,
+            "tier3_load": 0,
+            "tier4": 0
+          }
+        }
+      }
+    },
+    "axum": {
+      "manifest": {
+        "name": "Axum",
+        "language": "Rust",
+        "group": "rust",
+        "framework": "axum",
+        "framework_version": "0.8.9",
+        "version_package": "axum",
+        "runtime": "Rust 1.99.1 (release build, thin LTO)",
+        "server": "Hyper via axum::serve",
+        "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
+        "database_layer": "SQLx 0.9 (Axum has no ORM; its examples use SQLx)",
+        "template_engine": "Askama 0.16",
+        "logging": "none",
+        "startup_timeout_s": 120,
+        "notes": "Baseline: every job measures it on the same runner as the framework under test.",
+        "slug": "axum"
+      },
+      "status": "measured",
+      "build": {
+        "image_id": "sha256:ff1b5419b504ca82af704ba5142108d51ac22dca87a8a537d220b016b389bca5",
+        "image_size_mib": 9.7,
+        "build_seconds": 46.6,
+        "build_args": {},
+        "base_images": {
+          "rust:1.99.1-slim-bookworm": "sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd",
+          "gcr.io/distroless/cc-debian12:nonroot@sha256:9dac0a79194e45a7da0158a9c6da57b217585af0786db3845d1f0ec1a0dd182f": "sha256:9dac0a79194e45a7da0158a9c6da57b217585af0786db3845d1f0ec1a0dd182f"
+        },
+        "versions": "askama 0.16.1\naxum 0.8.9\nhyper 1.12.0\nsqlx 0.9.0\ntokio 1.54.1"
+      },
+      "conformance": {
+        "passed": true,
+        "checks": [
+          {
+            "endpoint": "/text",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "text/plain; charset=utf-8",
+            "body_bytes": 11
+          },
+          {
+            "endpoint": "/json",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "application/json",
+            "body_bytes": 25
+          },
+          {
+            "endpoint": "/html",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "text/html; charset=utf-8",
+            "body_bytes": 98
+          },
+          {
+            "endpoint": "/db-single",
+            "ok": true,
+            "problem": null,
+            "status": 200,
+            "content_type": "application/json",
+            "body_bytes": 29
+          }
+        ],
+        "startup_s": 0.28
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "implementation": "axum",
+          "crashed": null,
+          "startup_s": 0.01,
+          "idle": {
+            "ram_mib": 1.1,
+            "cpu_cores": 0.0,
+            "tasks": 3,
+            "processes": 1
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.0,
+              "requests_ok": 1870721,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 187070.98,
+              "latency_ms": {
+                "mean": 0.667,
+                "p50": 0.59,
+                "p99": 1.772,
+                "max": 5.898
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.992,
+              "client_bound": true,
+              "server_cpu_cores": 1.908,
+              "server_ram_peak_mib": 8.4
+            },
+            "json": {
+              "duration_s": 10.0,
+              "requests_ok": 1885153,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 188514.68,
+              "latency_ms": {
+                "mean": 0.662,
+                "p50": 0.585,
+                "p99": 1.751,
+                "max": 8.083
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.994,
+              "client_bound": true,
+              "server_cpu_cores": 1.923,
+              "server_ram_peak_mib": 9.1
+            },
+            "db-single": {
+              "duration_s": 10.005,
+              "requests_ok": 227057,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 22694.09,
+              "latency_ms": {
+                "mean": 5.504,
+                "p50": 5.464,
+                "p99": 6.375,
+                "max": 14.427
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.234,
+              "client_bound": true,
+              "server_cpu_cores": 1.229,
+              "server_ram_peak_mib": 8.4
+            },
+            "html": {
+              "duration_s": 10.0,
+              "requests_ok": 1875932,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 187592.01,
+              "latency_ms": {
+                "mean": 0.665,
+                "p50": 0.586,
+                "p99": 1.763,
+                "max": 5.848
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.995,
+              "client_bound": true,
+              "server_cpu_cores": 1.929,
+              "server_ram_peak_mib": 8.5
+            }
+          },
+          "tier2": {
+            "duration_s": 30.0,
+            "requests_ok": 5507793,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 183591.25,
+            "latency_ms": {
+              "mean": 1.633,
+              "p50": 1.627,
+              "p99": 2.974,
+              "max": 20.188
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.998,
+            "loadgen_cpu_share": 0.993,
+            "client_bound": true,
+            "server_cpu_cores": 1.906,
+            "server_ram_peak_mib": 13.1
+          },
+          "tier3": {
+            "idle_ram_mib": 1.1,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 10.5,
+            "load_cpu_cores": 1.922,
+            "rps": 185760.17,
+            "error_rate": 0.0,
+            "client_bound": true,
+            "client_cpu_busy": 0.999
+          },
+          "tier4": {
+            "duration_s": 120.001,
+            "requests_ok": 21856210,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 182134.17,
+            "latency_ms": {
+              "mean": 2.744,
+              "p50": 2.733,
+              "p99": 4.206,
+              "max": 29.287
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.999,
+            "loadgen_cpu_share": 0.996,
+            "client_bound": true,
+            "server_cpu_cores": 1.913,
+            "server_ram_peak_mib": 19.5,
+            "ram_mid_mib": 18.6,
+            "ram_end_mib": 18.6,
+            "ram_growth_mib": 0.0,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                8.5
+              ],
+              [
+                1.0,
+                18.6
+              ],
+              [
+                2.0,
+                18.6
+              ],
+              [
+                3.0,
+                18.7
+              ],
+              [
+                4.0,
+                18.7
+              ],
+              [
+                5.0,
+                18.9
+              ],
+              [
+                6.0,
+                18.9
+              ],
+              [
+                7.0,
+                18.7
+              ],
+              [
+                8.0,
+                18.7
+              ],
+              [
+                9.0,
+                18.5
+              ],
+              [
+                10.1,
+                18.9
+              ],
+              [
+                11.1,
+                18.8
+              ],
+              [
+                12.1,
+                18.6
+              ],
+              [
+                13.1,
+                18.5
+              ],
+              [
+                14.1,
+                18.6
+              ],
+              [
+                15.1,
+                18.6
+              ],
+              [
+                16.1,
+                18.6
+              ],
+              [
+                17.1,
+                18.7
+              ],
+              [
+                18.1,
+                18.9
+              ],
+              [
+                19.1,
+                18.8
+              ],
+              [
+                20.1,
+                18.5
+              ],
+              [
+                21.1,
+                18.8
+              ],
+              [
+                22.1,
+                18.8
+              ],
+              [
+                23.1,
+                18.8
+              ],
+              [
+                24.1,
+                18.6
+              ],
+              [
+                25.1,
+                18.9
+              ],
+              [
+                26.1,
+                18.8
+              ],
+              [
+                27.1,
+                18.7
+              ],
+              [
+                28.2,
+                19.0
+              ],
+              [
+                29.2,
+                18.6
+              ],
+              [
+                30.2,
+                18.7
+              ],
+              [
+                31.2,
+                18.8
+              ],
+              [
+                32.2,
+                18.7
+              ],
+              [
+                33.2,
+                19.0
+              ],
+              [
+                34.2,
+                18.7
+              ],
+              [
+                35.2,
+                18.7
+              ],
+              [
+                36.2,
+                18.5
+              ],
+              [
+                37.2,
+                18.5
+              ],
+              [
+                38.2,
+                18.4
+              ],
+              [
+                39.2,
+                18.6
+              ],
+              [
+                40.2,
+                18.6
+              ],
+              [
+                41.2,
+                18.7
+              ],
+              [
+                42.2,
+                18.6
+              ],
+              [
+                43.2,
+                18.4
+              ],
+              [
+                44.2,
+                18.7
+              ],
+              [
+                45.2,
+                18.6
+              ],
+              [
+                46.3,
+                18.7
+              ],
+              [
+                47.3,
+                18.8
+              ],
+              [
+                48.3,
+                18.7
+              ],
+              [
+                49.3,
+                18.9
+              ],
+              [
+                50.3,
+                18.6
+              ],
+              [
+                51.3,
+                18.7
+              ],
+              [
+                52.3,
+                18.6
+              ],
+              [
+                53.3,
+                18.7
+              ],
+              [
+                54.3,
+                18.8
+              ],
+              [
+                55.3,
+                18.7
+              ],
+              [
+                56.3,
+                18.7
+              ],
+              [
+                57.3,
+                18.5
+              ],
+              [
+                58.3,
+                18.4
+              ],
+              [
+                59.3,
+                18.6
+              ],
+              [
+                60.3,
+                18.7
+              ],
+              [
+                61.3,
+                18.6
+              ],
+              [
+                62.3,
+                18.6
+              ],
+              [
+                63.4,
+                18.6
+              ],
+              [
+                64.4,
+                18.6
+              ],
+              [
+                65.4,
+                18.5
+              ],
+              [
+                66.4,
+                18.5
+              ],
+              [
+                67.4,
+                18.5
+              ],
+              [
+                68.4,
+                18.5
+              ],
+              [
+                69.4,
+                19.1
+              ],
+              [
+                70.4,
+                18.9
+              ],
+              [
+                71.4,
+                18.7
+              ],
+              [
+                72.4,
+                18.9
+              ],
+              [
+                73.4,
+                19.0
+              ],
+              [
+                74.4,
+                19.0
+              ],
+              [
+                75.4,
+                19.1
+              ],
+              [
+                76.4,
+                18.5
+              ],
+              [
+                77.4,
+                18.9
+              ],
+              [
+                78.4,
+                18.5
+              ],
+              [
+                79.4,
+                18.6
+              ],
+              [
+                80.4,
+                18.8
+              ],
+              [
+                81.5,
+                18.7
+              ],
+              [
+                82.5,
+                18.6
+              ],
+              [
+                83.5,
+                18.7
+              ],
+              [
+                84.5,
+                18.7
+              ],
+              [
+                85.5,
+                18.5
+              ],
+              [
+                86.5,
+                18.7
+              ],
+              [
+                87.5,
+                18.7
+              ],
+              [
+                88.5,
+                18.7
+              ],
+              [
+                89.5,
+                18.8
+              ],
+              [
+                90.5,
+                18.8
+              ],
+              [
+                91.5,
+                18.6
+              ],
+              [
+                92.5,
+                18.6
+              ],
+              [
+                93.5,
+                18.3
+              ],
+              [
+                94.5,
+                18.4
+              ],
+              [
+                95.5,
+                18.9
+              ],
+              [
+                96.5,
+                18.7
+              ],
+              [
+                97.5,
+                18.7
+              ],
+              [
+                98.6,
+                18.5
+              ],
+              [
+                99.6,
+                18.4
+              ],
+              [
+                100.6,
+                18.4
+              ],
+              [
+                101.6,
+                18.6
+              ],
+              [
+                102.6,
+                18.6
+              ],
+              [
+                103.6,
+                18.5
+              ],
+              [
+                104.6,
+                18.5
+              ],
+              [
+                105.6,
+                18.5
+              ],
+              [
+                106.6,
+                18.6
+              ],
+              [
+                107.6,
+                18.8
+              ],
+              [
+                108.6,
+                18.8
+              ],
+              [
+                109.6,
+                18.6
+              ],
+              [
+                110.6,
+                18.6
+              ],
+              [
+                111.6,
+                18.6
+              ],
+              [
+                112.6,
+                18.6
+              ],
+              [
+                113.6,
+                18.8
+              ],
+              [
+                114.6,
+                18.8
+              ],
+              [
+                115.6,
+                18.6
+              ],
+              [
+                116.7,
+                18.4
+              ],
+              [
+                117.7,
+                18.4
+              ],
+              [
+                118.7,
+                18.6
+              ],
+              [
+                119.7,
+                18.6
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 15.2,
+            "memory_peak_mib": 19.6
+          }
+        },
+        {
+          "round": 2,
+          "implementation": "axum",
+          "crashed": null,
+          "startup_s": 0.01,
+          "idle": {
+            "ram_mib": 1.0,
+            "cpu_cores": 0.0,
+            "tasks": 3,
+            "processes": 1
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.0,
+              "requests_ok": 1913568,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 191355.71,
+              "latency_ms": {
+                "mean": 0.652,
+                "p50": 0.577,
+                "p99": 1.732,
+                "max": 5.691
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.996,
+              "loadgen_cpu_share": 0.992,
+              "client_bound": true,
+              "server_cpu_cores": 1.909,
+              "server_ram_peak_mib": 8.3
+            },
+            "json": {
+              "duration_s": 10.0,
+              "requests_ok": 1913526,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 191348.26,
+              "latency_ms": {
+                "mean": 0.652,
+                "p50": 0.577,
+                "p99": 1.726,
+                "max": 5.622
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.993,
+              "loadgen_cpu_share": 0.989,
+              "client_bound": true,
+              "server_cpu_cores": 1.912,
+              "server_ram_peak_mib": 8.3
+            },
+            "db-single": {
+              "duration_s": 10.006,
+              "requests_ok": 233105,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 23296.4,
+              "latency_ms": {
+                "mean": 5.36,
+                "p50": 5.29,
+                "p99": 7.344,
+                "max": 13.036
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.24,
+              "client_bound": true,
+              "server_cpu_cores": 1.233,
+              "server_ram_peak_mib": 8.7
+            },
+            "html": {
+              "duration_s": 10.0,
+              "requests_ok": 1962111,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 196210.28,
+              "latency_ms": {
+                "mean": 0.636,
+                "p50": 0.562,
+                "p99": 1.684,
+                "max": 6.12
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.995,
+              "client_bound": true,
+              "server_cpu_cores": 1.927,
+              "server_ram_peak_mib": 8.7
+            }
+          },
+          "tier2": {
+            "duration_s": 30.0,
+            "requests_ok": 5704810,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 190157.79,
+            "latency_ms": {
+              "mean": 1.576,
+              "p50": 1.57,
+              "p99": 2.893,
+              "max": 15.832
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.998,
+            "loadgen_cpu_share": 0.994,
+            "client_bound": true,
+            "server_cpu_cores": 1.908,
+            "server_ram_peak_mib": 12.8
+          },
+          "tier3": {
+            "idle_ram_mib": 1.0,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 10.7,
+            "load_cpu_cores": 1.919,
+            "rps": 193672.47,
+            "error_rate": 0.0,
+            "client_bound": true,
+            "client_cpu_busy": 0.999
+          },
+          "tier4": {
+            "duration_s": 120.001,
+            "requests_ok": 21758584,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 181320.28,
+            "latency_ms": {
+              "mean": 2.756,
+              "p50": 2.74,
+              "p99": 4.395,
+              "max": 31.616
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.999,
+            "loadgen_cpu_share": 0.996,
+            "client_bound": true,
+            "server_cpu_cores": 1.91,
+            "server_ram_peak_mib": 19.5,
+            "ram_mid_mib": 18.8,
+            "ram_end_mib": 18.7,
+            "ram_growth_mib": -0.1,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                8.1
+              ],
+              [
+                1.0,
+                18.8
+              ],
+              [
+                2.0,
+                18.8
+              ],
+              [
+                3.0,
+                18.8
+              ],
+              [
+                4.0,
+                18.7
+              ],
+              [
+                5.0,
+                18.8
+              ],
+              [
+                6.0,
+                18.6
+              ],
+              [
+                7.0,
+                18.8
+              ],
+              [
+                8.0,
+                18.7
+              ],
+              [
+                9.1,
+                18.7
+              ],
+              [
+                10.1,
+                18.9
+              ],
+              [
+                11.1,
+                18.8
+              ],
+              [
+                12.1,
+                18.9
+              ],
+              [
+                13.1,
+                18.8
+              ],
+              [
+                14.1,
+                18.8
+              ],
+              [
+                15.1,
+                18.8
+              ],
+              [
+                16.1,
+                18.8
+              ],
+              [
+                17.1,
+                18.7
+              ],
+              [
+                18.1,
+                18.8
+              ],
+              [
+                19.1,
+                18.7
+              ],
+              [
+                20.1,
+                19.0
+              ],
+              [
+                21.1,
+                18.9
+              ],
+              [
+                22.1,
+                18.9
+              ],
+              [
+                23.1,
+                18.9
+              ],
+              [
+                24.1,
+                18.9
+              ],
+              [
+                25.2,
+                18.9
+              ],
+              [
+                26.2,
+                18.5
+              ],
+              [
+                27.2,
+                19.0
+              ],
+              [
+                28.2,
+                18.9
+              ],
+              [
+                29.2,
+                18.5
+              ],
+              [
+                30.2,
+                18.8
+              ],
+              [
+                31.2,
+                18.9
+              ],
+              [
+                32.2,
+                18.8
+              ],
+              [
+                33.2,
+                18.8
+              ],
+              [
+                34.2,
+                18.8
+              ],
+              [
+                35.2,
+                18.6
+              ],
+              [
+                36.2,
+                19.0
+              ],
+              [
+                37.2,
+                18.9
+              ],
+              [
+                38.2,
+                18.8
+              ],
+              [
+                39.2,
+                19.0
+              ],
+              [
+                40.2,
+                19.2
+              ],
+              [
+                41.2,
+                19.2
+              ],
+              [
+                42.3,
+                19.1
+              ],
+              [
+                43.3,
+                19.4
+              ],
+              [
+                44.3,
+                18.7
+              ],
+              [
+                45.3,
+                18.7
+              ],
+              [
+                46.3,
+                18.7
+              ],
+              [
+                47.3,
+                18.7
+              ],
+              [
+                48.3,
+                18.7
+              ],
+              [
+                49.3,
+                18.7
+              ],
+              [
+                50.3,
+                18.6
+              ],
+              [
+                51.3,
+                18.5
+              ],
+              [
+                52.3,
+                18.9
+              ],
+              [
+                53.3,
+                18.7
+              ],
+              [
+                54.3,
+                18.6
+              ],
+              [
+                55.3,
+                18.9
+              ],
+              [
+                56.3,
+                18.8
+              ],
+              [
+                57.3,
+                18.7
+              ],
+              [
+                58.3,
+                18.6
+              ],
+              [
+                59.4,
+                18.8
+              ],
+              [
+                60.4,
+                18.8
+              ],
+              [
+                61.4,
+                18.8
+              ],
+              [
+                62.4,
+                19.0
+              ],
+              [
+                63.4,
+                18.6
+              ],
+              [
+                64.4,
+                18.8
+              ],
+              [
+                65.4,
+                18.6
+              ],
+              [
+                66.4,
+                18.6
+              ],
+              [
+                67.4,
+                18.6
+              ],
+              [
+                68.4,
+                18.8
+              ],
+              [
+                69.4,
+                19.4
+              ],
+              [
+                70.4,
+                18.6
+              ],
+              [
+                71.4,
+                18.9
+              ],
+              [
+                72.4,
+                18.8
+              ],
+              [
+                73.4,
+                18.8
+              ],
+              [
+                74.4,
+                18.7
+              ],
+              [
+                75.4,
+                18.9
+              ],
+              [
+                76.5,
+                18.8
+              ],
+              [
+                77.5,
+                18.7
+              ],
+              [
+                78.5,
+                18.9
+              ],
+              [
+                79.5,
+                18.7
+              ],
+              [
+                80.5,
+                18.8
+              ],
+              [
+                81.5,
+                18.9
+              ],
+              [
+                82.5,
+                18.8
+              ],
+              [
+                83.5,
+                18.8
+              ],
+              [
+                84.5,
+                18.9
+              ],
+              [
+                85.5,
+                18.7
+              ],
+              [
+                86.5,
+                18.6
+              ],
+              [
+                87.5,
+                18.7
+              ],
+              [
+                88.5,
+                18.6
+              ],
+              [
+                89.5,
+                18.9
+              ],
+              [
+                90.5,
+                18.9
+              ],
+              [
+                91.5,
+                18.8
+              ],
+              [
+                92.5,
+                18.6
+              ],
+              [
+                93.5,
+                18.6
+              ],
+              [
+                94.6,
+                18.7
+              ],
+              [
+                95.6,
+                18.7
+              ],
+              [
+                96.6,
+                18.8
+              ],
+              [
+                97.6,
+                18.7
+              ],
+              [
+                98.6,
+                18.8
+              ],
+              [
+                99.6,
+                18.8
+              ],
+              [
+                100.6,
+                18.8
+              ],
+              [
+                101.6,
+                18.6
+              ],
+              [
+                102.6,
+                18.7
+              ],
+              [
+                103.6,
+                18.8
+              ],
+              [
+                104.6,
+                18.8
+              ],
+              [
+                105.6,
+                18.9
+              ],
+              [
+                106.6,
+                18.9
+              ],
+              [
+                107.6,
+                18.8
+              ],
+              [
+                108.6,
+                19.0
+              ],
+              [
+                109.6,
+                18.7
+              ],
+              [
+                110.6,
+                18.7
+              ],
+              [
+                111.7,
+                18.7
+              ],
+              [
+                112.7,
+                18.6
+              ],
+              [
+                113.7,
+                18.6
+              ],
+              [
+                114.7,
+                18.7
+              ],
+              [
+                115.7,
+                18.9
+              ],
+              [
+                116.7,
+                18.6
+              ],
+              [
+                117.7,
+                18.6
+              ],
+              [
+                118.7,
+                18.8
+              ],
+              [
+                119.7,
+                18.6
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 14.6,
+            "memory_peak_mib": 19.7
+          }
+        },
+        {
+          "round": 3,
+          "implementation": "axum",
+          "crashed": null,
+          "startup_s": 0.02,
+          "idle": {
+            "ram_mib": 1.2,
+            "cpu_cores": 0.0,
+            "tasks": 3,
+            "processes": 1
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.0,
+              "requests_ok": 1855063,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 185505.73,
+              "latency_ms": {
+                "mean": 0.673,
+                "p50": 0.593,
+                "p99": 1.788,
+                "max": 14.396
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.995,
+              "client_bound": true,
+              "server_cpu_cores": 1.919,
+              "server_ram_peak_mib": 8.8
+            },
+            "json": {
+              "duration_s": 10.0,
+              "requests_ok": 1864033,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 186401.99,
+              "latency_ms": {
+                "mean": 0.67,
+                "p50": 0.592,
+                "p99": 1.769,
+                "max": 5.791
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.995,
+              "client_bound": true,
+              "server_cpu_cores": 1.924,
+              "server_ram_peak_mib": 9.0
+            },
+            "db-single": {
+              "duration_s": 10.005,
+              "requests_ok": 225770,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 22565.03,
+              "latency_ms": {
+                "mean": 5.533,
+                "p50": 5.496,
+                "p99": 6.279,
+                "max": 12.686
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.237,
+              "client_bound": true,
+              "server_cpu_cores": 1.228,
+              "server_ram_peak_mib": 9.3
+            },
+            "html": {
+              "duration_s": 10.0,
+              "requests_ok": 1860080,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 186004.78,
+              "latency_ms": {
+                "mean": 0.671,
+                "p50": 0.593,
+                "p99": 1.773,
+                "max": 5.93
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.994,
+              "client_bound": true,
+              "server_cpu_cores": 1.927,
+              "server_ram_peak_mib": 9.3
+            }
+          },
+          "tier2": {
+            "duration_s": 30.0,
+            "requests_ok": 5424367,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 180810.09,
+            "latency_ms": {
+              "mean": 1.658,
+              "p50": 1.652,
+              "p99": 3.027,
+              "max": 19.193
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.998,
+            "loadgen_cpu_share": 0.994,
+            "client_bound": true,
+            "server_cpu_cores": 1.91,
+            "server_ram_peak_mib": 13.2
+          },
+          "tier3": {
+            "idle_ram_mib": 1.2,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 11.3,
+            "load_cpu_cores": 1.918,
+            "rps": 188777.59,
+            "error_rate": 0.0,
+            "client_bound": true,
+            "client_cpu_busy": 0.998
+          },
+          "tier4": {
+            "duration_s": 120.001,
+            "requests_ok": 22188573,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 184903.82,
+            "latency_ms": {
+              "mean": 2.703,
+              "p50": 2.695,
+              "p99": 4.084,
+              "max": 30.742
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.999,
+            "loadgen_cpu_share": 0.995,
+            "client_bound": true,
+            "server_cpu_cores": 1.914,
+            "server_ram_peak_mib": 19.8,
+            "ram_mid_mib": 18.8,
+            "ram_end_mib": 18.8,
+            "ram_growth_mib": -0.0,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                9.0
+              ],
+              [
+                1.0,
+                18.9
+              ],
+              [
+                2.0,
+                19.1
+              ],
+              [
+                3.0,
+                18.9
+              ],
+              [
+                4.0,
+                19.1
+              ],
+              [
+                5.0,
+                19.0
+              ],
+              [
+                6.0,
+                19.1
+              ],
+              [
+                7.0,
+                19.1
+              ],
+              [
+                8.1,
+                18.9
+              ],
+              [
+                9.1,
+                19.0
+              ],
+              [
+                10.1,
+                18.9
+              ],
+              [
+                11.1,
+                18.9
+              ],
+              [
+                12.1,
+                18.8
+              ],
+              [
+                13.1,
+                18.7
+              ],
+              [
+                14.1,
+                18.8
+              ],
+              [
+                15.1,
+                18.7
+              ],
+              [
+                16.1,
+                18.9
+              ],
+              [
+                17.1,
+                18.8
+              ],
+              [
+                18.1,
+                18.6
+              ],
+              [
+                19.1,
+                18.9
+              ],
+              [
+                20.1,
+                18.8
+              ],
+              [
+                21.1,
+                18.9
+              ],
+              [
+                22.1,
+                18.7
+              ],
+              [
+                23.1,
+                18.9
+              ],
+              [
+                24.1,
+                18.6
+              ],
+              [
+                25.2,
+                18.7
+              ],
+              [
+                26.2,
+                18.7
+              ],
+              [
+                27.2,
+                18.8
+              ],
+              [
+                28.2,
+                19.3
+              ],
+              [
+                29.2,
+                19.0
+              ],
+              [
+                30.2,
+                19.0
+              ],
+              [
+                31.2,
+                18.7
+              ],
+              [
+                32.2,
+                18.5
+              ],
+              [
+                33.2,
+                18.4
+              ],
+              [
+                34.2,
+                18.7
+              ],
+              [
+                35.2,
+                18.9
+              ],
+              [
+                36.2,
+                18.6
+              ],
+              [
+                37.2,
+                18.9
+              ],
+              [
+                38.2,
+                18.8
+              ],
+              [
+                39.2,
+                18.7
+              ],
+              [
+                40.2,
+                18.6
+              ],
+              [
+                41.2,
+                18.8
+              ],
+              [
+                42.3,
+                18.7
+              ],
+              [
+                43.3,
+                18.8
+              ],
+              [
+                44.3,
+                18.7
+              ],
+              [
+                45.3,
+                18.9
+              ],
+              [
+                46.3,
+                18.5
+              ],
+              [
+                47.3,
+                18.8
+              ],
+              [
+                48.3,
+                18.7
+              ],
+              [
+                49.3,
+                18.5
+              ],
+              [
+                50.3,
+                18.6
+              ],
+              [
+                51.3,
+                18.9
+              ],
+              [
+                52.3,
+                18.6
+              ],
+              [
+                53.3,
+                18.6
+              ],
+              [
+                54.3,
+                18.8
+              ],
+              [
+                55.3,
+                18.7
+              ],
+              [
+                56.3,
+                18.8
+              ],
+              [
+                57.3,
+                18.7
+              ],
+              [
+                58.3,
+                18.5
+              ],
+              [
+                59.4,
+                18.9
+              ],
+              [
+                60.4,
+                18.9
+              ],
+              [
+                61.4,
+                18.8
+              ],
+              [
+                62.4,
+                19.0
+              ],
+              [
+                63.4,
+                18.6
+              ],
+              [
+                64.4,
+                18.8
+              ],
+              [
+                65.4,
+                18.8
+              ],
+              [
+                66.4,
+                18.7
+              ],
+              [
+                67.4,
+                18.9
+              ],
+              [
+                68.4,
+                18.7
+              ],
+              [
+                69.4,
+                18.8
+              ],
+              [
+                70.4,
+                18.8
+              ],
+              [
+                71.4,
+                18.9
+              ],
+              [
+                72.4,
+                18.8
+              ],
+              [
+                73.4,
+                18.6
+              ],
+              [
+                74.4,
+                18.8
+              ],
+              [
+                75.4,
+                18.7
+              ],
+              [
+                76.5,
+                18.7
+              ],
+              [
+                77.5,
+                18.7
+              ],
+              [
+                78.5,
+                18.9
+              ],
+              [
+                79.5,
+                18.9
+              ],
+              [
+                80.5,
+                18.9
+              ],
+              [
+                81.5,
+                18.8
+              ],
+              [
+                82.5,
+                18.7
+              ],
+              [
+                83.5,
+                18.6
+              ],
+              [
+                84.5,
+                18.7
+              ],
+              [
+                85.5,
+                18.6
+              ],
+              [
+                86.5,
+                18.7
+              ],
+              [
+                87.5,
+                18.8
+              ],
+              [
+                88.5,
+                18.8
+              ],
+              [
+                89.5,
+                18.9
+              ],
+              [
+                90.5,
+                18.9
+              ],
+              [
+                91.6,
+                18.8
+              ],
+              [
+                92.6,
+                18.8
+              ],
+              [
+                93.6,
+                18.6
+              ],
+              [
+                94.6,
+                18.6
+              ],
+              [
+                95.6,
+                19.0
+              ],
+              [
+                96.6,
+                18.8
+              ],
+              [
+                97.6,
+                18.9
+              ],
+              [
+                98.6,
+                18.7
+              ],
+              [
+                99.6,
+                18.6
+              ],
+              [
+                100.6,
+                18.9
+              ],
+              [
+                101.6,
+                18.9
+              ],
+              [
+                102.6,
+                18.8
+              ],
+              [
+                103.6,
+                18.8
+              ],
+              [
+                104.6,
+                18.9
+              ],
+              [
+                105.6,
+                18.8
+              ],
+              [
+                106.6,
+                18.9
+              ],
+              [
+                107.6,
+                18.6
+              ],
+              [
+                108.7,
+                18.9
+              ],
+              [
+                109.7,
+                18.8
+              ],
+              [
+                110.7,
+                18.9
+              ],
+              [
+                111.7,
+                18.9
+              ],
+              [
+                112.7,
+                18.5
+              ],
+              [
+                113.7,
+                18.8
+              ],
+              [
+                114.7,
+                18.8
+              ],
+              [
+                115.7,
+                19.0
+              ],
+              [
+                116.7,
+                18.9
+              ],
+              [
+                117.7,
+                18.8
+              ],
+              [
+                118.7,
+                18.8
+              ],
+              [
+                119.7,
+                18.7
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 15.0,
+            "memory_peak_mib": 19.8
+          }
+        },
+        {
+          "round": 4,
+          "implementation": "axum",
+          "crashed": null,
+          "startup_s": 0.01,
+          "idle": {
+            "ram_mib": 1.1,
+            "cpu_cores": 0.0,
+            "tasks": 3,
+            "processes": 1
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.0,
+              "requests_ok": 1895631,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 189561.85,
+              "latency_ms": {
+                "mean": 0.658,
+                "p50": 0.584,
+                "p99": 1.745,
+                "max": 5.883
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.997,
+              "loadgen_cpu_share": 0.99,
+              "client_bound": true,
+              "server_cpu_cores": 1.907,
+              "server_ram_peak_mib": 8.1
+            },
+            "json": {
+              "duration_s": 10.0,
+              "requests_ok": 1920326,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 192030.84,
+              "latency_ms": {
+                "mean": 0.65,
+                "p50": 0.575,
+                "p99": 1.717,
+                "max": 5.249
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.995,
+              "client_bound": true,
+              "server_cpu_cores": 1.922,
+              "server_ram_peak_mib": 8.3
+            },
+            "db-single": {
+              "duration_s": 10.005,
+              "requests_ok": 239299,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 23918.43,
+              "latency_ms": {
+                "mean": 5.222,
+                "p50": 5.2,
+                "p99": 5.905,
+                "max": 12.449
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.243,
+              "client_bound": true,
+              "server_cpu_cores": 1.242,
+              "server_ram_peak_mib": 8.4
+            },
+            "html": {
+              "duration_s": 10.0,
+              "requests_ok": 1974264,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 197425.22,
+              "latency_ms": {
+                "mean": 0.632,
+                "p50": 0.558,
+                "p99": 1.674,
+                "max": 5.956
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.995,
+              "client_bound": true,
+              "server_cpu_cores": 1.925,
+              "server_ram_peak_mib": 8.6
+            }
+          },
+          "tier2": {
+            "duration_s": 30.0,
+            "requests_ok": 5753933,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 191795.93,
+            "latency_ms": {
+              "mean": 1.563,
+              "p50": 1.557,
+              "p99": 2.868,
+              "max": 20.507
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.998,
+            "loadgen_cpu_share": 0.993,
+            "client_bound": true,
+            "server_cpu_cores": 1.907,
+            "server_ram_peak_mib": 13.1
+          },
+          "tier3": {
+            "idle_ram_mib": 1.1,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 10.9,
+            "load_cpu_cores": 1.917,
+            "rps": 191374.63,
+            "error_rate": 0.0,
+            "client_bound": true,
+            "client_cpu_busy": 0.999
+          },
+          "tier4": {
+            "duration_s": 120.001,
+            "requests_ok": 22268619,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 185570.82,
+            "latency_ms": {
+              "mean": 2.693,
+              "p50": 2.682,
+              "p99": 4.145,
+              "max": 26.508
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.999,
+            "loadgen_cpu_share": 0.996,
+            "client_bound": true,
+            "server_cpu_cores": 1.912,
+            "server_ram_peak_mib": 19.6,
+            "ram_mid_mib": 18.6,
+            "ram_end_mib": 18.7,
+            "ram_growth_mib": 0.0,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                8.5
+              ],
+              [
+                1.0,
+                18.8
+              ],
+              [
+                2.0,
+                18.8
+              ],
+              [
+                3.0,
+                18.8
+              ],
+              [
+                4.0,
+                19.1
+              ],
+              [
+                5.0,
+                19.3
+              ],
+              [
+                6.0,
+                18.8
+              ],
+              [
+                7.0,
+                18.9
+              ],
+              [
+                8.0,
+                18.8
+              ],
+              [
+                9.1,
+                19.2
+              ],
+              [
+                10.1,
+                18.8
+              ],
+              [
+                11.1,
+                18.9
+              ],
+              [
+                12.1,
+                18.9
+              ],
+              [
+                13.1,
+                18.8
+              ],
+              [
+                14.1,
+                18.7
+              ],
+              [
+                15.1,
+                18.9
+              ],
+              [
+                16.1,
+                19.1
+              ],
+              [
+                17.1,
+                19.1
+              ],
+              [
+                18.1,
+                19.0
+              ],
+              [
+                19.1,
+                18.9
+              ],
+              [
+                20.1,
+                18.9
+              ],
+              [
+                21.1,
+                19.0
+              ],
+              [
+                22.1,
+                18.8
+              ],
+              [
+                23.1,
+                18.8
+              ],
+              [
+                24.1,
+                19.0
+              ],
+              [
+                25.2,
+                19.1
+              ],
+              [
+                26.2,
+                19.0
+              ],
+              [
+                27.2,
+                18.9
+              ],
+              [
+                28.2,
+                18.9
+              ],
+              [
+                29.2,
+                18.9
+              ],
+              [
+                30.2,
+                18.9
+              ],
+              [
+                31.2,
+                18.8
+              ],
+              [
+                32.2,
+                18.9
+              ],
+              [
+                33.2,
+                18.5
+              ],
+              [
+                34.2,
+                18.7
+              ],
+              [
+                35.2,
+                18.7
+              ],
+              [
+                36.2,
+                18.6
+              ],
+              [
+                37.2,
+                18.8
+              ],
+              [
+                38.2,
+                18.7
+              ],
+              [
+                39.2,
+                18.7
+              ],
+              [
+                40.2,
+                18.6
+              ],
+              [
+                41.2,
+                18.6
+              ],
+              [
+                42.2,
+                18.6
+              ],
+              [
+                43.3,
+                18.6
+              ],
+              [
+                44.3,
+                18.7
+              ],
+              [
+                45.3,
+                18.6
+              ],
+              [
+                46.3,
+                18.4
+              ],
+              [
+                47.3,
+                18.4
+              ],
+              [
+                48.3,
+                18.6
+              ],
+              [
+                49.3,
+                18.4
+              ],
+              [
+                50.3,
+                18.5
+              ],
+              [
+                51.3,
+                18.5
+              ],
+              [
+                52.3,
+                18.7
+              ],
+              [
+                53.3,
+                18.4
+              ],
+              [
+                54.3,
+                18.5
+              ],
+              [
+                55.3,
+                18.7
+              ],
+              [
+                56.3,
+                18.6
+              ],
+              [
+                57.3,
+                18.6
+              ],
+              [
+                58.3,
+                18.9
+              ],
+              [
+                59.3,
+                18.7
+              ],
+              [
+                60.4,
+                18.8
+              ],
+              [
+                61.4,
+                18.6
+              ],
+              [
+                62.4,
+                18.6
+              ],
+              [
+                63.4,
+                18.5
+              ],
+              [
+                64.4,
+                18.5
+              ],
+              [
+                65.4,
+                18.7
+              ],
+              [
+                66.4,
+                18.7
+              ],
+              [
+                67.4,
+                18.5
+              ],
+              [
+                68.4,
+                18.6
+              ],
+              [
+                69.4,
+                18.8
+              ],
+              [
+                70.4,
+                18.5
+              ],
+              [
+                71.4,
+                18.3
+              ],
+              [
+                72.4,
+                18.6
+              ],
+              [
+                73.4,
+                18.6
+              ],
+              [
+                74.4,
+                18.6
+              ],
+              [
+                75.4,
+                18.7
+              ],
+              [
+                76.4,
+                18.4
+              ],
+              [
+                77.5,
+                18.5
+              ],
+              [
+                78.5,
+                18.4
+              ],
+              [
+                79.5,
+                18.7
+              ],
+              [
+                80.5,
+                18.6
+              ],
+              [
+                81.5,
+                18.6
+              ],
+              [
+                82.5,
+                18.7
+              ],
+              [
+                83.5,
+                18.4
+              ],
+              [
+                84.5,
+                18.6
+              ],
+              [
+                85.5,
+                18.5
+              ],
+              [
+                86.5,
+                18.6
+              ],
+              [
+                87.5,
+                18.5
+              ],
+              [
+                88.5,
+                18.5
+              ],
+              [
+                89.5,
+                18.5
+              ],
+              [
+                90.5,
+                18.9
+              ],
+              [
+                91.5,
+                18.5
+              ],
+              [
+                92.5,
+                18.7
+              ],
+              [
+                93.6,
+                18.7
+              ],
+              [
+                94.6,
+                18.7
+              ],
+              [
+                95.6,
+                18.4
+              ],
+              [
+                96.6,
+                18.5
+              ],
+              [
+                97.6,
+                18.7
+              ],
+              [
+                98.6,
+                18.4
+              ],
+              [
+                99.6,
+                18.7
+              ],
+              [
+                100.6,
+                19.3
+              ],
+              [
+                101.6,
+                18.7
+              ],
+              [
+                102.6,
+                18.7
+              ],
+              [
+                103.6,
+                18.9
+              ],
+              [
+                104.6,
+                18.8
+              ],
+              [
+                105.6,
+                18.5
+              ],
+              [
+                106.6,
+                18.6
+              ],
+              [
+                107.6,
+                18.7
+              ],
+              [
+                108.6,
+                18.6
+              ],
+              [
+                109.7,
+                18.7
+              ],
+              [
+                110.7,
+                18.6
+              ],
+              [
+                111.7,
+                18.3
+              ],
+              [
+                112.7,
+                18.8
+              ],
+              [
+                113.7,
+                18.7
+              ],
+              [
+                114.7,
+                18.7
+              ],
+              [
+                115.7,
+                18.5
+              ],
+              [
+                116.7,
+                18.5
+              ],
+              [
+                117.7,
+                18.5
+              ],
+              [
+                118.7,
+                18.6
+              ],
+              [
+                119.7,
+                18.7
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 14.7,
+            "memory_peak_mib": 19.6
+          }
+        },
+        {
+          "round": 5,
+          "implementation": "axum",
+          "crashed": null,
+          "startup_s": 0.01,
+          "idle": {
+            "ram_mib": 1.2,
+            "cpu_cores": 0.0,
+            "tasks": 3,
+            "processes": 1
+          },
+          "warmup_errors": 0,
+          "tier1": {
+            "text": {
+              "duration_s": 10.0,
+              "requests_ok": 1938367,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 193834.71,
+              "latency_ms": {
+                "mean": 0.644,
+                "p50": 0.568,
+                "p99": 1.713,
+                "max": 5.835
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.994,
+              "client_bound": true,
+              "server_cpu_cores": 1.916,
+              "server_ram_peak_mib": 8.2
+            },
+            "json": {
+              "duration_s": 10.0,
+              "requests_ok": 1924921,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 192491.21,
+              "latency_ms": {
+                "mean": 0.648,
+                "p50": 0.573,
+                "p99": 1.72,
+                "max": 4.893
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.999,
+              "loadgen_cpu_share": 0.994,
+              "client_bound": true,
+              "server_cpu_cores": 1.923,
+              "server_ram_peak_mib": 8.0
+            },
+            "db-single": {
+              "duration_s": 10.005,
+              "requests_ok": 231766,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 23165.4,
+              "latency_ms": {
+                "mean": 5.392,
+                "p50": 5.362,
+                "p99": 6.049,
+                "max": 11.828
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.997,
+              "loadgen_cpu_share": 0.248,
+              "client_bound": true,
+              "server_cpu_cores": 1.247,
+              "server_ram_peak_mib": 8.4
+            },
+            "html": {
+              "duration_s": 10.0,
+              "requests_ok": 1930829,
+              "non_2xx": 0,
+              "transport_errors": 0,
+              "timeouts": 0,
+              "error_rate": 0.0,
+              "error_kinds": {},
+              "rps": 193082.07,
+              "latency_ms": {
+                "mean": 0.646,
+                "p50": 0.571,
+                "p99": 1.708,
+                "max": 6.684
+              },
+              "connections": 125,
+              "client_cpu_busy": 0.998,
+              "loadgen_cpu_share": 0.994,
+              "client_bound": true,
+              "server_cpu_cores": 1.925,
+              "server_ram_peak_mib": 8.8
+            }
+          },
+          "tier2": {
+            "duration_s": 30.0,
+            "requests_ok": 5624951,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 187496.25,
+            "latency_ms": {
+              "mean": 1.599,
+              "p50": 1.592,
+              "p99": 2.923,
+              "max": 17.503
+            },
+            "connections": 300,
+            "client_cpu_busy": 0.998,
+            "loadgen_cpu_share": 0.994,
+            "client_bound": true,
+            "server_cpu_cores": 1.911,
+            "server_ram_peak_mib": 13.1
+          },
+          "tier3": {
+            "idle_ram_mib": 1.2,
+            "idle_cpu_cores": 0.0,
+            "load_ram_peak_mib": 10.7,
+            "load_cpu_cores": 1.92,
+            "rps": 188830.47,
+            "error_rate": 0.0,
+            "client_bound": true,
+            "client_cpu_busy": 0.999
+          },
+          "tier4": {
+            "duration_s": 120.001,
+            "requests_ok": 22769020,
+            "non_2xx": 0,
+            "transport_errors": 0,
+            "timeouts": 0,
+            "error_rate": 0.0,
+            "error_kinds": {},
+            "rps": 189740.56,
+            "latency_ms": {
+              "mean": 2.634,
+              "p50": 2.626,
+              "p99": 3.982,
+              "max": 26.724
+            },
+            "connections": 500,
+            "client_cpu_busy": 0.999,
+            "loadgen_cpu_share": 0.995,
+            "client_bound": true,
+            "server_cpu_cores": 1.915,
+            "server_ram_peak_mib": 19.2,
+            "ram_mid_mib": 18.5,
+            "ram_end_mib": 18.5,
+            "ram_growth_mib": 0.0,
+            "ram_growing": false,
+            "ram_series_mib": [
+              [
+                0.0,
+                8.4
+              ],
+              [
+                1.0,
+                18.5
+              ],
+              [
+                2.0,
+                18.5
+              ],
+              [
+                3.0,
+                18.7
+              ],
+              [
+                4.0,
+                18.5
+              ],
+              [
+                5.0,
+                18.6
+              ],
+              [
+                6.0,
+                18.6
+              ],
+              [
+                7.0,
+                18.6
+              ],
+              [
+                8.0,
+                18.5
+              ],
+              [
+                9.1,
+                18.6
+              ],
+              [
+                10.1,
+                18.5
+              ],
+              [
+                11.1,
+                18.5
+              ],
+              [
+                12.1,
+                18.2
+              ],
+              [
+                13.1,
+                18.4
+              ],
+              [
+                14.1,
+                18.5
+              ],
+              [
+                15.1,
+                18.7
+              ],
+              [
+                16.1,
+                18.7
+              ],
+              [
+                17.1,
+                18.6
+              ],
+              [
+                18.1,
+                18.5
+              ],
+              [
+                19.1,
+                18.6
+              ],
+              [
+                20.1,
+                18.4
+              ],
+              [
+                21.1,
+                18.4
+              ],
+              [
+                22.1,
+                18.6
+              ],
+              [
+                23.1,
+                18.6
+              ],
+              [
+                24.1,
+                18.5
+              ],
+              [
+                25.2,
+                18.6
+              ],
+              [
+                26.2,
+                18.5
+              ],
+              [
+                27.2,
+                18.4
+              ],
+              [
+                28.2,
+                18.6
+              ],
+              [
+                29.2,
+                18.5
+              ],
+              [
+                30.2,
+                18.6
+              ],
+              [
+                31.2,
+                18.5
+              ],
+              [
+                32.2,
+                18.6
+              ],
+              [
+                33.2,
+                18.5
+              ],
+              [
+                34.2,
+                18.6
+              ],
+              [
+                35.2,
+                18.4
+              ],
+              [
+                36.2,
+                18.7
+              ],
+              [
+                37.2,
+                18.7
+              ],
+              [
+                38.2,
+                18.5
+              ],
+              [
+                39.2,
+                18.4
+              ],
+              [
+                40.2,
+                18.5
+              ],
+              [
+                41.3,
+                18.3
+              ],
+              [
+                42.3,
+                18.4
+              ],
+              [
+                43.3,
+                18.6
+              ],
+              [
+                44.3,
+                18.3
+              ],
+              [
+                45.3,
+                18.8
+              ],
+              [
+                46.3,
+                18.5
+              ],
+              [
+                47.3,
+                18.5
+              ],
+              [
+                48.3,
+                18.4
+              ],
+              [
+                49.3,
+                18.5
+              ],
+              [
+                50.3,
+                18.7
+              ],
+              [
+                51.3,
+                18.5
+              ],
+              [
+                52.3,
+                18.6
+              ],
+              [
+                53.3,
+                18.7
+              ],
+              [
+                54.3,
+                18.3
+              ],
+              [
+                55.3,
+                18.4
+              ],
+              [
+                56.3,
+                18.5
+              ],
+              [
+                57.3,
+                18.4
+              ],
+              [
+                58.4,
+                18.6
+              ],
+              [
+                59.4,
+                18.6
+              ],
+              [
+                60.4,
+                18.5
+              ],
+              [
+                61.4,
+                18.5
+              ],
+              [
+                62.4,
+                18.7
+              ],
+              [
+                63.4,
+                18.6
+              ],
+              [
+                64.4,
+                18.5
+              ],
+              [
+                65.4,
+                18.4
+              ],
+              [
+                66.4,
+                18.5
+              ],
+              [
+                67.4,
+                18.4
+              ],
+              [
+                68.4,
+                18.4
+              ],
+              [
+                69.4,
+                18.5
+              ],
+              [
+                70.4,
+                18.6
+              ],
+              [
+                71.4,
+                18.4
+              ],
+              [
+                72.4,
+                18.5
+              ],
+              [
+                73.4,
+                18.3
+              ],
+              [
+                74.5,
+                18.6
+              ],
+              [
+                75.5,
+                18.3
+              ],
+              [
+                76.5,
+                18.3
+              ],
+              [
+                77.5,
+                18.3
+              ],
+              [
+                78.5,
+                18.3
+              ],
+              [
+                79.5,
+                18.3
+              ],
+              [
+                80.5,
+                18.9
+              ],
+              [
+                81.5,
+                18.7
+              ],
+              [
+                82.5,
+                18.6
+              ],
+              [
+                83.5,
+                18.6
+              ],
+              [
+                84.5,
+                18.5
+              ],
+              [
+                85.5,
+                18.6
+              ],
+              [
+                86.5,
+                18.5
+              ],
+              [
+                87.5,
+                18.4
+              ],
+              [
+                88.5,
+                18.4
+              ],
+              [
+                89.5,
+                18.4
+              ],
+              [
+                90.6,
+                18.6
+              ],
+              [
+                91.6,
+                18.6
+              ],
+              [
+                92.6,
+                18.4
+              ],
+              [
+                93.6,
+                18.4
+              ],
+              [
+                94.6,
+                18.8
+              ],
+              [
+                95.6,
+                18.5
+              ],
+              [
+                96.6,
+                19.1
+              ],
+              [
+                97.6,
+                18.9
+              ],
+              [
+                98.6,
+                18.6
+              ],
+              [
+                99.6,
+                18.6
+              ],
+              [
+                100.6,
+                18.4
+              ],
+              [
+                101.6,
+                18.6
+              ],
+              [
+                102.6,
+                18.3
+              ],
+              [
+                103.6,
+                18.7
+              ],
+              [
+                104.6,
+                18.5
+              ],
+              [
+                105.6,
+                18.5
+              ],
+              [
+                106.6,
+                18.4
+              ],
+              [
+                107.6,
+                18.6
+              ],
+              [
+                108.7,
+                18.6
+              ],
+              [
+                109.7,
+                18.5
+              ],
+              [
+                110.7,
+                18.5
+              ],
+              [
+                111.7,
+                18.5
+              ],
+              [
+                112.7,
+                18.3
+              ],
+              [
+                113.7,
+                18.5
+              ],
+              [
+                114.7,
+                18.5
+              ],
+              [
+                115.7,
+                18.4
+              ],
+              [
+                116.7,
+                18.5
+              ],
+              [
+                117.7,
+                18.6
+              ],
+              [
+                118.7,
+                18.7
+              ],
+              [
+                119.7,
+                18.4
+              ]
+            ]
+          },
+          "after": {
+            "ram_mib": 14.6,
+            "memory_peak_mib": 19.4
+          }
+        }
+      ],
+      "summary": {
+        "metrics": {
+          "tier1.text.rps": {
+            "median": 189561.85,
+            "min": 185505.73,
+            "max": 193834.71,
+            "spread": 0.0439,
+            "n": 5
+          },
+          "tier1.text.latency_ms.mean": {
+            "median": 0.658,
+            "min": 0.644,
+            "max": 0.673,
+            "spread": 0.0441,
+            "n": 5
+          },
+          "tier1.text.latency_ms.p50": {
+            "median": 0.584,
+            "min": 0.568,
+            "max": 0.593,
+            "spread": 0.0428,
+            "n": 5
+          },
+          "tier1.text.latency_ms.p99": {
+            "median": 1.745,
+            "min": 1.713,
+            "max": 1.788,
+            "spread": 0.043,
+            "n": 5
+          },
+          "tier1.text.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.text.server_cpu_cores": {
+            "median": 1.909,
+            "min": 1.907,
+            "max": 1.919,
+            "spread": 0.0063,
+            "n": 5
+          },
+          "tier1.json.rps": {
+            "median": 191348.26,
+            "min": 186401.99,
+            "max": 192491.21,
+            "spread": 0.0318,
+            "n": 5
+          },
+          "tier1.json.latency_ms.mean": {
+            "median": 0.652,
+            "min": 0.648,
+            "max": 0.67,
+            "spread": 0.0337,
+            "n": 5
+          },
+          "tier1.json.latency_ms.p50": {
+            "median": 0.577,
+            "min": 0.573,
+            "max": 0.592,
+            "spread": 0.0329,
+            "n": 5
+          },
+          "tier1.json.latency_ms.p99": {
+            "median": 1.726,
+            "min": 1.717,
+            "max": 1.769,
+            "spread": 0.0301,
+            "n": 5
+          },
+          "tier1.json.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.json.server_cpu_cores": {
+            "median": 1.923,
+            "min": 1.912,
+            "max": 1.924,
+            "spread": 0.0062,
+            "n": 5
+          },
+          "tier1.db-single.rps": {
+            "median": 23165.4,
+            "min": 22565.03,
+            "max": 23918.43,
+            "spread": 0.0584,
+            "n": 5
+          },
+          "tier1.db-single.latency_ms.mean": {
+            "median": 5.392,
+            "min": 5.222,
+            "max": 5.533,
+            "spread": 0.0577,
+            "n": 5
+          },
+          "tier1.db-single.latency_ms.p50": {
+            "median": 5.362,
+            "min": 5.2,
+            "max": 5.496,
+            "spread": 0.0552,
+            "n": 5
+          },
+          "tier1.db-single.latency_ms.p99": {
+            "median": 6.279,
+            "min": 5.905,
+            "max": 7.344,
+            "spread": 0.2292,
+            "n": 5
+          },
+          "tier1.db-single.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.db-single.server_cpu_cores": {
+            "median": 1.233,
+            "min": 1.228,
+            "max": 1.247,
+            "spread": 0.0154,
+            "n": 5
+          },
+          "tier1.html.rps": {
+            "median": 193082.07,
+            "min": 186004.78,
+            "max": 197425.22,
+            "spread": 0.0591,
+            "n": 5
+          },
+          "tier1.html.latency_ms.mean": {
+            "median": 0.646,
+            "min": 0.632,
+            "max": 0.671,
+            "spread": 0.0604,
+            "n": 5
+          },
+          "tier1.html.latency_ms.p50": {
+            "median": 0.571,
+            "min": 0.558,
+            "max": 0.593,
+            "spread": 0.0613,
+            "n": 5
+          },
+          "tier1.html.latency_ms.p99": {
+            "median": 1.708,
+            "min": 1.674,
+            "max": 1.773,
+            "spread": 0.058,
+            "n": 5
+          },
+          "tier1.html.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier1.html.server_cpu_cores": {
+            "median": 1.927,
+            "min": 1.925,
+            "max": 1.929,
+            "spread": 0.0021,
+            "n": 5
+          },
+          "tier2.rps": {
+            "median": 187496.25,
+            "min": 180810.09,
+            "max": 191795.93,
+            "spread": 0.0586,
+            "n": 5
+          },
+          "tier2.latency_ms.p50": {
+            "median": 1.592,
+            "min": 1.557,
+            "max": 1.652,
+            "spread": 0.0597,
+            "n": 5
+          },
+          "tier2.latency_ms.p99": {
+            "median": 2.923,
+            "min": 2.868,
+            "max": 3.027,
+            "spread": 0.0544,
+            "n": 5
+          },
+          "tier2.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier2.timeouts": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier3.idle_ram_mib": {
+            "median": 1.1,
+            "min": 1.0,
+            "max": 1.2,
+            "spread": 0.1818,
+            "n": 5
+          },
+          "tier3.idle_cpu_cores": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier3.load_ram_peak_mib": {
+            "median": 10.7,
+            "min": 10.5,
+            "max": 11.3,
+            "spread": 0.0748,
+            "n": 5
+          },
+          "tier3.load_cpu_cores": {
+            "median": 1.919,
+            "min": 1.917,
+            "max": 1.922,
+            "spread": 0.0026,
+            "n": 5
+          },
+          "tier3.rps": {
+            "median": 188830.47,
+            "min": 185760.17,
+            "max": 193672.47,
+            "spread": 0.0419,
+            "n": 5
+          },
+          "tier4.rps": {
+            "median": 184903.82,
+            "min": 181320.28,
+            "max": 189740.56,
+            "spread": 0.0455,
+            "n": 5
+          },
+          "tier4.latency_ms.p99": {
+            "median": 4.145,
+            "min": 3.982,
+            "max": 4.395,
+            "spread": 0.0996,
+            "n": 5
+          },
+          "tier4.error_rate": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier4.transport_errors": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier4.timeouts": {
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "tier4.ram_mid_mib": {
+            "median": 18.6,
+            "min": 18.5,
+            "max": 18.8,
+            "spread": 0.0161,
+            "n": 5
+          },
+          "tier4.ram_end_mib": {
+            "median": 18.7,
+            "min": 18.5,
+            "max": 18.8,
+            "spread": 0.016,
+            "n": 5
+          },
+          "tier4.ram_growth_mib": {
+            "median": -0.0,
+            "min": -0.1,
+            "max": 0.0,
+            "spread": null,
+            "n": 5
+          },
+          "startup_s": {
+            "median": 0.01,
+            "min": 0.01,
+            "max": 0.02,
+            "spread": 1.0,
+            "n": 5
+          },
+          "idle.tasks": {
+            "median": 3.0,
+            "min": 3.0,
+            "max": 3.0,
+            "spread": 0.0,
+            "n": 5
+          },
+          "after.ram_mib": {
+            "median": 14.7,
+            "min": 14.6,
+            "max": 15.2,
+            "spread": 0.0408,
+            "n": 5
+          },
+          "after.memory_peak_mib": {
+            "median": 19.6,
+            "min": 19.4,
+            "max": 19.8,
+            "spread": 0.0204,
+            "n": 5
+          }
+        },
+        "flags": {
+          "rounds": 5,
+          "crashed_rounds": 0,
+          "ram_growing_rounds": 0,
+          "client_bound_rounds": {
+            "tier1.text": 5,
+            "tier1.json": 5,
+            "tier1.db-single": 5,
+            "tier1.html": 5,
+            "tier2": 5,
+            "tier3_load": 5,
+            "tier4": 5
+          }
+        }
+      }
+    }
+  },
+  "database": {
+    "image": "postgres:18.6-alpine3.24@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b",
+    "digest": "sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b",
+    "version": "18.6"
+  },
+  "ratios": {
+    "tier1.text.rps": {
+      "median": 0.0061,
+      "min": 0.0056,
+      "max": 0.0066,
+      "spread": 0.154,
+      "n": 5
+    },
+    "tier1.text.latency_ms.mean": {
+      "median": 162.6701,
+      "min": 151.7061,
+      "max": 176.9814,
+      "spread": 0.1554,
+      "n": 5
+    },
+    "tier1.text.latency_ms.p50": {
+      "median": 185.6931,
+      "min": 171.7492,
+      "max": 201.7201,
+      "spread": 0.1614,
+      "n": 5
+    },
+    "tier1.text.latency_ms.p99": {
+      "median": 71.3782,
+      "min": 65.9594,
+      "max": 78.7552,
+      "spread": 0.1793,
+      "n": 5
+    },
+    "tier1.text.server_cpu_cores": {
+      "median": 1.0466,
+      "min": 1.0412,
+      "max": 1.0477,
+      "spread": 0.0063,
+      "n": 5
+    },
+    "tier1.json.rps": {
+      "median": 0.0061,
+      "min": 0.0054,
+      "max": 0.0066,
+      "spread": 0.1956,
+      "n": 5
+    },
+    "tier1.json.latency_ms.mean": {
+      "median": 163.4662,
+      "min": 151.3051,
+      "max": 184.733,
+      "spread": 0.2045,
+      "n": 5
+    },
+    "tier1.json.latency_ms.p50": {
+      "median": 185.4017,
+      "min": 171.3675,
+      "max": 209.2356,
+      "spread": 0.2042,
+      "n": 5
+    },
+    "tier1.json.latency_ms.p99": {
+      "median": 74.2842,
+      "min": 66.2987,
+      "max": 84.5727,
+      "spread": 0.246,
+      "n": 5
+    },
+    "tier1.json.server_cpu_cores": {
+      "median": 1.039,
+      "min": 1.0379,
+      "max": 1.0445,
+      "spread": 0.0063,
+      "n": 5
+    },
+    "tier1.db-single.rps": {
+      "median": 0.0138,
+      "min": 0.0128,
+      "max": 0.0152,
+      "spread": 0.1736,
+      "n": 5
+    },
+    "tier1.db-single.latency_ms.mean": {
+      "median": 71.101,
+      "min": 64.9529,
+      "max": 76.9434,
+      "spread": 0.1686,
+      "n": 5
+    },
+    "tier1.db-single.latency_ms.p50": {
+      "median": 72.3357,
+      "min": 66.106,
+      "max": 78.3961,
+      "spread": 0.1699,
+      "n": 5
+    },
+    "tier1.db-single.latency_ms.p99": {
+      "median": 70.1001,
+      "min": 63.0892,
+      "max": 76.8858,
+      "spread": 0.1968,
+      "n": 5
+    },
+    "tier1.db-single.server_cpu_cores": {
+      "median": 0.8216,
+      "min": 0.7567,
+      "max": 0.8821,
+      "spread": 0.1526,
+      "n": 5
+    },
+    "tier1.html.rps": {
+      "median": 0.0048,
+      "min": 0.0042,
+      "max": 0.0051,
+      "spread": 0.1872,
+      "n": 5
+    },
+    "tier1.html.latency_ms.mean": {
+      "median": 206.2086,
+      "min": 193.8346,
+      "max": 234.9733,
+      "spread": 0.1995,
+      "n": 5
+    },
+    "tier1.html.latency_ms.p50": {
+      "median": 233.3255,
+      "min": 220.4676,
+      "max": 262.5872,
+      "spread": 0.1805,
+      "n": 5
+    },
+    "tier1.html.latency_ms.p99": {
+      "median": 99.144,
+      "min": 85.287,
+      "max": 119.288,
+      "spread": 0.3429,
+      "n": 5
+    },
+    "tier1.html.server_cpu_cores": {
+      "median": 1.0368,
+      "min": 1.0358,
+      "max": 1.0379,
+      "spread": 0.0021,
+      "n": 5
+    },
+    "tier2.rps": {
+      "median": 0.0063,
+      "min": 0.0058,
+      "max": 0.0068,
+      "spread": 0.1673,
+      "n": 5
+    },
+    "tier2.latency_ms.p50": {
+      "median": 157.1036,
+      "min": 146.217,
+      "max": 173.3197,
+      "spread": 0.1725,
+      "n": 5
+    },
+    "tier2.latency_ms.p99": {
+      "median": 104.3119,
+      "min": 89.7878,
+      "max": 111.6295,
+      "spread": 0.2094,
+      "n": 5
+    },
+    "tier3.idle_ram_mib": {
+      "median": 33.8182,
+      "min": 31.0,
+      "max": 37.4,
+      "spread": 0.1892,
+      "n": 5
+    },
+    "tier3.load_ram_peak_mib": {
+      "median": 7.4206,
+      "min": 7.0973,
+      "max": 7.6542,
+      "spread": 0.075,
+      "n": 5
+    },
+    "tier3.load_cpu_cores": {
+      "median": 1.0412,
+      "min": 1.0395,
+      "max": 1.0423,
+      "spread": 0.0026,
+      "n": 5
+    },
+    "tier3.rps": {
+      "median": 0.0063,
+      "min": 0.0054,
+      "max": 0.0066,
+      "spread": 0.1802,
+      "n": 5
+    },
+    "tier4.rps": {
+      "median": 0.0065,
+      "min": 0.0059,
+      "max": 0.0067,
+      "spread": 0.1196,
+      "n": 5
+    },
+    "tier4.latency_ms.p99": {
+      "median": 112.4166,
+      "min": 108.7411,
+      "max": 127.3504,
+      "spread": 0.1655,
+      "n": 5
+    },
+    "tier4.ram_mid_mib": {
+      "median": 4.4521,
+      "min": 4.328,
+      "max": 4.6108,
+      "spread": 0.0635,
+      "n": 5
+    },
+    "tier4.ram_end_mib": {
+      "median": 4.4681,
+      "min": 4.328,
+      "max": 4.6324,
+      "spread": 0.0681,
+      "n": 5
+    },
+    "startup_s": {
+      "median": 40.0,
+      "min": 20.5,
+      "max": 41.0,
+      "spread": 0.5125,
+      "n": 5
+    },
+    "after.ram_mib": {
+      "median": 5.411,
+      "min": 5.0197,
+      "max": 5.5274,
+      "spread": 0.0938,
+      "n": 5
+    },
+    "after.memory_peak_mib": {
+      "median": 4.2626,
+      "min": 4.1429,
+      "max": 4.5,
+      "spread": 0.0838,
+      "n": 5
+    }
+  },
+  "finished_at": "2026-11-15T18:04:07Z"
+}

@@ -12,9 +12,30 @@ and every number on this page is generated from the measurement output.
 ## Results
 
 <!-- results:start -->
-No results have been published from the rebuilt suite yet. The first run
-will replace this paragraph. Results from before the rebuild are kept, for
-the record only, in [history/2026-06-22-laptop.md](history/2026-06-22-laptop.md).
+> Measured on 2026-11-15 with **Rullst 13.0.0-alpha.5** on GitHub-hosted runners (INTEL(R) XEON(R) PLATINUM 8573C, 4 vCPUs, 16 GiB RAM; each server limited to 2 vCPUs and 2 GiB). Values are medians of 5 rounds. "vs Axum" is the ratio to the Axum baseline measured in alternating rounds on the same runner, which cancels most of the difference between runners; compare ratios rather than absolute numbers across runs. These results update automatically when a new Rullst version is published on crates.io. Last update: 2026-11-15.
+>
+> **Note:** This measurement found a throughput problem in the production stack that `cargo rullst new` generates: Rullst as generated reached 0.31× Axum's requests/s on /json, while the minimal configuration reached 1.00×. A fix is planned for Rullst 13.0.0-alpha.6. These results update automatically when a new Rullst version is published.
+
+Source: [workflow run 43731095115](https://github.com/Rullst/Benchmarks/actions/runs/43731095115). Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); dashboard: <https://rullst.win/Benchmarks/>.
+
+| Implementation | Version | Language | /json req/s | vs Axum | /db-single req/s | vs Axum | /html req/s | Tier 2 p99 (ms) | Idle RAM (MiB) | Peak RAM (MiB) | Tier 4 errors | req/s per MiB |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Axum – baseline | 0.8.9 | Rust | 186,759 | 1.00 | 19,658 | 1.00 | 186,891 | 3.02 | 1.1 | 10.7 | 0 | 17,454.1 |
+| Actix Web | 4.19.0 | Rust | 190,569 | 0.97 | 19,370 | 0.98 | 191,126 | 2.92 | 1.3 | 9.5 | 0 | 20,059.9 |
+| Loco | 1.3.1 | Rust | 65,740 | 0.42 | 15,323 | 1.01 | 59,368 | 7.10 | 3.0 | 13.9 | 0 | 4,729.5 |
+| Rullst (as generated) | 13.0.0-alpha.5 | Rust | 59,139 | 0.31 | 17,531 | 0.77 | 57,206 | 11.30 | 1.6 | 12.6 | 0 | 4,693.6 |
+| Rullst (minimal) | 13.0.0-alpha.5 | Rust | 114,422 | 1.00 | 9,935 | 1.00 | 109,272 | 4.83 | 1.2 | 11.3 | 0 | 10,125.8 |
+| Topcoat | 0.12.1 | Rust | 218,610 | 0.83 | 41,049 | 1.42 | 204,761 | 3.10 | 1.3 | 11.1 | 0 | 19,694.6 |
+| ASP.NET Core | 10.0.15 | C# | 71,839 | 0.62 | 4,091 | 0.41 | 38,234 | 8.03 | 26.4 | 108.7 | 0 | 660.9 |
+| Django | 6.1.3 | Python | 5,990 | 0.02 | 2,480 | 0.08 | 5,162 | 102.90 | 104.1 | 116.6 | 0 | 51.4 |
+| Laravel | 13.42.0 | PHP | 1,169 | 0.01 | 312 | 0.01 | 898 | 315.44 | 37.4 | 80.2 | 0 | 14.6 |
+| NestJS | 12.5.0 | TypeScript | 126,809 | 0.48 | 19,516 | 0.67 | 58,469 | 2.93 | 162.9 | 263.2 | 0 | 481.8 |
+| Phoenix | 1.8.16 | Elixir | 26,831 | 0.17 | 12,930 | 0.88 | 20,294 | 13.39 | 135.9 | 153.7 | 0 | 174.6 |
+| Ruby on Rails | 8.1.4.1 | Ruby | 1,682 | 0.02 | 1,441 | 0.14 | 1,511 | 416.58 | 102.5 | 369.3 | 0 | 4.6 |
+| Spring Boot | 4.1.2 | Java | 32,571 | 0.21 | 8,965 | 0.59 | 16,279 | 12.49 | 213.9 | 377.2 | 0 | 86.3 |
+| FastAPI | 0.163.0 | Python | 17,577 | 0.07 | 0 | 0.00 | 14,292 | 20.09 | 167.7 | 225.2 | 0 | 78.1 |
+| Fastify | 5.12.8 | JavaScript | 154,630 | 0.59 | 22,840 | 0.78 | 117,739 | 3.16 | 72.8 | 165.0 | 0 | 937.1 |
+| Gin | 1.12.0 | Go | 78,542 | 0.51 | 19,765 | 1.32 | 76,162 | 9.50 | 3.5 | 19.8 | 0 | 3,966.8 |
 <!-- results:end -->
 
 ## What is measured

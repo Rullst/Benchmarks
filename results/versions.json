@@ -1,0 +1,75 @@
+{
+  "schema": "rullst.benchmarks.versions.v1",
+  "latest": "13.0.0-alpha.5",
+  "updated_at": "2026-11-15T19:51:47Z",
+  "versions": [
+    {
+      "version": "13.0.0-alpha.5",
+      "measured_from": "2026-11-15T15:39:55Z",
+      "generated_at": "2026-11-15T19:51:47Z",
+      "run_url": "https://github.com/Rullst/Benchmarks/actions/runs/43731095115",
+      "file": "rullst/13.0.0-alpha.5.json",
+      "note": "This measurement found a throughput problem in the production stack that `cargo rullst new` generates: Rullst as generated reached 0.31\u00d7 Axum's requests/s on /json, while the minimal configuration reached 1.00\u00d7. A fix is planned for Rullst 13.0.0-alpha.6. These results update automatically when a new Rullst version is published.",
+      "implementations": {
+        "rullst": {
+          "status": "measured",
+          "metrics": {
+            "tier1.json.rps": 59138.97,
+            "tier1.db-single.rps": 17531.02,
+            "tier1.html.rps": 57205.82,
+            "tier1.text.rps": 56573.89,
+            "tier2.latency_ms.p99": 11.296,
+            "tier3.idle_ram_mib": 1.6,
+            "tier3.load_ram_peak_mib": 12.6,
+            "tier4.error_rate": 0.0
+          },
+          "ratios": {
+            "tier1.json.rps": 0.3106,
+            "tier1.db-single.rps": 0.7684,
+            "tier1.html.rps": 0.3051,
+            "tier1.text.rps": 0.2958,
+            "tier2.latency_ms.p99": 3.7957,
+            "tier3.idle_ram_mib": 1.4545,
+            "tier3.load_ram_peak_mib": 1.1429
+          }
+        },
+        "rullst-minimal": {
+          "status": "measured",
+          "metrics": {
+            "tier1.json.rps": 114421.89,
+            "tier1.db-single.rps": 9935.01,
+            "tier1.html.rps": 109271.75,
+            "tier1.text.rps": 115519.34,
+            "tier2.latency_ms.p99": 4.829,
+            "tier3.idle_ram_mib": 1.2,
+            "tier3.load_ram_peak_mib": 11.3,
+            "tier4.error_rate": 0.0
+          },
+          "ratios": {
+            "tier1.json.rps": 0.9958,
+            "tier1.db-single.rps": 0.9956,
+            "tier1.html.rps": 0.9736,
+            "tier1.text.rps": 0.9973,
+            "tier2.latency_ms.p99": 0.8985,
+            "tier3.idle_ram_mib": 1.0,
+            "tier3.load_ram_peak_mib": 1.0762
+          }
+        },
+        "axum": {
+          "status": "measured",
+          "metrics": {
+            "tier1.json.rps": 186758.62,
+            "tier1.db-single.rps": 19657.54,
+            "tier1.html.rps": 186890.62,
+            "tier1.text.rps": 187322.3,
+            "tier2.latency_ms.p99": 3.021,
+            "tier3.idle_ram_mib": 1.1,
+            "tier3.load_ram_peak_mib": 10.7,
+            "tier4.error_rate": 0.0
+          },
+          "ratios": {}
+        }
+      }
+    }
+  ]
+}
