@@ -1,0 +1,8 @@
+.dockerignore
+.env*
+Dockerfile
+README.md
+bench.json
+/vendor
+/bootstrap/cache/*.php
+/storage

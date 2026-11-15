@@ -1,0 +1,16 @@
+{
+  "name": "Ruby on Rails",
+  "language": "Ruby",
+  "group": "full-stack",
+  "framework": "rails",
+  "framework_version": "8.1.4.1",
+  "version_package": "rails",
+  "runtime": "Ruby 4.0.9 with YJIT and jemalloc",
+  "server": "Puma 8.1 behind Thruster 0.1, as in the Dockerfile rails new generates",
+  "workers": "Puma cluster mode: WEB_CONCURRENCY = BENCH_WORKERS (2) workers x 3 threads (the generated RAILS_MAX_THREADS default)",
+  "database_layer": "Active Record (pg 1.7), up to 8 connections per worker (16 in total)",
+  "template_engine": "ERB (Action View)",
+  "logging": "Rails at warn (no request lines); Thruster's request log off",
+  "startup_timeout_s": 120,
+  "notes": "The rails new production setup; force_ssl stays commented out (no TLS) and db:prepare does not run at start-up."
+}

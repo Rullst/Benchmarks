@@ -1,0 +1,16 @@
+{
+  "name": "Django",
+  "language": "Python",
+  "group": "full-stack",
+  "framework": "django",
+  "framework_version": "6.1.3",
+  "version_package": "django",
+  "runtime": "Python 3.15.2",
+  "server": "Gunicorn 27 (gthread worker)",
+  "workers": "BENCH_WORKERS (2) processes x 8 threads",
+  "database_layer": "Django ORM with psycopg 3.3 (C extension); persistent connections (CONN_MAX_AGE), one per thread, 16 in total",
+  "template_engine": "Django templates (cached loader)",
+  "logging": "none (Gunicorn's access log is off; Django logs only warnings and errors)",
+  "startup_timeout_s": 120,
+  "notes": "startproject settings with the deployment checklist applied; HTTPS settings stay off (no TLS)."
+}

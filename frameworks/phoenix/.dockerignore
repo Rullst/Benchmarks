@@ -1,0 +1,15 @@
+# Based on the .dockerignore `mix phx.gen.release --docker` generates.
+.dockerignore
+Dockerfile
+README.md
+bench.json
+
+.git
+
+# Mix artifacts
+/_build/
+/deps/
+*.ez
+
+# Generated on crash by the VM
+erl_crash.dump

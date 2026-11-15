@@ -1,0 +1,17 @@
+# PostgreSQL, as `rails new --database=postgresql` generates it, except for
+# the pool size and the production entry (see below).
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  # For details on connection pooling, see Rails configuration guide
+  # https://guides.rubyonrails.org/configuring.html#database-pooling
+  #
+  # Benchmark: DB_POOL_SIZE (16) is the total for the server, so each Puma
+  # worker gets DB_POOL_SIZE / WEB_CONCURRENCY (8) connections, and never
+  # fewer than its thread count. The generated value is RAILS_MAX_THREADS (5).
+  max_connections: <%= [ENV.fetch("DB_POOL_SIZE", 16).to_i / [ENV.fetch("WEB_CONCURRENCY", 1).to_i, 1].max, ENV.fetch("RAILS_MAX_THREADS", 3).to_i].max %>
+
+# Benchmark: the connection comes from DATABASE_URL, which Rails merges into
+# this entry (the generated entry names a database, user and password).
+production:
+  <<: *default
