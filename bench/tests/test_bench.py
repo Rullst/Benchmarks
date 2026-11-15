@@ -92,6 +92,23 @@ class LoadgenTests(unittest.TestCase):
         self.assertIsNone(parse_result(raw)["latency_ms"]["p99"])
 
 
+class SamplerTests(unittest.TestCase):
+    def test_sampler_thread_runs(self):
+        import time
+        from loadgen import RamSampler
+
+        class Fake:
+            def ram_bytes(self):
+                return 5 * MIB
+
+        sampler = RamSampler(Fake(), 0.005)
+        sampler.start()
+        time.sleep(0.05)
+        samples = sampler.stop()
+        self.assertGreater(len(samples), 2)
+        self.assertEqual(samples[-1][1], 5 * MIB)
+
+
 class SystemTests(unittest.TestCase):
     def test_cpu_list(self):
         self.assertEqual(parse_cpu_list("0-2,5,7-8\n"), [0, 1, 2, 5, 7, 8])
