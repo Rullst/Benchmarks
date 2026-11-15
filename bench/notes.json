@@ -1,4 +1,7 @@
 {
-  "_comment": "A note shown on every results surface for one Rullst version. {slug:metric} is replaced by that implementation's median ratio to Axum.",
-  "13.0.0-alpha.5": "This measurement found a throughput problem in the production stack that `cargo rullst new` generates: Rullst as generated reached {rullst:tier1.json.rps}× Axum's requests/s on /json, while the minimal configuration reached {rullst-minimal:tier1.json.rps}×. A fix is planned for Rullst 13.0.0-alpha.6. These results update automatically when a new Rullst version is published."
+  "_comment": "A note shown on every results surface for one Rullst version: a string (English) or {\"en\": ..., \"pt_br\": ...}. {slug:metric} is replaced by that implementation's median ratio to Axum (decimal comma in pt_br).",
+  "13.0.0-alpha.5": {
+    "en": "This measurement found a throughput problem in the production stack that `cargo rullst new` generates: Rullst as generated reached {rullst:tier1.json.rps}× Axum's requests/s on /json, while the minimal configuration reached {rullst-minimal:tier1.json.rps}×. A fix is planned for Rullst 13.0.0-alpha.6. These results update automatically when a new Rullst version is published.",
+    "pt_br": "Esta medição encontrou um problema de vazão na pilha de produção que o `cargo rullst new` gera: o Rullst como gerado chegou a {rullst:tier1.json.rps}× as requisições/s do Axum em /json, enquanto a configuração mínima chegou a {rullst-minimal:tier1.json.rps}×. Uma correção está planejada para o Rullst 13.0.0-alpha.6. Estes resultados se atualizam automaticamente quando uma nova versão do Rullst é publicada."
+  }
 }

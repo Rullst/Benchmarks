@@ -240,6 +240,7 @@ Fields are only ever added to it:
   "rullst_version": "13.0.0-alpha.5",
   "note": "...",                               a note about this Rullst version
                                                (bench/notes.json), or ""
+  "note_pt_br": "...",                         the same note in Brazilian Portuguese, or ""
   "measured_from", "measured_to", "generated_at",   ISO 8601 UTC
   "run": { "id", "url", "sha", "event", "rounds" },
   "baseline": "axum",

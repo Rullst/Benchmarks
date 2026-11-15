@@ -251,8 +251,16 @@ class AggregateTests(unittest.TestCase):
             path.write_text('{"1.0.0": "as generated {rullst:tier1.json.rps}x, minimal {rullst-minimal:tier1.json.rps}x"}')
             self.assertEqual(aggregate.version_note("1.0.0", rows, path), "as generated 0.21x, minimal –x")
             self.assertEqual(aggregate.version_note("2.0.0", rows, path), "")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "notes.json"
+            path.write_text('{"1.0.0": {"en": "at {rullst:tier1.json.rps}x", "pt_br": "a {rullst:tier1.json.rps}x"}}')
+            self.assertEqual(aggregate.version_note("1.0.0", rows, path), "at 0.21x")
+            self.assertEqual(aggregate.version_note("1.0.0", rows, path, lang="pt_br"), "a 0,21x")
         combined = aggregate.combine([fake_job("rullst", 0.5)], ["rullst"])
         self.assertIn("0.50", combined["note"])
+        self.assertIn("0,50×", combined["note_pt_br"])
+        self.assertTrue(combined["note_pt_br"].startswith("Esta medição"))
+        self.assertEqual(aggregate.site_document(combined)["note_pt_br"], combined["note_pt_br"])
         self.assertIn("**Note:**", report.render_results(combined))
         self.assertEqual(aggregate.site_document(combined)["note"], combined["note"])
 

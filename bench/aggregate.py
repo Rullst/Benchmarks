@@ -203,12 +203,14 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
             break
     apply_corrections(rullst_version, rows)
     note = version_note(rullst_version, rows)
+    note_pt_br = version_note(rullst_version, rows, lang="pt_br")
     started = sorted(j.get("started_at", "") for j in jobs if j.get("started_at"))
     finished = sorted(j.get("finished_at", "") for j in jobs if j.get("finished_at"))
     return {
         "schema": SCHEMA,
         "rullst_version": rullst_version,
         "note": note,
+        "note_pt_br": note_pt_br,
         "measured_from": started[0] if started else "",
         "measured_to": finished[-1] if finished else "",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -252,15 +254,22 @@ def apply_corrections(version: str, rows: list[dict], path: Path = CORRECTIONS) 
         row["problem"] = fix.get("problem", "")
 
 
-def version_note(version: str, rows: list[dict], notes_path: Path = NOTES) -> str:
-    """The note for a Rullst version from bench/notes.json, with {slug:metric} ratios filled in."""
+def version_note(version: str, rows: list[dict], notes_path: Path = NOTES, lang: str = "en") -> str:
+    """The note for a Rullst version from bench/notes.json, with {slug:metric} ratios filled in.
+
+    A note is a string (English) or {"en": ..., "pt_br": ...}; pt_br numbers use a decimal comma.
+    """
     notes = json.loads(notes_path.read_text()) if notes_path.is_file() else {}
-    template = notes.get(version, "")
+    entry = notes.get(version, "")
+    template = entry.get(lang, "") if isinstance(entry, dict) else (entry if lang == "en" else "")
     by_slug = {r["slug"]: r for r in rows}
 
     def ratio(match: re.Match) -> str:
         stat = by_slug.get(match.group(1), {}).get("ratios", {}).get(match.group(2))
-        return f"{stat['median']:.2f}" if stat else "–"
+        if not stat:
+            return "–"
+        text = f"{stat['median']:.2f}"
+        return text.replace(".", ",") if lang == "pt_br" else text
 
     return re.sub(r"\{([a-z0-9-]+):([a-z0-9._-]+)\}", ratio, template)
 
@@ -275,6 +284,7 @@ def history_entry(combined: dict) -> dict:
         "run_url": combined["run"]["url"],
         "file": f"rullst/{combined['rullst_version']}.json",
         "note": combined.get("note", ""),
+        "note_pt_br": combined.get("note_pt_br", ""),
         "implementations": {},
     }
     for slug in (*RULLST_SLUGS, combined["baseline"]):
