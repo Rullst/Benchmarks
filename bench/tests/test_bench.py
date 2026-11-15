@@ -281,6 +281,13 @@ class YieldTests(unittest.TestCase):
         self.assertTrue(decide([pr_ci], 3, 10)[0])
         self.assertFalse(decide([pr_ci], 11, 10)[0])
 
+    def test_parallelism(self):
+        from yield_check import parallelism
+        self.assertEqual(parallelism(True, 0, 4), 8)
+        self.assertEqual(parallelism(True, 5, 4), 3)
+        self.assertEqual(parallelism(True, 0, 15), 3)
+        self.assertEqual(parallelism(False, 0, 0), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

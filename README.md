@@ -155,14 +155,17 @@ recorded in `results/attempts.json` and the workflow run fails, so a
 maintainer can fix the benchmark app and rerun it by hand.
 
 **Shared runners.** The Rullst organization shares one pool of hosted runners
-between Rullst/Rullst and this repository. A measurement uses at most 3
-runners at a time (`max-parallel: 3`), only Linux runners, and one measurement
-runs at a time (a new trigger waits; it never cancels a running measurement).
-Before a scheduled or manual run starts, it checks the public Actions API of
-Rullst/Rullst and does not start while a release, release admission or a long
-verification workflow is running there, or while more than 10 jobs are
-queued; the next nightly check tries again. A manual run can override this
-with the `force` input.
+between Rullst/Rullst and this repository. A measurement uses only Linux
+runners, and one measurement runs at a time (a new trigger waits; it never
+cancels a running measurement). Before a scheduled or manual run starts, it
+checks the public Actions API of Rullst/Rullst and does not start while a
+release, release admission or a long verification workflow is running there,
+or while more than 10 jobs are queued; the next nightly check tries again. A
+manual run can override this with the `force` input. The same check sets how
+many frameworks are measured at once: 8 when Rullst/Rullst has at most 2
+queued and at most 8 running jobs, otherwise 3, and never more than 8 (the
+`max_parallel` input, `auto` by default and for the nightly run, can set 1-8
+instead). Labelled pull request trials use 3.
 
 ## Machine-readable results
 

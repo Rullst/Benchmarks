@@ -1,7 +1,8 @@
 name: Benchmark
 
-# Full measurements run on GitHub-hosted Linux runners, three frameworks at a
-# time (the organization shares 20 runners with Rullst/Rullst's CI).
+# Full measurements run on GitHub-hosted Linux runners, up to 8 frameworks at
+# a time while Rullst/Rullst is quiet and 3 while it is busy (the organization
+# shares 20 runners with Rullst/Rullst's CI).
 # - schedule: every night, measure the newest `rullst` release on crates.io if
 #   it has not been measured yet, then publish the results to main;
 # - workflow_dispatch: a manual run (publishing only when asked, from main);
@@ -33,6 +34,9 @@ on:
         description: Start even if Rullst/Rullst is running a release or a long verification workflow
         type: boolean
         default: false
+      max_parallel:
+        description: Measurement jobs at once, 1-8, or "auto" (8 while Rullst/Rullst is quiet, 3 while busy)
+        default: auto
   pull_request:
     types: [labeled]
 
@@ -56,6 +60,7 @@ jobs:
       rounds: ${{ steps.decide.outputs.rounds }}
       rullst_version: ${{ steps.decide.outputs.rullst_version }}
       publish: ${{ steps.decide.outputs.publish }}
+      max_parallel: ${{ steps.decide.outputs.max_parallel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,6 +75,7 @@ jobs:
           IN_VERSION: ${{ inputs.rullst_version }}
           IN_PUBLISH: ${{ inputs.publish }}
           IN_FORCE: ${{ inputs.force }}
+          IN_MAX_PARALLEL: ${{ inputs.max_parallel }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           REF: ${{ github.ref }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -107,20 +113,28 @@ jobs:
           esac
           case "$rounds" in ''|*[!0-9]*) echo "::error::rounds must be a number"; exit 1;; esac
           case "$version" in *[!0-9A-Za-z.+-]*) echo "::error::invalid rullst version"; exit 1;; esac
-          if [ "$run" = true ] && [ "$EVENT" != pull_request ] && [ "$IN_FORCE" != true ]; then
+          auto_parallel=3
+          if [ "$run" = true ] && [ "$EVENT" != pull_request ]; then
             python3 bench/yield_check.py > yield.txt
-            if [ "$(sed -n 's/^go=//p' yield.txt)" != true ]; then
-              echo "Not starting: $(sed -n 's/^reason=//p' yield.txt). The next nightly check retries." \
-                | tee -a "$GITHUB_STEP_SUMMARY"
+            auto_parallel="$(sed -n 's/^max_parallel=//p' yield.txt)"
+            echo "Yield guard: $(sed -n 's/^reason=//p' yield.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$IN_FORCE" != true ] && [ "$(sed -n 's/^go=//p' yield.txt)" != true ]; then
+              echo "Not starting. The next nightly check retries." | tee -a "$GITHUB_STEP_SUMMARY"
               run=false
             fi
           fi
+          case "${IN_MAX_PARALLEL:-auto}" in
+            auto) max_parallel="${auto_parallel:-3}" ;;
+            [1-8]) max_parallel="$IN_MAX_PARALLEL" ;;
+            *) echo "::error::max_parallel must be 1-8 or auto"; exit 1 ;;
+          esac
           matrix="$(python3 bench/harness.py plan --frameworks "$frameworks")"
           {
             echo "run=$run"; echo "publish=$publish"; echo "frameworks=$frameworks"
             echo "rounds=$rounds"; echo "rullst_version=$version"; echo "matrix=$matrix"
+            echo "max_parallel=$max_parallel"
           } >> "$GITHUB_OUTPUT"
-          echo "run=$run frameworks=$matrix rounds=$rounds rullst=$version publish=$publish"
+          echo "run=$run frameworks=$matrix rounds=$rounds rullst=$version publish=$publish max_parallel=$max_parallel"
 
   measure:
     needs: plan
@@ -129,7 +143,7 @@ jobs:
     timeout-minutes: 200
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: ${{ fromJSON(needs.plan.outputs.max_parallel) }}
       matrix:
         framework: ${{ fromJson(needs.plan.outputs.matrix) }}
     steps:
