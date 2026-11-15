@@ -1,0 +1,16 @@
+{
+  "name": "NestJS",
+  "language": "TypeScript",
+  "group": "full-stack",
+  "framework": "nestjs",
+  "framework_version": "12.5.0",
+  "version_package": "@nestjs/core",
+  "runtime": "Node.js 26.13.1 LTS, NODE_ENV=production, compiled with nest build (tsc)",
+  "server": "Nest NodeAdapter (@nestjs/platform-node, on node:http)",
+  "workers": "node:cluster, one process per vCPU (2)",
+  "database_layer": "TypeORM 1.1 via @nestjs/typeorm with pg, 8 connections per process (16 in total)",
+  "template_engine": "hbs 4.4 (Handlebars)",
+  "logging": "none per request (Nest has no request logger); start-up log per process",
+  "startup_timeout_s": 120,
+  "notes": "Nest's documentation recommends the NodeAdapter since v12.3; Nest still uses Express when no adapter is passed."
+}
