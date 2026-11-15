@@ -1,0 +1,6 @@
+**/__pycache__
+*.pyc
+.dockerignore
+Dockerfile
+README.md
+bench.json
