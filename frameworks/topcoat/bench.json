@@ -1,0 +1,17 @@
+{
+  "name": "Topcoat",
+  "language": "Rust",
+  "group": "rust",
+  "framework": "topcoat",
+  "framework_version": "0.12.1",
+  "version_package": "topcoat",
+  "runtime": "Rust 1.99.1 (release build, thin LTO)",
+  "server": "topcoat::start (Hyper)",
+  "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
+  "database_layer": "Toasty 0.11 (World::get_by_id), max_pool_size = DB_POOL_SIZE",
+  "template_engine": "view! macro",
+  "logging": "none (Topcoat logs nothing per request by default)",
+  "startup_timeout_s": 120,
+  "maturity_note": "early 0.x framework, measured with its documented defaults",
+  "notes": "Topcoat describes itself as early-stage and experimental, with breaking changes expected."
+}

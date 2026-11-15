@@ -1,0 +1,21 @@
+# Dependencies as `topcoat new` generates them (topcoat without default
+# features plus asset/router/serve/view/discover; Toasty as the database
+# layer, with its PostgreSQL driver instead of the generated SQLite one).
+[package]
+name = "topcoat-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toasty = { version = "=0.11.0", features = ["postgresql"] }
+tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread"] }
+topcoat = { version = "=0.12.1", default-features = false, features = ["asset", "discover", "router", "serve", "view"] }
+
+# The same release profile for every Rust implementation (the one
+# `cargo rullst new` generates), so compiler settings are not a variable.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
