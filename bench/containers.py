@@ -24,18 +24,18 @@ def image_tag(slug: str) -> str:
 
 
 def base_images(dockerfile: Path) -> list[str]:
-    """Image references named in FROM lines, excluding earlier build stages."""
+    """Images a Dockerfile pulls: FROM lines and COPY --from=<image>, not stages or scratch."""
     stages: set[str] = set()
     images: list[str] = []
     for line in dockerfile.read_text().splitlines():
-        match = re.match(r"\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?", line, re.I)
-        if not match:
-            continue
-        ref, stage = match.group(1), match.group(2)
-        if ref.lower() not in stages and ref not in images:
+        found = re.match(r"\s*FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?", line, re.I)
+        copy = re.match(r"\s*COPY\s+(?:--\S+\s+)*--from=(\S+)", line, re.I)
+        ref = found.group(1) if found else (copy.group(1) if copy else None)
+        if ref and ref.lower() not in stages and ref.lower() != "scratch" and not ref.isdigit() \
+                and ref not in images:
             images.append(ref)
-        if stage:
-            stages.add(stage.lower())
+        if found and found.group(2):
+            stages.add(found.group(2).lower())
     return images
 
 
