@@ -93,10 +93,12 @@ export default function App() {
           <section>
             <h2>Ranking</h2>
             <p className="note">
-              Every implementation in order of its /json requests/s ratio to Axum. Rows without that ratio (not
-              measured, or left out) are listed last, without a position.
+              An overall ranking and one per category: Speed (Tier 1), Under pressure (Tier 2), Memory (Tier 3),
+              Endurance (Tier 4) and Startup. &quot;3=&quot; is a shared position (a tie); Axum is the reference and
+              has no position; an implementation with a missing or left-out result is listed as incomplete, without a
+              position. &quot;How to read these results&quot; above explains the scores.
             </p>
-            <Ranking rows={state.rows} />
+            <Ranking rankings={state.data.rankings} rows={state.rows} />
           </section>
           <section>
             <h2>Summary</h2>

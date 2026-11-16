@@ -26,9 +26,30 @@ export function HowToRead() {
           results at the top are ties.
         </li>
         <li>
+          <strong>How the ranking is computed.</strong> Each category has a score where higher is better and Axum
+          is 1.00. <em>Speed</em> (Tier 1, 125 connections) is the geometric mean of the requests/s ratios of the
+          four endpoints. <em>Under pressure</em> (Tier 2, 300 connections for 30 s) and <em>Endurance</em> (Tier 4,
+          500 connections for 2 minutes) are requests/s ratios; Endurance also lists errors, timeouts, RAM still
+          growing and stops. <em>Memory</em> (Tier 3) is 1 divided by the peak RAM ratio, so using half of
+          Axum&apos;s RAM scores 2.00 (the table also shows the RAM ratio itself). <em>Startup</em> is Axum&apos;s
+          start-up time divided by the framework&apos;s; the harness checks every 0.25 s, so times below 0.25 s
+          count as equal. The <strong>overall score</strong> is the geometric mean of the five category scores,
+          each weighted equally (one fifth). That weighting is a choice, not a fact about the frameworks: the
+          per-category rankings are the detail, and the one that matters depends on your application.
+        </li>
+        <li>
+          <strong>Ties and incomplete rows.</strong> When the load generator was the limit (client-bound) for two
+          frameworks and their scores are within 10%, they share a position, written &quot;1=&quot;; start-up
+          times within 0.25 s also share a position. A framework with a missing or left-out result (for example a
+          correction) is listed as incomplete, without a position in that category or overall, rather than ranked
+          on fewer metrics.
+        </li>
+        <li>
           <strong>Rullst is measured twice.</strong> <em>Rullst (as generated)</em> is the application that{' '}
           <code>cargo rullst new</code> and <code>cargo rullst deploy</code> create, with the production middleware
-          they turn on: WAF, CSRF protection, secure cookies, security headers and an access log.{' '}
+          they turn on: WAF, CSRF protection, secure cookies, security headers and an access log (on in the
+          13.0.0-alpha.5 results, a release that cannot turn it off; off from 13.0.0-alpha.6, like logging in every
+          implementation).{' '}
           <em>Rullst (minimal)</em> is Rullst&apos;s router, ORM and <code>html!</code> served like the Axum app,
           without that middleware; it is not how <code>cargo rullst new</code> sets up an application. The gap
           between the two rows shows what the default stack costs.

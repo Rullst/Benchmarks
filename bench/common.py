@@ -12,6 +12,9 @@ ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / "bench"
 FRAMEWORKS = ROOT / "frameworks"
 
+# How often a starting server is checked (GET /text) until it answers.
+READY_POLL_S = 0.25
+
 GROUPS = {
     "rust": "Rust",
     "full-stack": "Full-stack frameworks",

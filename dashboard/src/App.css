@@ -125,7 +125,7 @@ footer {
 }
 
 .bar-value {
-  min-width: 4.5ch;
+  min-width: 6.5ch;
   text-align: right;
 }
 
@@ -157,4 +157,26 @@ footer {
   .bar {
     width: 64px;
   }
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tabs button {
+  font: inherit;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  cursor: pointer;
+}
+
+.tabs button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
 }

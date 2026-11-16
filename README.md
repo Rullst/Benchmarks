@@ -40,6 +40,36 @@ Source: [workflow run 43731095115](https://github.com/Rullst/Benchmarks/actions/
 Corrections (left-out results are shown as –):
 
 - **FastAPI**: /db-single is not measured in this run: under load every request timed out because of a defect in this implementation (the session dependency's cleanup waited for a thread-pool slot held by requests waiting for a database connection), so the number says nothing about FastAPI. Fixed in Rullst/Benchmarks#8; the next run (Rullst 13.0.0-alpha.6) measures it again.
+
+### Rankings
+
+- **Speed (Tier 1):** requests per second on each of the four endpoints with 125 connections for 10 s; the score is the geometric mean of the four ratios to Axum.
+- **Under pressure (Tier 2):** requests per second on /json with 300 connections for 30 s.
+- **Memory (Tier 3):** the most RAM the server used while answering /json with 200 connections; lower is better, so the table shows the RAM ratio and the score is its inverse.
+- **Endurance (Tier 4):** requests per second on /json with 500 connections for 2 minutes; errors, timeouts, RAM still growing and stops are listed with it.
+- **Startup:** time from starting the container to its first answer; lower is better. The harness checks every 0.25 s, so times below 0.25 s count as equal.
+- **Overall:** the geometric mean of the five category scores, each weighted equally (1/5), with every score oriented so that higher is better and Axum at 1.00. The weighting is a choice; the per-category positions are the detail.
+
+Each cell is the position and the ratio to Axum (seconds for Startup). "(tie)": the load generator was the limit (client-bound) for both and the results are within 10% of each other, or the start-up times are within 0.25 s, so they share the position. Axum is the reference and has no position. "incomplete": a result is missing or left out, so there is no position rather than one computed from fewer metrics.
+
+| Implementation | Overall | Speed | Under pressure | Memory (RAM) | Endurance | Startup |
+| --- | --- | --- | --- | --- | --- | --- |
+| Actix Web | 1: 1.01 | 1 (tie): 0.98× | 1 (tie): 0.97× | 1: 0.88× | 1 (tie): 0.97× | 1 (tie): 0.01 s |
+| Axum – baseline | reference: 1.00 | reference: 1.00× | reference: 1.00× | reference: 1.00× | reference: 1.00× | reference: 0.01 s |
+| Rullst (minimal) | 2: 0.98 | 1 (tie): 0.99× | 1 (tie): 1.00× | 3: 1.08× | 1 (tie): 1.00× | 1 (tie): 0.02 s |
+| Topcoat | 3: 0.91 | 3: 0.94× | 3: 0.83× | 2: 1.06× | 3: 0.85× | 1 (tie): 0.01 s |
+| Gin | 4: 0.62 | 4: 0.66× | 6: 0.51× | 6: 1.84× | 6: 0.51× | 1 (tie): 0.01 s |
+| Loco | 5: 0.59 | 6: 0.51× | 8: 0.43× | 5: 1.32× | 8: 0.43× | 1 (tie): 0.01 s |
+| Rullst (as generated) | 6: 0.49 | 9: 0.38× | 10: 0.29× | 4: 1.14× | 9: 0.29× | 1 (tie): 0.01 s |
+| Fastify | 7: 0.42 | 5: 0.60× | 5: 0.60× | 11: 15.65× | 5: 0.63× | 7 (tie): 0.28 s |
+| ASP.NET Core | 8: 0.38 | 7: 0.48× | 4: 0.62× | 8: 10.23× | 4: 0.63× | 9 (tie): 0.61 s |
+| NestJS | 9: 0.25 | 8: 0.44× | 7: 0.49× | 13: 24.79× | 7: 0.50× | 11 (tie): 1.06 s |
+| Phoenix | 10: 0.16 | 10: 0.24× | 11: 0.16× | 10: 13.73× | 11: 0.17× | 11 (tie): 1.08 s |
+| Spring Boot | 11: 0.12 | 11: 0.20× | 9: 0.29× | 15: 35.92× | 10: 0.27× | 15: 4.12 s |
+| Django | 12: 0.056 | 12: 0.031× | 13: 0.024× | 9: 10.37× | 13: 0.024× | 9 (tie): 0.76 s |
+| Ruby on Rails | 13: 0.031 | 13: 0.025× | 14: 0.014× | 14: 34.16× | 14: 0.014× | 14: 1.38 s |
+| Laravel | 14: 0.030 | 14: 0.007× | 15: 0.006× | 7: 7.42× | 15: 0.006× | 7 (tie): 0.41 s |
+| FastAPI | incomplete | incomplete | 12: 0.072× | 12: 20.97× | 12: 0.068× | 11 (tie): 1.07 s |
 <!-- results:end -->
 
 ## What is measured
@@ -65,6 +95,14 @@ The four tiers:
 Each metric is also reported as a ratio to the Axum baseline measured on the
 same runner (see below). The results also list requests/s per MiB of peak RAM
 as one column; it is not used to rank anything.
+
+The rankings under [Results](#results) are computed by `bench/rankings.py`
+from those ratios: one per category (Speed, Under pressure, Memory, Endurance,
+Startup) and an overall one, the geometric mean of the five category scores
+with equal weights. The weighting is a choice; the per-category rankings are
+the detail. Close results that were client-bound, and start-up times within
+the 0.25 s readiness check interval, share a position. An implementation with
+a missing or left-out result is listed as incomplete, without a position.
 
 ## Method
 
@@ -247,6 +285,45 @@ Fields are only ever added to it:
   "config": { tiers, server limits, pool size, load generator, database },
   "environment": { "cpu_model", "cpu_count", "memory_total_mib", "kernel", "os",
                    "runner_image", "docker", "load_generator", "postgres", "cpu_split" },
+  "rankings": {                                per-category and overall positions (bench/rankings.py)
+    "reference": "axum",                       listed with score 1.0 and no position
+    "tie_tolerance": 0.1,                      client-bound scores this close share a position
+    "startup_resolution_s": 0.25,              readiness check interval: start-up times below it count
+                                               as equal, and times this close share a position
+    "method": { "overall", "ratios", "ties", "incomplete", "reference" },   the rules in words
+    "categories": [                            speed, pressure, memory, endurance, startup, in that order
+      {
+        "key": "speed", "title": "Speed", "tier": "Tier 1", "description": "...",
+        "metrics": ["tier1.text.rps", ...],    the ratios the score is computed from
+        "lower_is_better": false,              true for memory and startup (the score is inverted)
+        "entries": [                           ranked and reference rows by score, then the others
+          {
+            "slug", "framework",               "framework" as in results[]
+            "position": 1,                     1, 1, 3 for a tie; null for the reference, incomplete
+                                               and not measured rows
+            "status": "ranked",                ranked, reference, incomplete or not measured
+            "tie": true, "tied_with": ["<slug>", ...],   rows sharing the position (the reference too)
+            "score": 0.99,                     higher is better, Axum = 1.0; null without a position
+            "ratio": 0.99,                     the measured ratio to Axum (peak RAM ratio for memory,
+                                               start-up time ratio for startup)
+            "client_bound": true,              every run of the category client-bound in at least
+                                               half of the rounds (throughput categories only)
+            "client_bound_runs": ["tier1.json", ...],
+            "detail": { ... },                 speed: the four endpoint ratios; pressure: rps, p99_ms,
+                                               p99_ratio; memory: peak_ram_mib; endurance: rps,
+                                               error_rate, timeouts, ram_growing_rounds,
+                                               crashed_rounds, rounds; startup: startup_s
+            "reason": ""                       why an incomplete or not measured row has no position
+          }
+        ]
+      }
+    ],
+    "overall": {
+      "weights": { "speed": 0.2, ... },        geometric mean of the category scores, equal weights
+      "entries": [ { "slug", "framework", "position", "status", "tie", "tied_with",
+                     "score", "categories": { "<key>": score or null }, "missing": [keys], "reason" } ]
+    }
+  },
   "results_schema": 1
 }
 ```
