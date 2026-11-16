@@ -95,3 +95,66 @@ footer {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.howto {
+  border: 1px solid var(--border);
+  background: var(--stripe);
+  padding: 4px 16px;
+  margin-bottom: 24px;
+  max-width: 90ch;
+}
+
+.howto h2 {
+  margin: 12px 0 8px;
+  font-size: 1.15rem;
+}
+
+.howto ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.howto li + li {
+  margin-top: 6px;
+}
+
+.bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-value {
+  min-width: 4.5ch;
+  text-align: right;
+}
+
+.bar {
+  position: relative;
+  display: inline-block;
+  width: 160px;
+  height: 10px;
+  background: var(--stripe);
+  border: 1px solid var(--border);
+}
+
+.bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+}
+
+.bar-axum {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--fg);
+}
+
+@media (max-width: 600px) {
+  .bar {
+    width: 64px;
+  }
+}
