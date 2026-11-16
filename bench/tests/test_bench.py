@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import aggregate  # noqa: E402
+import rankings  # noqa: E402
 import report  # noqa: E402
 from common import load_config  # noqa: E402
 from conformance import check_body, check_content_type  # noqa: E402
@@ -281,6 +282,136 @@ class AggregateTests(unittest.TestCase):
             self.assertEqual([e["version"] for e in index["versions"]], ["13.0.0-alpha.5", "13.0.0-alpha.6"])
             self.assertTrue((root / "results" / "rullst" / "13.0.0-alpha.6.json").is_file())
             self.assertTrue((root / "results" / "raw" / "13.0.0-alpha.5" / "rullst.json").is_file())
+
+
+def rank_row(slug: str, speed=(1.0, 1.0, 1.0, 1.0), t2=1.0, ram=1.0, t4=1.0, startup_s=0.01, bound=(),
+             status="measured", rounds=5, **extra) -> dict:
+    """A combined row with the ratios the rankings read; `bound` lists the client-bound runs."""
+    ratios = {f"tier1.{ep}.rps": value for ep, value in zip(rankings.ENDPOINTS, speed) if value is not None}
+    ratios.update({"tier2.rps": t2, "tier3.load_ram_peak_mib": ram, "tier4.rps": t4})
+    stat = lambda v: {"median": v, "min": v, "max": v, "spread": 0.0, "n": rounds}  # noqa: E731
+    metrics = {"startup_s": stat(startup_s), "tier2.rps": stat(1000 * t2), "tier2.latency_ms.p99": stat(5.0),
+               "tier3.load_ram_peak_mib": stat(10 * ram), "tier4.rps": stat(1000 * t4),
+               "tier4.error_rate": stat(0.0), "tier4.timeouts": stat(0)}
+    metrics.update({f"tier1.{ep}.rps": stat(1000 * value) for ep, value in zip(rankings.ENDPOINTS, speed)
+                    if value is not None})
+    runs = [f"tier1.{ep}" for ep in rankings.ENDPOINTS] + ["tier2", "tier3_load", "tier4"]
+    row = {"slug": slug, "name": slug.title(), "status": status,
+           "ratios": {k: stat(v) for k, v in ratios.items()}, "metrics": metrics,
+           "flags": {"rounds": rounds, "crashed_rounds": 0, "ram_growing_rounds": 0,
+                     "client_bound_rounds": {r: (rounds if r in bound else 0) for r in runs}}}
+    row.update(extra)
+    return row
+
+
+ALL_RUNS = ("tier1.text", "tier1.json", "tier1.db-single", "tier1.html", "tier2", "tier3_load", "tier4")
+
+
+class RankingTests(unittest.TestCase):
+    def rank(self, rows):
+        base = rank_row("axum", bound=ALL_RUNS, is_baseline=True, ratios={})
+        result = rankings.compute([base, *rows], "axum")
+        cats = {c["key"]: {e["slug"]: e for e in c["entries"]} for c in result["categories"]}
+        overall = {e["slug"]: e for e in result["overall"]["entries"]}
+        return result, cats, overall
+
+    def test_scores_are_oriented_so_higher_is_better(self):
+        _, cats, overall = self.rank([rank_row("a", speed=(2.0, 0.5, 1.0, 1.0), t2=0.8, ram=2.0, t4=0.9,
+                                               startup_s=1.0)])
+        a = {key: cats[key]["a"] for key in rankings.CATEGORY_KEYS}
+        self.assertAlmostEqual(a["speed"]["score"], 1.0)
+        self.assertEqual(a["speed"]["detail"]["text"], 2.0)
+        self.assertAlmostEqual(a["memory"]["score"], 0.5)
+        self.assertAlmostEqual(a["memory"]["ratio"], 2.0)
+        # 1 s against Axum's 0.01 s, which counts as the 0.25 s poll interval.
+        self.assertAlmostEqual(a["startup"]["score"], 0.25)
+        expected = (1.0 * 0.8 * 0.5 * 0.9 * 0.25) ** 0.2
+        self.assertAlmostEqual(overall["a"]["score"], round(expected, 4))
+        self.assertEqual(overall["a"]["position"], 1)
+
+    def test_reference_is_listed_without_a_position(self):
+        result, cats, overall = self.rank([rank_row("fast", t2=1.5), rank_row("slow", t2=0.5)])
+        self.assertEqual(overall["axum"]["status"], "reference")
+        self.assertIsNone(overall["axum"]["position"])
+        self.assertEqual(overall["axum"]["score"], 1.0)
+        self.assertEqual((cats["pressure"]["fast"]["position"], cats["pressure"]["slow"]["position"]), (1, 2))
+        order = [e["slug"] for e in result["categories"][1]["entries"]]
+        self.assertEqual(order, ["fast", "axum", "slow"])
+        self.assertEqual(result["overall"]["weights"], {key: 0.2 for key in rankings.CATEGORY_KEYS})
+
+    def test_a_missing_metric_makes_the_row_incomplete(self):
+        row = rank_row("fastapi", speed=(0.5, 0.5, None, 0.5), excluded=["tier1.db-single"])
+        failed = rank_row("broken", status="failed-conformance", ratios={}, metrics={}, flags={})
+        _, cats, overall = self.rank([row, failed, rank_row("other", t2=0.1)])
+        self.assertEqual(cats["speed"]["fastapi"]["status"], "incomplete")
+        self.assertIsNone(cats["speed"]["fastapi"]["position"])
+        self.assertIn("left out by a correction", cats["speed"]["fastapi"]["reason"])
+        self.assertEqual(cats["pressure"]["fastapi"]["position"], 1)
+        self.assertEqual(overall["fastapi"]["status"], "incomplete")
+        self.assertIsNone(overall["fastapi"]["position"])
+        self.assertIsNone(overall["fastapi"]["score"])
+        self.assertEqual(overall["fastapi"]["missing"], ["speed"])
+        self.assertEqual(overall["broken"]["status"], "not measured")
+        self.assertEqual(overall["other"]["position"], 1)
+
+    def test_client_bound_results_within_the_tolerance_tie(self):
+        rows = [rank_row("a", t2=1.02, ram=0.95, bound=ALL_RUNS), rank_row("b", t2=0.95, bound=ALL_RUNS),
+                rank_row("c", t2=0.90), rank_row("d", t2=0.89),
+                rank_row("e", t2=0.60, bound=ALL_RUNS)]
+        _, cats, _ = self.rank(rows)
+        pressure = cats["pressure"]
+        self.assertEqual([pressure[s]["position"] for s in "abcde"], [1, 1, 3, 4, 5])
+        self.assertTrue(pressure["a"]["tie"])
+        self.assertEqual(sorted(pressure["a"]["tied_with"]), ["axum", "b"])
+        self.assertFalse(pressure["c"]["tie"])  # close, but not client-bound
+        self.assertFalse(pressure["e"]["tie"])  # client-bound, but not close
+        self.assertFalse(cats["memory"]["a"]["tie"])  # 5% less RAM: memory has no client-bound ties
+
+    def test_speed_ties_only_when_every_endpoint_is_client_bound(self):
+        rows = [rank_row("a", speed=(0.98,) * 4, bound=ALL_RUNS),
+                rank_row("b", speed=(0.95,) * 4, bound=("tier1.db-single",))]
+        _, cats, _ = self.rank(rows)
+        self.assertTrue(cats["speed"]["a"]["tie"])
+        self.assertFalse(cats["speed"]["b"]["tie"])
+        self.assertEqual(cats["speed"]["b"]["client_bound_runs"], ["tier1.db-single"])
+        self.assertEqual(cats["speed"]["b"]["position"], 2)
+
+    def test_startup_ties_within_the_poll_interval(self):
+        rows = [rank_row("a", startup_s=0.02), rank_row("b", startup_s=0.28), rank_row("c", startup_s=0.41),
+                rank_row("d", startup_s=0.61), rank_row("e", startup_s=4.1)]
+        _, cats, overall = self.rank(rows)
+        startup = cats["startup"]
+        self.assertEqual([startup[s]["position"] for s in "abcde"], [1, 2, 2, 4, 5])
+        self.assertEqual(startup["a"]["score"], 1.0)
+        self.assertEqual(startup["a"]["tied_with"], ["axum"])
+        self.assertEqual(startup["d"]["detail"]["startup_s"], 0.61)
+        self.assertAlmostEqual(startup["e"]["score"], round(0.25 / 4.1, 4))
+        # b and c differ only in start-up, where they tie, so they tie overall too.
+        self.assertEqual((overall["b"]["position"], overall["c"]["position"]), (2, 2))
+
+    def test_overall_ties_only_when_tied_in_every_category(self):
+        same = dict(speed=(0.99,) * 4, t2=0.99, t4=0.99, bound=ALL_RUNS)
+        rows = [rank_row("a", ram=1.0, **same), rank_row("b", ram=1.0, **same), rank_row("c", ram=0.5, **same)]
+        _, _, overall = self.rank(rows)
+        self.assertEqual(overall["c"]["position"], 1)
+        self.assertFalse(overall["c"]["tie"])  # better memory is a real difference
+        self.assertEqual((overall["a"]["position"], overall["b"]["position"]), (2, 2))
+        # a and b equal Axum's memory and tie with it in every other category.
+        self.assertEqual(sorted(overall["a"]["tied_with"]), ["axum", "b"])
+
+    def test_published_and_rendered(self):
+        jobs = [fake_job("rullst", 0.5), fake_job("actix", 1.1)]
+        combined = aggregate.combine(jobs, ["rullst", "actix"])
+        doc = aggregate.site_document(combined)
+        self.assertEqual(doc["schema"], "rullst.benchmarks.latest.v1")
+        self.assertEqual([c["key"] for c in doc["rankings"]["categories"]], rankings.CATEGORY_KEYS)
+        overall = doc["rankings"]["overall"]["entries"]
+        self.assertEqual([e["slug"] for e in overall if e["position"]], ["actix", "rullst"])
+        self.assertEqual(next(e for e in overall if e["slug"] == "rullst")["framework"], "Rullst")
+        readme = report.render_readme_table(combined)
+        self.assertIn("### Rankings", readme)
+        self.assertIn("| Actix | 1: ", readme)
+        self.assertIn("## Rankings", report.render_results(combined))
 
 
 class ReleaseCheckTests(unittest.TestCase):

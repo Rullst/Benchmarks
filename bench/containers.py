@@ -12,7 +12,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from common import BENCH, FRAMEWORKS, BenchError, log, run
+from common import BENCH, FRAMEWORKS, READY_POLL_S, BenchError, log, run
 from system import format_cpu_list
 
 DB_CONTAINER = "bench-db"
@@ -211,7 +211,7 @@ class Server:
                         return round(time.monotonic() - started, 2)
             except OSError:
                 pass
-            time.sleep(0.25)
+            time.sleep(READY_POLL_S)
         raise BenchError(f"{self.name} did not answer GET /text within {timeout_s}s")
 
     def cgroup(self) -> Path:

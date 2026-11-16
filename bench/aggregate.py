@@ -28,6 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import GROUPS, ROOT, framework_slugs, load_manifest, write_json  # noqa: E402
+import rankings  # noqa: E402
 from measure import summarize  # noqa: E402
 from release_check import semver_key  # noqa: E402
 from report import render_readme_table, render_results, replace_between_markers  # noqa: E402
@@ -225,6 +226,7 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
         "config": first.get("config", {}),
         "environment": _env_brief(first) if first else {},
         "implementations": rows,
+        "rankings": rankings.compute(rows, baseline, display_name),
     }
 
 

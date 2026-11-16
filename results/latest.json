@@ -10343,5 +10343,1963 @@
     },
     "postgres": "18.6"
   },
+  "rankings": {
+    "reference": "axum",
+    "tie_tolerance": 0.1,
+    "startup_resolution_s": 0.25,
+    "method": {
+      "overall": "geometric mean of the five category scores, each weighted equally (1/5); every score is oriented so that higher is better and Axum is 1.00. The weighting is a choice; the per-category rankings are the detail.",
+      "ratios": "medians of the per-round ratios to Axum measured on the same runner (results[].ratios), except start-up: the harness checks a starting server every 0.25 s, so a start-up time is known only to 0.25 s; the score divides Axum's median time by the implementation's, with times below 0.25 s counted as 0.25 s, instead of dividing by Axum's 0.01-0.02 s",
+      "ties": "in Speed, Under pressure and Endurance, implementations that were client-bound (load generator vCPUs at least 90% busy) in at least half of the rounds of every run of the category, and whose scores are within 10% of the best score of their group, share a position (Memory compares RAM, not requests/s, so it has no client-bound ties); in Startup, times within 0.25 s (the readiness poll interval) of the fastest of their group share a position; equal scores always share a position; overall, implementations that share a position in all five categories share a position",
+      "incomplete": "an implementation without a value for every metric of a category (not measured, or left out by a correction) has no position in that category and no overall position",
+      "reference": "Axum is the reference (1.00) and is listed without a position"
+    },
+    "categories": [
+      {
+        "key": "speed",
+        "title": "Speed",
+        "tier": "Tier 1",
+        "description": "geometric mean of the requests/s ratios of /text, /json, /db-single and /html (125 connections for 10 s each)",
+        "metrics": [
+          "tier1.text.rps",
+          "tier1.json.rps",
+          "tier1.db-single.rps",
+          "tier1.html.rps"
+        ],
+        "lower_is_better": false,
+        "entries": [
+          {
+            "slug": "axum",
+            "framework": "Axum",
+            "position": null,
+            "tie": true,
+            "tied_with": [
+              "rullst-minimal",
+              "actix"
+            ],
+            "status": "reference",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier1.text",
+              "tier1.json",
+              "tier1.db-single",
+              "tier1.html"
+            ],
+            "detail": {
+              "text": 1.0,
+              "json": 1.0,
+              "db-single": 1.0,
+              "html": 1.0
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst-minimal",
+            "framework": "Rullst (minimal)",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "axum",
+              "actix"
+            ],
+            "status": "ranked",
+            "score": 0.9905,
+            "ratio": 0.9905,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier1.text",
+              "tier1.json",
+              "tier1.db-single",
+              "tier1.html"
+            ],
+            "detail": {
+              "text": 0.9973,
+              "json": 0.9958,
+              "db-single": 0.9956,
+              "html": 0.9736
+            },
+            "reason": ""
+          },
+          {
+            "slug": "actix",
+            "framework": "Actix Web",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "axum",
+              "rullst-minimal"
+            ],
+            "status": "ranked",
+            "score": 0.976,
+            "ratio": 0.976,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier1.text",
+              "tier1.json",
+              "tier1.db-single",
+              "tier1.html"
+            ],
+            "detail": {
+              "text": 0.966,
+              "json": 0.9732,
+              "db-single": 0.9848,
+              "html": 0.9801
+            },
+            "reason": ""
+          },
+          {
+            "slug": "topcoat",
+            "framework": "Topcoat",
+            "position": 3,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.9354,
+            "ratio": 0.9354,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier1.db-single"
+            ],
+            "detail": {
+              "text": 0.8418,
+              "json": 0.8282,
+              "db-single": 1.4161,
+              "html": 0.7755
+            },
+            "reason": ""
+          },
+          {
+            "slug": "gin",
+            "framework": "Gin",
+            "position": 4,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.6604,
+            "ratio": 0.6604,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier1.db-single"
+            ],
+            "detail": {
+              "text": 0.582,
+              "json": 0.5081,
+              "db-single": 1.3153,
+              "html": 0.4889
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastify",
+            "framework": "Fastify",
+            "position": 5,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.5955,
+            "ratio": 0.5955,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier1.db-single"
+            ],
+            "detail": {
+              "text": 0.6028,
+              "json": 0.5872,
+              "db-single": 0.7848,
+              "html": 0.4528
+            },
+            "reason": ""
+          },
+          {
+            "slug": "loco",
+            "framework": "Loco",
+            "position": 6,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.5119,
+            "ratio": 0.5119,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier1.db-single"
+            ],
+            "detail": {
+              "text": 0.4214,
+              "json": 0.4217,
+              "db-single": 1.0066,
+              "html": 0.3839
+            },
+            "reason": ""
+          },
+          {
+            "slug": "aspnet-core",
+            "framework": "ASP.NET Core",
+            "position": 7,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.4783,
+            "ratio": 0.4783,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "text": 0.6297,
+              "json": 0.6218,
+              "db-single": 0.4053,
+              "html": 0.3298
+            },
+            "reason": ""
+          },
+          {
+            "slug": "nestjs",
+            "framework": "NestJS",
+            "position": 8,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.4396,
+            "ratio": 0.4396,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier1.db-single"
+            ],
+            "detail": {
+              "text": 0.5216,
+              "json": 0.481,
+              "db-single": 0.6738,
+              "html": 0.2209
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst",
+            "framework": "Rullst",
+            "position": 9,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.3831,
+            "ratio": 0.3831,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier1.db-single"
+            ],
+            "detail": {
+              "text": 0.2958,
+              "json": 0.3106,
+              "db-single": 0.7684,
+              "html": 0.3051
+            },
+            "reason": ""
+          },
+          {
+            "slug": "phoenix",
+            "framework": "Phoenix",
+            "position": 10,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.2445,
+            "ratio": 0.2445,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "text": 0.1805,
+              "json": 0.1721,
+              "db-single": 0.8829,
+              "html": 0.1302
+            },
+            "reason": ""
+          },
+          {
+            "slug": "spring-boot",
+            "framework": "Spring Boot",
+            "position": 11,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.1967,
+            "ratio": 0.1967,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "text": 0.1176,
+              "json": 0.2081,
+              "db-single": 0.588,
+              "html": 0.1041
+            },
+            "reason": ""
+          },
+          {
+            "slug": "django",
+            "framework": "Django",
+            "position": 12,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0306,
+            "ratio": 0.0306,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "text": 0.0238,
+              "json": 0.0225,
+              "db-single": 0.0844,
+              "html": 0.0194
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rails",
+            "framework": "Ruby on Rails",
+            "position": 13,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0255,
+            "ratio": 0.0255,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "text": 0.0141,
+              "json": 0.0157,
+              "db-single": 0.145,
+              "html": 0.0131
+            },
+            "reason": ""
+          },
+          {
+            "slug": "laravel",
+            "framework": "Laravel",
+            "position": 14,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.007,
+            "ratio": 0.007,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier1.db-single"
+            ],
+            "detail": {
+              "text": 0.0061,
+              "json": 0.0061,
+              "db-single": 0.0138,
+              "html": 0.0048
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastapi",
+            "framework": "FastAPI",
+            "position": null,
+            "tie": false,
+            "tied_with": [],
+            "status": "incomplete",
+            "score": null,
+            "ratio": null,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "text": 0.0709,
+              "json": 0.0683,
+              "db-single": null,
+              "html": 0.0547
+            },
+            "reason": "no value for tier1.db-single.rps (left out by a correction)"
+          }
+        ]
+      },
+      {
+        "key": "pressure",
+        "title": "Under pressure",
+        "tier": "Tier 2",
+        "description": "requests/s ratio on /json with 300 connections for 30 s",
+        "metrics": [
+          "tier2.rps"
+        ],
+        "lower_is_better": false,
+        "entries": [
+          {
+            "slug": "rullst-minimal",
+            "framework": "Rullst (minimal)",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "axum",
+              "actix"
+            ],
+            "status": "ranked",
+            "score": 1.002,
+            "ratio": 1.002,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier2"
+            ],
+            "detail": {
+              "rps": 113296.01,
+              "p99_ms": 4.829,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "axum",
+            "framework": "Axum",
+            "position": null,
+            "tie": true,
+            "tied_with": [
+              "rullst-minimal",
+              "actix"
+            ],
+            "status": "reference",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier2"
+            ],
+            "detail": {
+              "rps": 182794.66,
+              "p99_ms": 3.021,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "actix",
+            "framework": "Actix Web",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "rullst-minimal",
+              "axum"
+            ],
+            "status": "ranked",
+            "score": 0.9695,
+            "ratio": 0.9695,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier2"
+            ],
+            "detail": {
+              "rps": 186896.03,
+              "p99_ms": 2.921,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "topcoat",
+            "framework": "Topcoat",
+            "position": 3,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.8325,
+            "ratio": 0.8325,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 213989.0,
+              "p99_ms": 3.101,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "aspnet-core",
+            "framework": "ASP.NET Core",
+            "position": 4,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.6226,
+            "ratio": 0.6226,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 72045.6,
+              "p99_ms": 8.031,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastify",
+            "framework": "Fastify",
+            "position": 5,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.6048,
+            "ratio": 0.6048,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 153180.37,
+              "p99_ms": 3.159,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "gin",
+            "framework": "Gin",
+            "position": 6,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.5076,
+            "ratio": 0.5076,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 78158.32,
+              "p99_ms": 9.502,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "nestjs",
+            "framework": "NestJS",
+            "position": 7,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.4863,
+            "ratio": 0.4863,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 124138.7,
+              "p99_ms": 2.93,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "loco",
+            "framework": "Loco",
+            "position": 8,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.4258,
+            "ratio": 0.4258,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 65233.74,
+              "p99_ms": 7.104,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "spring-boot",
+            "framework": "Spring Boot",
+            "position": 9,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.2936,
+            "ratio": 0.2936,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 45264.91,
+              "p99_ms": 12.49,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst",
+            "framework": "Rullst",
+            "position": 10,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.2925,
+            "ratio": 0.2925,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 53116.41,
+              "p99_ms": 11.296,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "phoenix",
+            "framework": "Phoenix",
+            "position": 11,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.1642,
+            "ratio": 0.1642,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 25147.26,
+              "p99_ms": 13.392,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastapi",
+            "framework": "FastAPI",
+            "position": 12,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0717,
+            "ratio": 0.0717,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 17747.57,
+              "p99_ms": 20.089,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "django",
+            "framework": "Django",
+            "position": 13,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0236,
+            "ratio": 0.0236,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 6016.1,
+              "p99_ms": 102.903,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rails",
+            "framework": "Ruby on Rails",
+            "position": 14,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0144,
+            "ratio": 0.0144,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 1636.06,
+              "p99_ms": 416.583,
+              "p99_ratio": null
+            },
+            "reason": ""
+          },
+          {
+            "slug": "laravel",
+            "framework": "Laravel",
+            "position": 15,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0063,
+            "ratio": 0.0063,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 1175.87,
+              "p99_ms": 315.436,
+              "p99_ratio": null
+            },
+            "reason": ""
+          }
+        ]
+      },
+      {
+        "key": "memory",
+        "title": "Memory",
+        "tier": "Tier 3",
+        "description": "peak RAM ratio on /json with 200 connections; lower RAM is better, so the score is 1 / ratio",
+        "metrics": [
+          "tier3.load_ram_peak_mib"
+        ],
+        "lower_is_better": true,
+        "entries": [
+          {
+            "slug": "actix",
+            "framework": "Actix Web",
+            "position": 1,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 1.1369,
+            "ratio": 0.8796,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier3_load"
+            ],
+            "detail": {
+              "peak_ram_mib": 9.5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "axum",
+            "framework": "Axum",
+            "position": null,
+            "tie": false,
+            "tied_with": [],
+            "status": "reference",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier3_load"
+            ],
+            "detail": {
+              "peak_ram_mib": 10.7
+            },
+            "reason": ""
+          },
+          {
+            "slug": "topcoat",
+            "framework": "Topcoat",
+            "position": 2,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.946,
+            "ratio": 1.0571,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 11.1
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst-minimal",
+            "framework": "Rullst (minimal)",
+            "position": 3,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.9292,
+            "ratio": 1.0762,
+            "client_bound": false,
+            "client_bound_runs": [
+              "tier3_load"
+            ],
+            "detail": {
+              "peak_ram_mib": 11.3
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst",
+            "framework": "Rullst",
+            "position": 4,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.875,
+            "ratio": 1.1429,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 12.6
+            },
+            "reason": ""
+          },
+          {
+            "slug": "loco",
+            "framework": "Loco",
+            "position": 5,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.7554,
+            "ratio": 1.3238,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 13.9
+            },
+            "reason": ""
+          },
+          {
+            "slug": "gin",
+            "framework": "Gin",
+            "position": 6,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.5427,
+            "ratio": 1.8426,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 19.8
+            },
+            "reason": ""
+          },
+          {
+            "slug": "laravel",
+            "framework": "Laravel",
+            "position": 7,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.1348,
+            "ratio": 7.4206,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 80.2
+            },
+            "reason": ""
+          },
+          {
+            "slug": "aspnet-core",
+            "framework": "ASP.NET Core",
+            "position": 8,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0978,
+            "ratio": 10.2286,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 108.7
+            },
+            "reason": ""
+          },
+          {
+            "slug": "django",
+            "framework": "Django",
+            "position": 9,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0965,
+            "ratio": 10.3661,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 116.6
+            },
+            "reason": ""
+          },
+          {
+            "slug": "phoenix",
+            "framework": "Phoenix",
+            "position": 10,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0728,
+            "ratio": 13.7273,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 153.7
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastify",
+            "framework": "Fastify",
+            "position": 11,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0639,
+            "ratio": 15.6509,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 165.0
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastapi",
+            "framework": "FastAPI",
+            "position": 12,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0477,
+            "ratio": 20.972,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 225.2
+            },
+            "reason": ""
+          },
+          {
+            "slug": "nestjs",
+            "framework": "NestJS",
+            "position": 13,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0403,
+            "ratio": 24.7909,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 263.2
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rails",
+            "framework": "Ruby on Rails",
+            "position": 14,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0293,
+            "ratio": 34.156,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 369.3
+            },
+            "reason": ""
+          },
+          {
+            "slug": "spring-boot",
+            "framework": "Spring Boot",
+            "position": 15,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0278,
+            "ratio": 35.9238,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "peak_ram_mib": 377.2
+            },
+            "reason": ""
+          }
+        ]
+      },
+      {
+        "key": "endurance",
+        "title": "Endurance",
+        "tier": "Tier 4",
+        "description": "requests/s ratio on /json with 500 connections for 2 minutes",
+        "metrics": [
+          "tier4.rps"
+        ],
+        "lower_is_better": false,
+        "entries": [
+          {
+            "slug": "rullst-minimal",
+            "framework": "Rullst (minimal)",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "axum",
+              "actix"
+            ],
+            "status": "ranked",
+            "score": 1.0012,
+            "ratio": 1.0012,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier4"
+            ],
+            "detail": {
+              "rps": 112546.06,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "axum",
+            "framework": "Axum",
+            "position": null,
+            "tie": true,
+            "tied_with": [
+              "rullst-minimal",
+              "actix"
+            ],
+            "status": "reference",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier4"
+            ],
+            "detail": {
+              "rps": 168907.6,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 75
+            },
+            "reason": ""
+          },
+          {
+            "slug": "actix",
+            "framework": "Actix Web",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "rullst-minimal",
+              "axum"
+            ],
+            "status": "ranked",
+            "score": 0.9661,
+            "ratio": 0.9661,
+            "client_bound": true,
+            "client_bound_runs": [
+              "tier4"
+            ],
+            "detail": {
+              "rps": 182813.86,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "topcoat",
+            "framework": "Topcoat",
+            "position": 3,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.8545,
+            "ratio": 0.8545,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 210072.42,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "aspnet-core",
+            "framework": "ASP.NET Core",
+            "position": 4,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.6266,
+            "ratio": 0.6266,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 71532.03,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastify",
+            "framework": "Fastify",
+            "position": 5,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.6255,
+            "ratio": 0.6255,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 151940.59,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "gin",
+            "framework": "Gin",
+            "position": 6,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.5066,
+            "ratio": 0.5066,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 77329.08,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "nestjs",
+            "framework": "NestJS",
+            "position": 7,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.5012,
+            "ratio": 0.5012,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 121968.43,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "loco",
+            "framework": "Loco",
+            "position": 8,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.4269,
+            "ratio": 0.4269,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 64908.16,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst",
+            "framework": "Rullst",
+            "position": 9,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.2924,
+            "ratio": 0.2924,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 49689.02,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "spring-boot",
+            "framework": "Spring Boot",
+            "position": 10,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.2701,
+            "ratio": 0.2701,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 41375.49,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "phoenix",
+            "framework": "Phoenix",
+            "position": 11,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.1669,
+            "ratio": 0.1669,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 24857.03,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastapi",
+            "framework": "FastAPI",
+            "position": 12,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0677,
+            "ratio": 0.0677,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 16277.55,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "django",
+            "framework": "Django",
+            "position": 13,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0239,
+            "ratio": 0.0239,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 5910.52,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rails",
+            "framework": "Ruby on Rails",
+            "position": 14,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0142,
+            "ratio": 0.0142,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 1599.04,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          },
+          {
+            "slug": "laravel",
+            "framework": "Laravel",
+            "position": 15,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0065,
+            "ratio": 0.0065,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "rps": 1198.49,
+              "error_rate": 0.0,
+              "timeouts": 0.0,
+              "ram_growing_rounds": 0,
+              "crashed_rounds": 0,
+              "rounds": 5
+            },
+            "reason": ""
+          }
+        ]
+      },
+      {
+        "key": "startup",
+        "title": "Startup",
+        "tier": "",
+        "description": "time from starting the container to the first answer; lower is better, so the score is Axum's median time / the implementation's, where times below the 0.25 s readiness poll interval count as 0.25 s",
+        "metrics": [
+          "startup_s"
+        ],
+        "lower_is_better": true,
+        "entries": [
+          {
+            "slug": "actix",
+            "framework": "Actix Web",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "axum",
+              "gin",
+              "loco",
+              "rullst",
+              "rullst-minimal",
+              "topcoat"
+            ],
+            "status": "ranked",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.01
+            },
+            "reason": ""
+          },
+          {
+            "slug": "axum",
+            "framework": "Axum",
+            "position": null,
+            "tie": true,
+            "tied_with": [
+              "actix",
+              "gin",
+              "loco",
+              "rullst",
+              "rullst-minimal",
+              "topcoat"
+            ],
+            "status": "reference",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.01
+            },
+            "reason": ""
+          },
+          {
+            "slug": "gin",
+            "framework": "Gin",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "actix",
+              "axum",
+              "loco",
+              "rullst",
+              "rullst-minimal",
+              "topcoat"
+            ],
+            "status": "ranked",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.01
+            },
+            "reason": ""
+          },
+          {
+            "slug": "loco",
+            "framework": "Loco",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "actix",
+              "axum",
+              "gin",
+              "rullst",
+              "rullst-minimal",
+              "topcoat"
+            ],
+            "status": "ranked",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.01
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst",
+            "framework": "Rullst",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "actix",
+              "axum",
+              "gin",
+              "loco",
+              "rullst-minimal",
+              "topcoat"
+            ],
+            "status": "ranked",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.01
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rullst-minimal",
+            "framework": "Rullst (minimal)",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "actix",
+              "axum",
+              "gin",
+              "loco",
+              "rullst",
+              "topcoat"
+            ],
+            "status": "ranked",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.02
+            },
+            "reason": ""
+          },
+          {
+            "slug": "topcoat",
+            "framework": "Topcoat",
+            "position": 1,
+            "tie": true,
+            "tied_with": [
+              "actix",
+              "axum",
+              "gin",
+              "loco",
+              "rullst",
+              "rullst-minimal"
+            ],
+            "status": "ranked",
+            "score": 1.0,
+            "ratio": 1.0,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.01
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastify",
+            "framework": "Fastify",
+            "position": 7,
+            "tie": true,
+            "tied_with": [
+              "laravel"
+            ],
+            "status": "ranked",
+            "score": 0.8929,
+            "ratio": 1.12,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.28
+            },
+            "reason": ""
+          },
+          {
+            "slug": "laravel",
+            "framework": "Laravel",
+            "position": 7,
+            "tie": true,
+            "tied_with": [
+              "fastify"
+            ],
+            "status": "ranked",
+            "score": 0.6098,
+            "ratio": 1.64,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.41
+            },
+            "reason": ""
+          },
+          {
+            "slug": "aspnet-core",
+            "framework": "ASP.NET Core",
+            "position": 9,
+            "tie": true,
+            "tied_with": [
+              "django"
+            ],
+            "status": "ranked",
+            "score": 0.4098,
+            "ratio": 2.44,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.61
+            },
+            "reason": ""
+          },
+          {
+            "slug": "django",
+            "framework": "Django",
+            "position": 9,
+            "tie": true,
+            "tied_with": [
+              "aspnet-core"
+            ],
+            "status": "ranked",
+            "score": 0.3289,
+            "ratio": 3.04,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 0.76
+            },
+            "reason": ""
+          },
+          {
+            "slug": "nestjs",
+            "framework": "NestJS",
+            "position": 11,
+            "tie": true,
+            "tied_with": [
+              "fastapi",
+              "phoenix"
+            ],
+            "status": "ranked",
+            "score": 0.2358,
+            "ratio": 4.24,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 1.06
+            },
+            "reason": ""
+          },
+          {
+            "slug": "fastapi",
+            "framework": "FastAPI",
+            "position": 11,
+            "tie": true,
+            "tied_with": [
+              "nestjs",
+              "phoenix"
+            ],
+            "status": "ranked",
+            "score": 0.2336,
+            "ratio": 4.28,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 1.07
+            },
+            "reason": ""
+          },
+          {
+            "slug": "phoenix",
+            "framework": "Phoenix",
+            "position": 11,
+            "tie": true,
+            "tied_with": [
+              "nestjs",
+              "fastapi"
+            ],
+            "status": "ranked",
+            "score": 0.2315,
+            "ratio": 4.32,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 1.08
+            },
+            "reason": ""
+          },
+          {
+            "slug": "rails",
+            "framework": "Ruby on Rails",
+            "position": 14,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.1812,
+            "ratio": 5.52,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 1.38
+            },
+            "reason": ""
+          },
+          {
+            "slug": "spring-boot",
+            "framework": "Spring Boot",
+            "position": 15,
+            "tie": false,
+            "tied_with": [],
+            "status": "ranked",
+            "score": 0.0607,
+            "ratio": 16.48,
+            "client_bound": false,
+            "client_bound_runs": [],
+            "detail": {
+              "startup_s": 4.12
+            },
+            "reason": ""
+          }
+        ]
+      }
+    ],
+    "overall": {
+      "weights": {
+        "speed": 0.2,
+        "pressure": 0.2,
+        "memory": 0.2,
+        "endurance": 0.2,
+        "startup": 0.2
+      },
+      "entries": [
+        {
+          "slug": "actix",
+          "framework": "Actix Web",
+          "position": 1,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 1.0077,
+          "categories": {
+            "speed": 0.976,
+            "pressure": 0.9695,
+            "memory": 1.1369,
+            "endurance": 0.9661,
+            "startup": 1.0
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "axum",
+          "framework": "Axum",
+          "position": null,
+          "tie": false,
+          "tied_with": [],
+          "status": "reference",
+          "score": 1.0,
+          "categories": {
+            "speed": 1.0,
+            "pressure": 1.0,
+            "memory": 1.0,
+            "endurance": 1.0,
+            "startup": 1.0
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "rullst-minimal",
+          "framework": "Rullst (minimal)",
+          "position": 2,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.9842,
+          "categories": {
+            "speed": 0.9905,
+            "pressure": 1.002,
+            "memory": 0.9292,
+            "endurance": 1.0012,
+            "startup": 1.0
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "topcoat",
+          "framework": "Topcoat",
+          "position": 3,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.9116,
+          "categories": {
+            "speed": 0.9354,
+            "pressure": 0.8325,
+            "memory": 0.946,
+            "endurance": 0.8545,
+            "startup": 1.0
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "gin",
+          "framework": "Gin",
+          "position": 4,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.6207,
+          "categories": {
+            "speed": 0.6604,
+            "pressure": 0.5076,
+            "memory": 0.5427,
+            "endurance": 0.5066,
+            "startup": 1.0
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "loco",
+          "framework": "Loco",
+          "position": 5,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.588,
+          "categories": {
+            "speed": 0.5119,
+            "pressure": 0.4258,
+            "memory": 0.7554,
+            "endurance": 0.4269,
+            "startup": 1.0
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "rullst",
+          "framework": "Rullst",
+          "position": 6,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.4915,
+          "categories": {
+            "speed": 0.3831,
+            "pressure": 0.2925,
+            "memory": 0.875,
+            "endurance": 0.2924,
+            "startup": 1.0
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "fastify",
+          "framework": "Fastify",
+          "position": 7,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.4186,
+          "categories": {
+            "speed": 0.5955,
+            "pressure": 0.6048,
+            "memory": 0.0639,
+            "endurance": 0.6255,
+            "startup": 0.8929
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "aspnet-core",
+          "framework": "ASP.NET Core",
+          "position": 8,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.3756,
+          "categories": {
+            "speed": 0.4783,
+            "pressure": 0.6226,
+            "memory": 0.0978,
+            "endurance": 0.6266,
+            "startup": 0.4098
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "nestjs",
+          "framework": "NestJS",
+          "position": 9,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.2521,
+          "categories": {
+            "speed": 0.4396,
+            "pressure": 0.4863,
+            "memory": 0.0403,
+            "endurance": 0.5012,
+            "startup": 0.2358
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "phoenix",
+          "framework": "Phoenix",
+          "position": 10,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.1624,
+          "categories": {
+            "speed": 0.2445,
+            "pressure": 0.1642,
+            "memory": 0.0728,
+            "endurance": 0.1669,
+            "startup": 0.2315
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "spring-boot",
+          "framework": "Spring Boot",
+          "position": 11,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.1214,
+          "categories": {
+            "speed": 0.1967,
+            "pressure": 0.2936,
+            "memory": 0.0278,
+            "endurance": 0.2701,
+            "startup": 0.0607
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "django",
+          "framework": "Django",
+          "position": 12,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.0559,
+          "categories": {
+            "speed": 0.0306,
+            "pressure": 0.0236,
+            "memory": 0.0965,
+            "endurance": 0.0239,
+            "startup": 0.3289
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "rails",
+          "framework": "Ruby on Rails",
+          "position": 13,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.0308,
+          "categories": {
+            "speed": 0.0255,
+            "pressure": 0.0144,
+            "memory": 0.0293,
+            "endurance": 0.0142,
+            "startup": 0.1812
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "laravel",
+          "framework": "Laravel",
+          "position": 14,
+          "tie": false,
+          "tied_with": [],
+          "status": "ranked",
+          "score": 0.0298,
+          "categories": {
+            "speed": 0.007,
+            "pressure": 0.0063,
+            "memory": 0.1348,
+            "endurance": 0.0065,
+            "startup": 0.6098
+          },
+          "missing": [],
+          "reason": ""
+        },
+        {
+          "slug": "fastapi",
+          "framework": "FastAPI",
+          "position": null,
+          "tie": false,
+          "tied_with": [],
+          "status": "incomplete",
+          "score": null,
+          "categories": {
+            "speed": null,
+            "pressure": 0.0717,
+            "memory": 0.0477,
+            "endurance": 0.0677,
+            "startup": 0.2336
+          },
+          "missing": [
+            "speed"
+          ],
+          "reason": "no score in: speed"
+        }
+      ]
+    }
+  },
   "results_schema": 1
 }

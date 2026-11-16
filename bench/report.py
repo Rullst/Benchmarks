@@ -73,7 +73,8 @@ def _measured(rows: list[dict]) -> list[dict]:
 
 
 TEXT_COLUMNS = {"Implementation", "Version", "Language", "Notes", "Status", "Reason", "Group", "Runtime",
-                "Server", "Workers", "Database layer", "Templates"}
+                "Server", "Workers", "Database layer", "Templates", "Overall", "Speed", "Under pressure",
+                "Memory (RAM)", "Endurance", "Startup"}
 
 
 def _table(header: list[str], lines: list[list[str]]) -> str:
@@ -126,6 +127,96 @@ def summary_table(rows: list[dict]) -> str:
     return _table(header, lines)
 
 
+def _rank_text(entry: dict) -> str:
+    if entry["status"] == "reference":
+        return "reference"
+    if entry["position"] is None:
+        return entry["status"]
+    return f"{entry['position']}" + (" (tie)" if entry["tie"] else "")
+
+
+def _endurance_flags(detail: dict) -> str:
+    notes = []
+    if detail.get("error_rate"):
+        notes.append(f"errors {detail['error_rate'] * 100:.2f}%")
+    if detail.get("timeouts"):
+        notes.append(f"{_num(detail['timeouts'])} timeouts")
+    if detail.get("ram_growing_rounds"):
+        notes.append(f"RAM growing {detail['ram_growing_rounds']}/{detail['rounds']}")
+    if detail.get("crashed_rounds"):
+        notes.append(f"stopped {detail['crashed_rounds']}/{detail['rounds']}")
+    return ", ".join(notes)
+
+
+def _times(value: float) -> str:
+    """Two decimals, three below 0.1 so that small ratios still differ."""
+    return f"{value:.2f}" if value >= 0.1 else f"{value:.3f}"
+
+
+def _category_cell(key: str, entry: dict) -> str:
+    """Position and the measured value: a ratio to Axum, or seconds for start-up."""
+    if entry["score"] is None:
+        return entry["status"]
+    if key == "startup":
+        value = f"{entry['detail']['startup_s']:.2f} s"
+    else:
+        value = f"{_times(entry['ratio'])}×"
+    if key == "endurance" and _endurance_flags(entry["detail"]):
+        value += f" ({_endurance_flags(entry['detail'])})"
+    return f"{_rank_text(entry)}: {value}"
+
+
+def _overall_cell(entry: dict) -> str:
+    if entry["score"] is None:
+        return entry["status"]
+    return f"{_rank_text(entry)}: {_times(entry['score'])}"
+
+
+def rankings_section(data: dict, level: str = "###") -> list[str]:
+    """The overall and per-category positions, with one sentence per tier."""
+    rankings = data.get("rankings")
+    if not rankings:
+        return []
+    tiers = data.get("config", {}).get("tiers", {})
+    t1, t2, t3, t4 = (tiers.get(k, {}) for k in ("tier1", "tier2", "tier3", "tier4"))
+    poll = rankings.get("startup_resolution_s")
+    labels = {r["slug"]: _label(r) for r in data["implementations"]}
+    cells = {c["key"]: {e["slug"]: e for e in c["entries"]} for c in rankings["categories"]}
+    header = ["Implementation", "Overall", "Speed", "Under pressure", "Memory (RAM)", "Endurance", "Startup"]
+    lines = []
+    for entry in rankings["overall"]["entries"]:
+        slug = entry["slug"]
+        lines.append([labels.get(slug, entry["framework"]), _overall_cell(entry),
+                      *(_category_cell(key, cells[key][slug]) for key in ("speed", "pressure", "memory",
+                                                                          "endurance", "startup"))])
+    return [
+        f"{level} Rankings", "",
+        f"- **Speed (Tier 1):** requests per second on each of the four endpoints with {t1.get('connections')} "
+        f"connections for {t1.get('duration_s')} s; the score is the geometric mean of the four ratios to Axum.",
+        f"- **Under pressure (Tier 2):** requests per second on /{t2.get('endpoint')} with "
+        f"{t2.get('connections')} connections for {t2.get('duration_s')} s.",
+        f"- **Memory (Tier 3):** the most RAM the server used while answering /{t3.get('endpoint')} with "
+        f"{t3.get('connections')} connections; lower is better, so the table shows the RAM ratio and the score "
+        "is its inverse.",
+        f"- **Endurance (Tier 4):** requests per second on /{t4.get('endpoint')} with {t4.get('connections')} "
+        f"connections for {_num((t4.get('duration_s') or 0) / 60)} minutes; errors, timeouts, RAM still "
+        "growing and stops are listed with it.",
+        f"- **Startup:** time from starting the container to its first answer; lower is better. The harness "
+        f"checks every {poll} s, so times below {poll} s count as equal.",
+        "- **Overall:** the geometric mean of the five category scores, each weighted equally (1/5), with every "
+        "score oriented so that higher is better and Axum at 1.00. The weighting is a choice; the per-category "
+        "positions are the detail.",
+        "",
+        "Each cell is the position and the ratio to Axum (seconds for Startup). \"(tie)\": the load generator "
+        "was the limit (client-bound) for both and the results are within "
+        f"{rankings.get('tie_tolerance', 0):.0%} of each other, or the start-up times are within {poll} s, so "
+        "they share the position. Axum is the reference and has no position. \"incomplete\": a result is "
+        "missing or left out, so there is no position rather than one computed from fewer metrics.",
+        "",
+        _table(header, lines),
+    ]
+
+
 def _corrections(rows: list[dict]) -> str:
     fixed = [r for r in rows if r.get("excluded")]
     return "\n".join(f"- **{_label(r)}**: {r['problem']}" for r in fixed)
@@ -172,6 +263,8 @@ def render_results(data: dict) -> str:
     parts += ["## Summary", "", summary_table(rows), ""]
     if _corrections(rows):
         parts += ["Corrections (left-out results are shown as –):", "", _corrections(rows), ""]
+    if data.get("rankings"):
+        parts += [*rankings_section(data, "##"), ""]
 
     t1 = tiers.get("tier1", {})
     parts += [f"## Tier 1: {t1.get('connections')} connections, {t1.get('duration_s')} s per endpoint", ""]
@@ -245,6 +338,8 @@ def render_readme_table(data: dict) -> str:
     failed = [r for r in data["implementations"] if r["status"] not in ("measured", "crashed")]
     if failed:
         lines += ["", "Not measured in this run: " + ", ".join(f"{_label(r)} ({r['status']})" for r in failed) + "."]
+    if data.get("rankings"):
+        lines += ["", *rankings_section(data)]
     return "\n".join(lines)
 
 
