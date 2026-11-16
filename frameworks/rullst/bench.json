@@ -12,10 +12,13 @@
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
   "database_layer": "rullst-orm (#[derive(Orm)], SQLx PostgreSQL pool)",
   "template_engine": "html! macro",
-  "logging": "Rullst's access log (one stdout line per request; Server has no switch to turn it off)",
+  "logging": "off (RULLST_ACCESS_LOG=off, Rullst 13.0.0-alpha.6 and later; earlier releases ignore it and write the access log)",
   "build_args_from_env": [
     "RULLST_VERSION"
   ],
+  "env": {
+    "RULLST_ACCESS_LOG": "off"
+  },
   "startup_timeout_s": 120,
   "notes": "Router, layers and production settings as cargo rullst new and cargo rullst deploy generate them."
 }
