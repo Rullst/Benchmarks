@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { History } from './components/History';
+import { HowToRead } from './components/HowToRead';
+import { Ranking } from './components/Ranking';
 import { Implementations, NotMeasured, SummaryTable, TierTables } from './components/Tables';
 import { date, num } from './format';
 import './App.css';
@@ -27,11 +29,6 @@ function Notice({ data }) {
         <strong>Rullst {data.rullst_version || 'unknown'}</strong> on GitHub-hosted runners ({env.cpu_model ?? 'CPU unknown'},{' '}
         {env.cpu_count} vCPUs, {num((env.memory_total_mib ?? 0) / 1024)} GiB RAM); each server was limited to 2 vCPUs
         and 2 GiB. Values are medians of {data.run?.rounds} rounds.
-      </p>
-      <p>
-        &quot;vs Axum&quot; is the ratio to the Axum baseline measured in alternating rounds on the same runner, which
-        cancels most of the difference between runners: compare ratios rather than absolute numbers across runs.
-        &quot;client-bound&quot; means the load generator&apos;s vCPUs were saturated, so close results at the top are ties.
       </p>
       <p>
         These results update automatically when a new Rullst version is published on crates.io. Last update:{' '}
@@ -91,7 +88,16 @@ export default function App() {
       )}
       {state.status === 'ready' && (
         <>
+          <HowToRead />
           <Notice data={state.data} />
+          <section>
+            <h2>Ranking</h2>
+            <p className="note">
+              Every implementation in order of its /json requests/s ratio to Axum. Rows without that ratio (not
+              measured, or left out) are listed last, without a position.
+            </p>
+            <Ranking rows={state.rows} />
+          </section>
           <section>
             <h2>Summary</h2>
             <SummaryTable rows={state.rows} />
