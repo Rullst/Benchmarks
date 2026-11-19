@@ -27,7 +27,7 @@
   ],
   "db_setup": "db.sql",
   "phase2": {
-    "validation": "Schemaless Ecto changesets for the query string, the JSON body and the form: 422; a non-integer id makes Repo.get raise Ecto.Query.CastError, 400 (phoenix_ecto); malformed JSON 400",
+    "validation": "Schemaless Ecto changesets for the query string, the JSON body and the form: 422; the id cast with Ecto.Type.cast: 400 for a non-integer; malformed JSON 400",
     "csrf": {
       "design": "token",
       "mechanism": "protect_from_forgery (:browser pipeline, Plug.CSRFProtection): token in the signed cookie session, masked _csrf_token field; 403",

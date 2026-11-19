@@ -1,9 +1,9 @@
 defmodule BenchWeb.WorldController do
   @moduledoc """
   GET /world/:id, GET /worlds and PUT /world/:id (docs/v2-phase2-spec.md,
-  section 3). A non-integer id makes `Repo.get` raise Ecto.Query.CastError,
-  which phoenix_ecto answers 400. The query string and the body are
-  validated with schemaless changesets (422).
+  section 3). The router's `:id` is a string, cast to an integer with Ecto
+  (400 when it is not one). The query string and the body are validated with
+  schemaless changesets (422).
   """
   use BenchWeb, :controller
 
@@ -13,9 +13,12 @@ defmodule BenchWeb.WorldController do
   alias Bench.{Repo, World}
 
   def show(conn, %{"id" => id}) do
-    case Repo.get(World, id) do
+    with {:ok, id} <- cast_id(id),
+         %World{} = world <- Repo.get(World, id) do
+      json(conn, %{id: world.id, randomNumber: world.randomnumber})
+    else
+      :error -> bad_request(conn)
       nil -> not_found(conn)
-      world -> json(conn, %{id: world.id, randomNumber: world.randomnumber})
     end
   end
 
@@ -64,14 +67,23 @@ defmodule BenchWeb.WorldController do
       |> validate_json_integer(params["randomNumber"])
 
     with {:ok, %{randomNumber: value}} <- apply_action(changeset, :update),
+         {:ok, id} <- cast_id(id),
          %World{} = world <- Repo.get(World, id) do
       world = world |> change(randomnumber: value) |> Repo.update!()
       json(conn, %{id: world.id, randomNumber: world.randomnumber})
     else
+      :error -> bad_request(conn)
       nil -> not_found(conn)
       {:error, changeset} -> unprocessable(conn, changeset)
     end
   end
+
+  # Ecto's cast of the id, before the query. Passing the string to Repo.get
+  # would also refuse "abc" (Ecto.Query.CastError, which phoenix_ecto answers
+  # 400), but through a raised exception, after which Bandit closed the
+  # keep-alive connection without a Connection: close header (seen in the
+  # conformance check, which reuses the connection).
+  defp cast_id(id), do: Ecto.Type.cast(:id, id)
 
   defp validate_min_not_above_max(changeset) do
     if changeset.valid? and get_field(changeset, :min) > get_field(changeset, :max) do
@@ -84,6 +96,10 @@ defmodule BenchWeb.WorldController do
   # cast/3 turns the JSON string "5" into 5; the body's value must be a JSON integer.
   defp validate_json_integer(changeset, value) when is_integer(value), do: changeset
   defp validate_json_integer(changeset, _value), do: add_error(changeset, :randomNumber, "must be a JSON integer")
+
+  defp bad_request(conn) do
+    conn |> put_status(:bad_request) |> json(%{errors: %{detail: "Bad Request"}})
+  end
 
   defp not_found(conn) do
     conn |> put_status(:not_found) |> json(%{errors: %{detail: "Not Found"}})
