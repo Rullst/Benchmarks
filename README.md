@@ -9,6 +9,21 @@ and every number on this page is generated from the measurement output.
 - Full results tables: [benchmarks_results.md](benchmarks_results.md)
 - Machine-readable results: <https://rullst.win/Benchmarks/data/latest.json> (see [Machine-readable results](#machine-readable-results))
 
+## What this benchmark does not measure
+
+- **Request input.** Route parameters, query strings (other than `queries`
+  on `/queries` and `/updates`), forms and request bodies, and validation.
+- **Sessions and authentication.** Not measured; they are planned, with
+  request input, for a second phase that is being designed separately.
+- **Real deployments.** No TLS and no network latency: client, server and
+  database share a single small virtual machine (4 vCPUs, 2 of them for the
+  server) and talk over loopback. Tiers are short (10 s to 2 minutes).
+- **Servers faster than the load generator.** When a run is client-bound
+  (the load generator or PostgreSQL used its vCPUs fully), its requests/s
+  measure the load generator rather than the server. The rankings compare
+  such runs by server efficiency instead, and flag a run as not comparable
+  when that is not possible ([Rankings and client-bound runs](#rankings-and-client-bound-runs)).
+
 ## Results
 
 <!-- results:start -->
@@ -216,7 +231,12 @@ the rankings compare those runs by server efficiency:
   counting the round pairs that used efficiency);
 - a category's score is the geometric mean of its runs' capacity ratios
   (medians over the rounds); a "*" in the rankings table marks a score where
-  a run used efficiency in at least half of the round pairs.
+  a run used efficiency in at least half of the round pairs;
+- a run that was client-bound in most rounds for both the implementation and
+  its paired Axum run, and that efficiency could not score (no server CPU
+  measurement, as in results from before November 2026), would compare two
+  load generators: the category lists the implementation as **not
+  comparable**, without a position, and it has no overall position.
 
 When the server is the limit, both measures agree: it uses both of its vCPUs,
 so requests/s is efficiency times two. When it is not, efficiency is the
@@ -479,6 +499,16 @@ Numbers from other hardware are not comparable with the published ones,
 except as ratios to Axum measured on the same machine.
 
 ## History
+
+**v1 and v2.** v1 (the results up to Rullst 13.0.0-alpha.5) measured only
+`/text`, `/json`, `/db-single` (always the row with id = 1) and `/html`. Its
+`/db-single` tier was client-bound in most rounds, because PostgreSQL shared
+the client vCPUs with the load generator, and its README table mixed
+absolute numbers from different runners. v2 (November 2026) adds `/queries`,
+`/updates` and `/fortunes`, measures server efficiency and PostgreSQL's CPU
+use in every run, scores client-bound runs by efficiency, and leads the table
+with ratios, showing each absolute number with Axum's from the same runner,
+as described in [Method](#method) and [CPU split](#cpu-split).
 
 The suite was rebuilt in November 2026. The results published before that
 (measured by hand on a laptop on 22 June 2026) are kept in
