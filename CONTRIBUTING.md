@@ -91,6 +91,32 @@ The tables are `world(id integer primary key, randomnumber integer not
 null)` and `fortune(id integer primary key, message varchar(2048) not null)`
 ([bench/db/init.sql](bench/db/init.sql)).
 
+### Phase-2 endpoints
+
+The contract of the five application endpoints is
+[docs/v2-phase2-spec.md](docs/v2-phase2-spec.md) (sections 2-6; section 10
+is the per-framework checklist and section 9 the expected mechanism for
+each framework). In short:
+
+| Name (bench.json) | Requests | Answer |
+| --- | --- | --- |
+| `world` | `GET /world/{id}` | `{"id":…,"randomNumber":…}`, `application/json`, read by primary key on every request; 404 without a row; 400, 404 or 422 for a non-integer id |
+| `worlds` | `GET /worlds?min=&max=&limit=&page=` | a JSON array of the rows `min..max` ordered by id, page `page` of `limit` rows, in one query; defaults 1, 10000, 20, 1; ranges 1-10000, 1-100, 1-1000 and `min <= max`, otherwise 400 or 422; unknown parameters ignored |
+| `world-update` | `PUT /world/{id}`, `{"randomNumber": n}` | the row as stored after setting `randomnumber` (1-10000) the ORM's usual way (or one `UPDATE … RETURNING`); malformed JSON, a missing, non-integer or out-of-range value: 400 or 422 and nothing written; 404 without a row. No cookies are sent: exempt the route from a global CSRF check the documented way |
+| `form` | `GET /form`, then `POST /form` (urlencoded `name`, `randomNumber` and the CSRF field) | `GET`: a page with `<form method="post" action="/form">`, inputs `name` and `randomNumber` and the framework's hidden CSRF field; `POST`: `<!DOCTYPE html><html><head><title>Form</title></head><body><h1>Hello, {name}</h1><p>{randomNumber}</p></body></html>`, the name escaped, `text/html; charset=utf-8`; a forged post: 400, 403, 419 or 422; invalid fields: 200, 302, 303, 400 or 422, never the success page |
+| `me` | `GET /login`, `POST /login` (urlencoded `username`, `password`, the hidden fields), then `GET /me` | login: 200, 204, 302 or 303 and session cookies (wrong password: 200, 302, 303, 400, 401 or 422 and no session); `/me`: `{"id":…,"username":…,"displayName":…}` with the user's row read on every request; without a session 401, 403, 302 or 303 |
+
+The harness behaves like a browser: it keeps every cookie a response sets
+(attributes such as `Secure`, `Path` and the `__Host-` prefix are ignored:
+it talks plain HTTP to 127.0.0.1), submits every hidden field of the first
+form whose action is the page's path (or empty), and sends `Origin:
+http://127.0.0.1:8080` and `Sec-Fetch-Site: same-origin` with every form
+post. One session's cookies and hidden fields must stay valid for many posts
+and requests: the load replays them. Accounts: `user1`..`user1000` in
+`users(id, username, display_name, password_bcrypt, password_argon2id)`,
+password `bench-password` ([bench/db/phase2.sql](bench/db/phase2.sql); the
+file's comment gives the hash prefixes each framework's hasher expects).
+
 ### Environment
 
 The harness starts the container with the host network, 2 vCPUs and 2 GiB of
@@ -142,15 +168,38 @@ must build from the committed lockfile.
   "database_layer": "SQLx 0.9 (Actix Web has no ORM)",
   "template_engine": "Askama 0.16",
   "logging": "none",
-  "endpoints": ["text", "json", "db-single", "html", "queries", "updates", "fortunes"],
+  "endpoints": ["text", "json", "db-single", "html", "queries", "updates", "fortunes",
+                "world", "worlds", "world-update", "form", "me"],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "web::Path, web::Query, web::Json and web::Form; ranges checked by hand",
+    "csrf": {"design": "token", "mechanism": "actix-csrf 0.8 (double-submit cookie)", "source": "library"},
+    "session": {"store": "cookie-encrypted", "mechanism": "actix-session CookieSessionStore", "source": "documented"},
+    "write_csrf": null
+  },
   "startup_timeout_s": 120
 }
 ```
 
 `group` is `rust`, `full-stack` or `reference`. Optional fields: `endpoints`
 (the endpoints the folder serves: `text`, `json`, `db-single` and `html`,
-plus any of `queries`, `updates` and `fortunes`; when it is absent, only the
-first four), `variant`
+plus any of `queries`, `updates`, `fortunes`, `world`, `worlds`,
+`world-update`, `form` and `me`; when it is absent, only the first four),
+`db_setup` (a `.sql` file in the folder that creates the tables the
+framework owns, such as its session table, written from the framework's own
+migration; the harness applies it in one transaction before the conformance
+check and empties the tables it created at the start of every round; it must
+not touch `world`, `fortune` or `users` or contain transaction control, and
+must not create a table Axum's `db.sql` creates, `tower_sessions.session`),
+`phase2` (required once a phase-2 endpoint is listed: `validation`, the
+mechanism; `csrf` with `design` `token` or `fetch-metadata`, `mechanism` and
+`source`, required with `form`; `session` with `store` `cookie-signed`,
+`cookie-encrypted`, `postgresql` or `memory`, `mechanism` and `source`,
+required with `me`; `source` is `built-in`, `generator`, `stdlib`,
+`documented` or `library`; `write_csrf`, `null` or `{"cookie": …,
+"header": …}` for a framework whose production stack refuses every
+cookieless write: the harness then sends that cookie from `GET /form` and
+its value in that header with `PUT /world/{id}`), `variant`
 (a label when a framework has more than one implementation), `default_variant`
 (`true` for the variant the published results name after the framework alone), `env` (extra
 environment variables for the container), `build_args_from_env` (environment
@@ -167,10 +216,13 @@ python3 bench/harness.py conformance --framework <name>
 
 `conformance` builds the image, starts PostgreSQL and prints the result of
 every check. It checks, and `run` measures, only the endpoints `endpoints`
-lists. While the three database endpoints are being added to every folder,
-a folder without them is measured on the other four and listed as incomplete
-in the Database ranking (and so overall); once every folder serves them,
-`endpoints` will be required to list all seven. Pull requests run the same check for every changed framework
+lists. While the database and application endpoints are being added to every
+folder, a folder without them is measured on the others and listed as
+incomplete in the Database or Application ranking (and so overall); once
+every folder serves them, `endpoints` will be required to list all twelve.
+`python3 bench/harness.py db-check` loads the database and applies every
+folder's `db_setup` file in a rolled-back transaction, without building
+images. Pull requests run the same check for every changed framework
 folder. A maintainer can add the `benchmark-trial` label to a pull request
 to run a one-round measurement of the changed frameworks.
 

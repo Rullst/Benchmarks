@@ -11,10 +11,16 @@ and every number on this page is generated from the measurement output.
 
 ## What this benchmark does not measure
 
-- **Request input.** Route parameters, query strings (other than `queries`
-  on `/queries` and `/updates`), forms and request bodies, and validation.
-- **Sessions and authentication.** Not measured; they are planned, with
-  request input, for a second phase that is being designed separately.
+- **Logins and password hashing.** The harness signs in before measuring;
+  `GET /me` measures resolving a session and loading the signed-in user, not
+  the login itself.
+- **Large or unusual request input.** Request bodies are small JSON objects
+  and urlencoded forms: no multipart forms, file uploads, streaming or
+  large payloads.
+- **One common session store or CSRF mechanism.** `POST /form` and `GET /me`
+  measure each framework's own default (a database, a signed or encrypted
+  cookie, or process memory; a token or fetch-metadata check), which the
+  results print next to the numbers.
 - **Real deployments.** No TLS and no network latency: client, server and
   database share a single small virtual machine (4 vCPUs, 2 of them for the
   server) and talk over loopback. Tiers are short (10 s to 2 minutes).
@@ -90,10 +96,16 @@ Each cell is the position and the ratio to Axum (seconds for Startup). "(tie)": 
 ## What is measured
 
 Every implementation serves the same endpoints on port 8080. The first four
-measure framework overhead; the last three, added in November 2026, follow
+measure framework overhead; the next three, added in November 2026, follow
 the [TechEmpower Framework Benchmarks](https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview)
 (round 23) multiple-queries, updates and fortunes tests and measure database
-work through the framework's ORM and template engine:
+work through the framework's ORM and template engine; the last five (v2
+phase 2, [docs/v2-phase2-spec.md](docs/v2-phase2-spec.md)) measure what an
+application does with a request: route parameters, query strings, JSON and
+form bodies, validation, a write of one record, CSRF verification and a
+signed-in session. An implementation serves the endpoints after `/html` once
+its `bench.json` lists them (`"endpoints"`); until then it is "not
+implemented yet" for them.
 
 | Endpoint | Response |
 | --- | --- |
@@ -104,12 +116,29 @@ work through the framework's ORM and template engine:
 | `GET /queries?queries=N` | N random rows of `world` (ids 1 to 10,000), each read with its own query, as a JSON array of `{"id":…,"randomNumber":…}`, `application/json`. N is clamped to 1-500; a missing or invalid value counts as 1. Measured with N = 20 |
 | `GET /updates?queries=N` | N random rows, each read with its own query, given a new random `randomNumber` (1-10,000), written back to the database before the response, and returned as for `/queries`. Writing the rows in a batch or a transaction is allowed (TechEmpower's rules); each folder README says what its implementation does. Measured with N = 20 |
 | `GET /fortunes` | every row of the `fortune` table (TechEmpower's 12 rows, one of them a `<script>` and one in Japanese) plus one added at request time (id 0, `Additional fortune added at request time.`), sorted by message and rendered as an HTML table by the framework's template engine, which escapes the messages; `text/html; charset=utf-8` |
+| `GET /world/{id}` | the row with that id, read by primary key through the ORM on every request, as `{"id":…,"randomNumber":…}`; 404 for an id without a row, 400, 404 or 422 for one that is not an integer. Measured with the 10,000 ids in a shuffled order |
+| `GET /worlds?min=&max=&limit=&page=` | the rows with `min <= id <= max`, ordered by id, `limit` rows of page `page`, as a JSON array, in one query (defaults 1, 10,000, 20, 1; `limit` 1-100, `page` 1-1000). Parameters are validated with the framework's mechanism: a value that is not an integer, out of range, or `min > max` is answered 400 or 422. Measured with 2,000 random 1,000-id windows, 20 rows per page, pages 1-5 |
+| `PUT /world/{id}` | body `{"randomNumber": n}` (an integer 1-10,000), validated (400 or 422 otherwise, with nothing written); the row is changed the ORM's usual way and returned as stored. A public JSON API call, sent without cookies (Rullst as generated, which refuses cookieless writes, gets its CSRF cookie and header). Measured with the 10,000 ids shuffled, random values |
+| `POST /form` | an urlencoded form (`name`, 1-64 characters, and `randomNumber`, 1-10,000) checked by the framework's CSRF protection and validated, answered with a page that greets the name (escaped) rendered by the template engine. Sent like a browser that loaded `GET /form` once: its cookies and hidden fields, `Origin` and `Sec-Fetch-Site: same-origin`. Measured with 125 such sessions |
+| `GET /me` | `{"id":…,"username":…,"displayName":…}` for the signed-in user: the framework's default session mechanism, then the user's row read through the ORM on every request; 401, 403 or a redirect without a session. Measured with 125 sessions, one login each (`user1`..`user125`, made before the warm-up and not timed) |
+
+Each `/form` and `/me` result is shown with the implementation's CSRF design
+(`token`, a secret the form echoes, or `fetch-metadata`, `Sec-Fetch-Site` and
+`Origin` checks) and session store (`postgresql`, `cookie-signed`,
+`cookie-encrypted` or `memory`), and where the mechanism comes from
+(built-in, the framework's generator, the language's standard library, a
+package the framework's documentation recommends, or the most-used library).
+
+**Write contention ("hot rows").** After the Tier 1 runs, `PUT /world/{id}`
+runs again with 125 connections for 10 s, but on ids 1-10 only, so requests
+wait for each other's row locks. Its errors, timeouts and p99 latency are
+reported next to Axum's; it is not part of any ranking.
 
 The tiers:
 
 | Tier | Load | Reported |
 | --- | --- | --- |
-| 1 | 125 connections for 10 s on each endpoint | requests/s, p50 and p99 latency, errors, server CPU, server efficiency, PostgreSQL CPU |
+| 1 | 125 connections for 10 s on each endpoint (reads first, then the two writing endpoints), and the hot-rows run | requests/s, p50 and p99 latency, errors, server CPU, server efficiency, PostgreSQL CPU |
 | 2 | 300 connections for 30 s on `/json` | requests/s, p50 and p99 latency, errors and timeouts, server efficiency |
 | 3 | idle for 10 s, then 200 connections for 15 s on `/json` | idle and peak RAM, idle and loaded CPU |
 | 4 | 500 connections for 2 minutes on `/json` | requests/s, p99, errors and timeouts, server efficiency, RAM growth, whether the server stopped |
@@ -127,11 +156,15 @@ same runner (see below). The results also list requests/s per MiB of peak RAM
 as one column; it is not used to rank anything.
 
 The rankings under [Results](#results) are computed by `bench/rankings.py`
-from those ratios: one per category (Speed, Database, Under pressure, Memory,
-Endurance, Startup) and an overall one, the geometric mean of the six category
-scores with equal weights. The weighting is a choice; the per-category
-rankings are the detail. In the throughput categories (Speed, Database, Under
-pressure, Endurance) each run counts with its requests/s ratio, or with its
+from those ratios: one per category (Speed, Database, Application, Under
+pressure, Memory, Endurance, Startup) and an overall one, the geometric mean
+of the seven category scores with equal weights. Application is the
+geometric mean of the five phase-2 endpoints' ratios; every request the load
+sends to them is valid, so a run with more than 1% errors (any response that
+is not 2xx, a redirect included) gets no Application score, because fast
+error responses would otherwise raise it. The weighting is a choice; the
+per-category rankings are the detail. In the throughput categories (Speed,
+Database, Application, Under pressure, Endurance) each run counts with its requests/s ratio, or with its
 server efficiency ratio when either server's run was client-bound (see
 [Rankings and client-bound runs](#rankings-and-client-bound-runs)), so
 client-bound results get positions instead of ties. Equal scores, and
@@ -151,9 +184,16 @@ memory, the Docker version, image digests and tool versions with the results.
    lockfiles.
 2. **Database.** PostgreSQL 18.6 (image pinned by digest) starts with a
    `world` table of 10,000 rows and the 12-row `fortune` table
-   ([bench/db/init.sql](bench/db/init.sql)), with `synchronous_commit = off`
-   (as in TechEmpower's configuration: `/updates` measures the writes, not
-   the runner's disk flushes) and `pg_stat_statements` loaded.
+   ([bench/db/init.sql](bench/db/init.sql)) and 1,000 accounts in `users`
+   (`user1`..`user1000`, one bcrypt and one Argon2id hash of the same
+   password, [bench/db/phase2.sql](bench/db/phase2.sql)), with
+   `synchronous_commit = off` (as in TechEmpower's configuration: `/updates`
+   measures the writes, not the runner's disk flushes) and
+   `pg_stat_statements` loaded. Tables a framework owns (its session or token
+   table) come from the folder's `db.sql` (`"db_setup"` in `bench.json`,
+   written from the framework's own migration), applied once by the harness:
+   no implementation creates or migrates tables at start-up, which is
+   timed.
 3. **Conformance.** Each implementation is started and checked: status, media
    type and body of every endpoint, HTTP/1.1 keep-alive, and that
    `/db-single` follows changes made to the row between requests (so it reads
@@ -161,15 +201,24 @@ memory, the Docker version, image digests and tool versions with the results.
    `pg_stat_statements` counts the statements each request runs: each row
    must be read by its own `SELECT`, the updated rows must be in the
    database, and `/fortunes` must read the table on every request without
-   `ORDER BY` (the rules are in [CONTRIBUTING.md](CONTRIBUTING.md)). Statement
-   tracking is then turned off for the measurement. An implementation that
-   fails is reported as failed with the reason and is not measured.
+   `ORDER BY` (the rules are in [CONTRIBUTING.md](CONTRIBUTING.md)). The
+   phase-2 endpoints are checked against the database the same way (the
+   response follows rows changed between requests, `/worlds` runs one query,
+   refused writes write nothing), together with validation, the CSRF check
+   (a forged cross-site post, a changed token and a post without the cookies
+   are refused, and one session's cookies and token stay valid for repeated
+   posts) and sessions (each session returns its own user, re-read on every
+   request). Statement tracking is then turned off for the measurement. An
+   implementation that fails is reported as failed with the reason and is
+   not measured.
 4. **Rounds.** The framework and Axum then alternate for 5 rounds (framework,
    Axum, framework, Axum, …). Each round restores the `world` table to its
    initial values and rewrites it (`VACUUM FULL`, so earlier `/updates` runs
-   leave no dead rows behind), starts a fresh container, waits for it to
-   answer, measures it idle, warms up each endpoint for 5 s and runs the
-   four tiers. Results are the median over rounds, with the lowest and
+   leave no dead rows behind), empties the framework's own tables (its
+   sessions), starts a fresh container, waits for it to answer, measures it
+   idle, obtains the sessions the phase-2 endpoints need (125 `GET /form`
+   pages and 125 logins, 8 at a time, not timed), warms up each endpoint for
+   5 s and runs the four tiers. Results are the median over rounds, with the lowest and
    highest round shown as the spread.
 5. **Ratios.** For every round, each metric of the framework is divided by
    Axum's value from the adjacent round on the same runner; the reported ratio
@@ -189,10 +238,24 @@ Fixed settings, the same for every implementation:
   small cloud instance; runtimes that size their heap from the container
   limit see the same limit.
 - **Network.** All containers use the host network (no Docker port proxy).
-- **Load generator.** [bombardier](https://github.com/codesenberg/bombardier)
-  2.0.2 with its fasthttp client, downloaded from its release and checked by
-  SHA-256, with a 5 s request timeout. It runs as a host process pinned to the
-  client vCPUs.
+- **Load generator.** [wrk](https://github.com/wg/wrk) 4.2.0, built on the
+  runner from its source tarball (checked by SHA-256; wrk publishes no
+  binaries; the results record the binary's SHA-256 and the compiler), with
+  a 5 s request timeout and one thread per client vCPU, as a host process
+  pinned to the client vCPUs. It sends one fixed request on the endpoints up
+  to `/fortunes` and on Tiers 2-4, and on the phase-2 endpoints cycles
+  through requests the harness built beforehand (ids, query strings, bodies,
+  each session's cookies and CSRF token) with a fixed seed, so every
+  implementation gets the same mix. On the phase-2 endpoints a Lua hook
+  counts every response that is not 2xx as an error; elsewhere wrk counts
+  statuses of 400 and above, and conformance already refuses redirects.
+  wrk opens `connections / threads` connections per thread: 124 of Tier 1's
+  125 with two threads (the results record `connections_open`). It was chosen
+  over bombardier (one fixed request per run) and oha (no per-request
+  headers) because it varies URL, headers and body together and does the most
+  requests per client CPU-second ([measurements](docs/v2-phase2-spec.md#7-load-generator));
+  its licence (Apache 2.0 plus a naming condition on changed derivatives)
+  does not affect running it unmodified.
 - **Database pool.** 16 connections per server (`DB_POOL_SIZE`), split
   across processes for multi-process servers.
 - **Workers.** Sized for the 2 vCPUs the server has (`BENCH_WORKERS=2`), the
@@ -248,7 +311,8 @@ best when both carry a similar load.
 
 PostgreSQL shares the 2 client vCPUs with the load generator. On the
 database endpoints both compete for them, so most `/db-single` runs were
-client-bound. Giving PostgreSQL a vCPU of its own (server 2, load generator 1,
+client-bound. (This experiment ran with bombardier, the load generator
+before wrk.) Giving PostgreSQL a vCPU of its own (server 2, load generator 1,
 PostgreSQL 1) was measured for Axum, alternating both splits on one runner
 (a temporary `cpu-split-experiment` workflow, November 2026):
 
@@ -296,6 +360,15 @@ implementations whose loads differ a lot are not significant.
   one) and template engine, and its documented way to run in production.
 - Each folder has a README that says how the implementation is configured
   and why.
+- **Phase-2 mechanisms.** Each phase-2 endpoint uses the framework's
+  standard mechanism for each concern, in this order: built into the
+  framework, written by its generator, the language's standard library, a
+  package its documentation recommends, the most-used maintained package.
+  Where the framework documents how to scope them, sessions, CSRF and
+  authentication apply only to `/form`, `/login` and `/me`, so the other
+  endpoints keep their stack; Rullst as generated keeps its global
+  production stack, as `cargo rullst new` generates it. The folder READMEs
+  name what each uses.
 - Rullst is not tuned more than the others. It is measured twice: **as
   generated** by `cargo rullst new` and `cargo rullst deploy` (its default
   production middleware included), and **minimal** (its router, ORM and
@@ -326,6 +399,17 @@ implementations whose loads differ a lot are not significant.
   and a template over database rows, but they are still small, fixed
   workloads on a 10,000-row table; a real application's code and data
   usually dominate. Tiers 2 to 4 use `/json` only.
+- **`/form` and `/me` compare defaults.** Each framework uses its own CSRF
+  design and its default session store for a signed-in user: a database
+  store costs a query (and some write the session on every request), a
+  cookie store a signature check or decryption, an in-memory session a map
+  lookup. The results print the design and the store next to the numbers;
+  a faster or slower library or store would change them. Laravel keeps its
+  `cookie` session driver rather than its default `database` driver: the
+  load sends no cookies to `/html`, so the database driver would insert a
+  session row on every `/html` request, an artifact of the load generator.
+- **Hot rows are reported, not ranked.** The contention run shows lock waits
+  on 10 rows; it does not model a real application's write pattern.
 - **One configuration per framework.** Experts may know better settings; the
   folders document the choices so they can be challenged.
 
@@ -521,7 +605,7 @@ On a Linux machine with Docker, cgroup v2, Python 3.10+ and at least 4 CPUs
 (builds and load tests are heavy; 8 GiB of RAM or more is advisable):
 
 ```sh
-export BOMBARDIER="$(bench/install-bombardier.sh "$HOME/.local/bin")"
+export WRK="$(bench/install-loadgen.sh "$HOME/.local/bin")"  # builds wrk 4.2.0 (make, cc, OpenSSL headers)
 python3 bench/harness.py conformance --framework rullst
 python3 bench/harness.py run --framework rullst --rounds 1 --out out/rullst.json
 python3 bench/aggregate.py --input out --summary report.md
@@ -542,6 +626,14 @@ use in every run, scores client-bound runs by efficiency (giving PostgreSQL
 its own vCPU was measured and did not remove the client-bound runs), and
 leads the table with ratios, showing each absolute number with Axum's from
 the same runner, as described in [Method](#method) and [CPU split](#cpu-split).
+v2's second phase adds `GET /world/{id}`, `GET /worlds`, `PUT /world/{id}`,
+`POST /form` and `GET /me` (request input, validation, a write, CSRF and
+sessions), the Application category and the hot-rows contention run, and
+replaces the load generator: **v2 numbers come from wrk 4.2.0, v1 numbers
+from bombardier 2.0.2, so absolute requests/s and latencies before and after
+are not comparable** (wrk needs less client CPU per request, which raises
+client-bound results most). Ratios to Axum are always measured with the same
+tool in the same job.
 
 The suite was rebuilt in November 2026. The results published before that
 (measured by hand on a laptop on 22 June 2026) are kept in
