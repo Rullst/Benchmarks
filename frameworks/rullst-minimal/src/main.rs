@@ -129,12 +129,19 @@ async fn queries(Query(params): Query<QueriesParams>) -> Result<Json<Vec<World>>
 
 /// Each row is read with `World::find`, given a new random number and saved
 /// with `save()` (one UPDATE per row in its own transaction, no batching).
+/// The number is drawn again when it equals the stored one: `save()` of a
+/// `RowSnapshot` model writes nothing for an unchanged value, and every row
+/// must be written.
 async fn updates(Query(params): Query<QueriesParams>) -> Result<Json<Vec<World>>, StatusCode> {
     let count = query_count(&params);
     let mut worlds = Vec::with_capacity(count);
     for _ in 0..count {
         let mut world = find_world(random_id()).await?;
-        world.randomnumber = random_id();
+        let mut random_number = random_id();
+        while random_number == world.randomnumber {
+            random_number = random_id();
+        }
+        world.randomnumber = random_number;
         world
             .save()
             .await
