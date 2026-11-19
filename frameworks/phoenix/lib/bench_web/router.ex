@@ -20,7 +20,7 @@ defmodule BenchWeb.Router do
   end
 
   # Benchmark: /fortunes renders HTML without a session or CSRF token.
-  pipeline :html do
+  pipeline :plain_html do
     plug :accepts, ["html"]
   end
 
@@ -65,7 +65,7 @@ defmodule BenchWeb.Router do
   end
 
   scope "/", BenchWeb do
-    pipe_through :html
+    pipe_through :plain_html
 
     get "/fortunes", FortuneController, :index
   end

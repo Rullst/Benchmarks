@@ -11,7 +11,12 @@ Dockerfile `mix phx.gen.release --docker` generates.
 | Server | Bandit, Phoenix's default adapter, started by the release's generated `bin/server` (`PHX_SERVER=true`) on `$PORT` |
 | Workers | one BEAM node; the runtime starts one scheduler online per CPU the container may use (2) and Bandit serves each connection in its own process |
 | Database | Ecto, `Repo.get!(World, 1)`; one pool of `DB_POOL_SIZE` (16) connections |
-| Templates | HEEx: `page_html/hello.html.heex` rendered inside the root layout `layouts/root.html.heex` |
+| Database endpoints | `/queries`: `Repo.get!(World, id)` per row. `/updates`: per row, `Repo.get!`, a new random value (drawn again while it equals the current one, since Ecto skips an update without changes) and `Repo.update!` of a changeset, all in one `Repo.transaction` with the ids sorted, so concurrent requests lock rows in the same order. `/fortunes`: `Repo.all(Fortune)` (no `ORDER BY`), sorted in Elixir (binary order, i.e. code points), rendered by HEEx (escaped) without a layout, through a pipeline that only accepts `html` |
+| Request input (phase 2) | The router's `:id` is a string: `Repo.get(World, id)` casts it, and a non-integer raises `Ecto.Query.CastError`, which phoenix_ecto answers 400. `GET /worlds`, the PUT body and `POST /form` are validated with schemaless changesets (`cast`, `validate_required`, `validate_number`, `validate_length`): 422 with the errors (the form page again for `/form`). `cast` turns the JSON string `"5"` into 5, so the PUT also checks that the body's value is a JSON integer. Malformed JSON is 400 (`Plug.Parsers.ParseError`). `GET /worlds` is one Ecto query (`where`, `order_by`, `limit`, `offset`). `PUT /world/:id` validates first, then `Repo.get` (404 without a row) and `Repo.update!` |
+| CSRF | `protect_from_forgery` (`Plug.CSRFProtection`) in the generated `:browser` pipeline: the forms' hidden `_csrf_token` (`get_csrf_token()`) is a masked copy of the token kept in the signed cookie session (`_bench_key`); a post without a matching token raises `InvalidCSRFTokenError`, 403. The token does not change until a login renews the session. `PUT /world/:id` is in the `:api` pipeline, which has no CSRF protection |
+| Sessions | `mix phx.gen.auth` (Phoenix 1.8), password login only, adapted to the shared `users` table: `Accounts.User` reads `users.password_bcrypt` (as its `hashed_password` field) and checks it with `Bcrypt.verify_pass` (bcrypt_elixir, the dependency the generator adds); a login inserts a session token into `users_tokens` (table in [`db.sql`](db.sql), the SQL of the generated migration), renews the session, puts the token in it and redirects to `/me` (302). `fetch_current_scope_for_user` finds the user with one query joining `users_tokens` and `users` on every request; `require_authenticated_user` redirects a request without a session to `/login` (302) |
+| Middleware scope | `/form` uses the generated `:browser` pipeline, like `/html`; `/login` and `/me` add `fetch_current_scope_for_user` (and `/me` `require_authenticated_user`) with `pipe_through`, instead of the generator's `plug` in `:browser`, so `/html` and `/form` keep the generated pipeline. `:browser` accepts `json` as well as `html`, for `/me`. The phase-1 endpoints, `/world/:id` and `/worlds` use the `:api` pipeline |
+| Templates | HEEx: `page_html/hello.html.heex` rendered inside the root layout `layouts/root.html.heex`; the phase-1 and phase-2 pages are whole documents rendered without the root layout (the `:plain_html` pipeline of `/fortunes` sets none; the form and login controllers turn the `:browser` pipeline's off with `put_root_layout(false)`) |
 | Logging | Logger level `:warning`: the generated `:info` level logs every request |
 | Image | builder `hexpm/elixir:1.20.5-erlang-29.1.2-debian-trixie-20261104-slim`, runner `debian:trixie-20261104-slim`, as the generated Dockerfile pairs them |
 
@@ -30,12 +35,18 @@ Changes from the generated files, and why:
 - **Pool size**: `config/runtime.exs` reads `DB_POOL_SIZE` (generated:
   `POOL_SIZE`, default 10).
 - **Dependencies**: no `phoenix_live_reload` and `lazy_html` (development and
-  test only). Phoenix, LiveView, Ecto SQL, Postgrex and Bandit are pinned
+  test only); `bcrypt_elixir` added, as `mix phx.gen.auth` adds it. Phoenix, LiveView, Ecto SQL, Postgrex and Bandit are pinned
   exactly; `mix.lock` comes from the Dockerfile's `lockfile` stage.
 - **Image references** written out in the `FROM` lines instead of the
   generated `ARG`s, so the harness can record their digests.
 - **Secret**: `SECRET_KEY_BASE` is a fixed dummy value in the Dockerfile
-  (`runtime.exs` refuses to start without it). It protects nothing here.
+  (`runtime.exs` refuses to start without it). It signs the session cookie of
+  the benchmark's test accounts.
+- **phx.gen.auth**: the generated Accounts context, `UserToken`, `Scope` and
+  `UserAuth`, cut down to the password login and the session (no
+  registration, magic links, remember-me cookie or sudo mode); the user signs
+  in with a username (generated: email), as top-level `username` and
+  `password` fields. The generated login has no throttle.
 - **SSL and hosts**: no change. The generated `force_ssl` in
   `config/prod.exs` excludes the hosts `localhost` and `127.0.0.1`, which the
   harness uses, so these requests are neither redirected nor given HSTS.
