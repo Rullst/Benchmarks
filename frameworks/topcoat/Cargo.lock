@@ -2595,6 +2595,7 @@ dependencies = [
 name = "topcoat-bench"
 version = "0.1.0"
 dependencies = [
+ "rand 0.10.3",
  "serde",
  "toasty",
  "tokio",

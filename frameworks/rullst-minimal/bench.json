@@ -9,9 +9,18 @@
   "runtime": "Rust 1.99.1 (release build, thin LTO)",
   "server": "Hyper via axum::serve (no rullst::Server)",
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
-  "database_layer": "rullst-orm (#[derive(Orm)], SQLx PostgreSQL pool)",
+  "database_layer": "rullst-orm (#[derive(Orm)]: find, save, all; SQLx PostgreSQL pool)",
   "template_engine": "html! macro",
   "logging": "none",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes"
+  ],
   "build_args_from_env": [
     "RULLST_VERSION"
   ],

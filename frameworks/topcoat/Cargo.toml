@@ -8,6 +8,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 toasty = { version = "=0.11.0", features = ["postgresql"] }
 tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread"] }

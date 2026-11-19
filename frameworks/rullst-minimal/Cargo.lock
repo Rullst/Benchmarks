@@ -2268,6 +2268,7 @@ dependencies = [
 name = "rullst-minimal-bench"
 version = "0.1.0"
 dependencies = [
+ "rand 0.10.3",
  "rullst",
  "rullst-orm",
  "serde",

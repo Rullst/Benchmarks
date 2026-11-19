@@ -10,9 +10,18 @@
   "runtime": "Rust 1.99.1 (release build, thin LTO)",
   "server": "rullst::Server (production stack)",
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
-  "database_layer": "rullst-orm (#[derive(Orm)], SQLx PostgreSQL pool)",
+  "database_layer": "rullst-orm (#[derive(Orm)]: find, save, all; SQLx PostgreSQL pool)",
   "template_engine": "html! macro",
-  "logging": "off (RULLST_ACCESS_LOG=off, Rullst 13.0.0-alpha.6 and later; earlier releases ignore it and write the access log)",
+  "logging": "access log on with the pinned 13.0.0-alpha.5, which ignores RULLST_ACCESS_LOG; off (RULLST_ACCESS_LOG=off) from 13.0.0-alpha.6",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes"
+  ],
   "build_args_from_env": [
     "RULLST_VERSION"
   ],

@@ -1,12 +1,12 @@
 //! Rullst as `cargo rullst new` generates it: `Server::new(router()).run()`
 //! with the generated router layers (CSRF, health probes, security headers)
 //! and the production security baseline that `RULLST_ENV=production` turns on.
-//! The four endpoints use the ORM (`#[derive(Orm)]`) and `html!`.
+//! The endpoints use the ORM (`#[derive(Orm)]`) and `html!`.
 
 use rullst::db::Orm;
-use rullst::server::{Json, StatusCode};
+use rullst::server::{Json, Query, StatusCode};
 use rullst::{Markup, Router, Server, html, routes};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Orm, Serialize)]
 #[orm(table = "world")]
@@ -16,9 +16,43 @@ pub struct World {
     pub randomnumber: i32,
 }
 
+#[derive(Debug, Clone, Orm, Serialize)]
+#[orm(table = "fortune")]
+pub struct Fortune {
+    pub id: i32,
+    pub message: String,
+}
+
 #[derive(Serialize)]
 struct Message {
     message: &'static str,
+}
+
+#[derive(Deserialize)]
+struct QueriesParams {
+    queries: Option<String>,
+}
+
+/// The `queries` parameter: an integer clamped to 1..=500, otherwise 1.
+fn query_count(params: &QueriesParams) -> usize {
+    let count = params
+        .queries
+        .as_deref()
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(1);
+    count.clamp(1, 500) as usize
+}
+
+fn random_id() -> i32 {
+    rand::random_range(1..=10_000)
+}
+
+async fn find_world(id: i32) -> Result<World, StatusCode> {
+    match World::find(id).await {
+        Ok(Some(world)) => Ok(world),
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
 }
 
 async fn text() -> &'static str {
@@ -30,11 +64,53 @@ async fn json() -> Json<Message> {
 }
 
 async fn db_single() -> Result<Json<World>, StatusCode> {
-    match World::find(1).await {
-        Ok(Some(world)) => Ok(Json(world)),
-        Ok(None) => Err(StatusCode::NOT_FOUND),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    Ok(Json(find_world(1).await?))
+}
+
+async fn queries(Query(params): Query<QueriesParams>) -> Result<Json<Vec<World>>, StatusCode> {
+    let count = query_count(&params);
+    let mut worlds = Vec::with_capacity(count);
+    for _ in 0..count {
+        worlds.push(find_world(random_id()).await?);
     }
+    Ok(Json(worlds))
+}
+
+/// Each row is read with `World::find`, given a new random number and saved
+/// with `save()` (one UPDATE per row in its own transaction, no batching).
+async fn updates(Query(params): Query<QueriesParams>) -> Result<Json<Vec<World>>, StatusCode> {
+    let count = query_count(&params);
+    let mut worlds = Vec::with_capacity(count);
+    for _ in 0..count {
+        let mut world = find_world(random_id()).await?;
+        world.randomnumber = random_id();
+        world
+            .save()
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        worlds.push(world);
+    }
+    Ok(Json(worlds))
+}
+
+async fn fortunes() -> Result<Markup, StatusCode> {
+    let mut fortunes = Fortune::all()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    fortunes.push(Fortune {
+        id: 0,
+        message: "Additional fortune added at request time.".to_string(),
+    });
+    fortunes.sort_by(|a, b| a.message.cmp(&b.message));
+    Ok(html! {
+        <!DOCTYPE html>
+        <html><head><title>Fortunes</title></head><body><table>
+        <tr><th>id</th><th>message</th></tr>
+        @for fortune in &fortunes {
+            <tr><td>{fortune.id}</td><td>{fortune.message}</td></tr>
+        }
+        </table></body></html>
+    })
 }
 
 async fn page() -> Markup {
@@ -51,6 +127,9 @@ fn router() -> Router {
         get("/json" => json),
         get("/db-single" => db_single),
         get("/html" => page),
+        get("/queries" => queries),
+        get("/updates" => updates),
+        get("/fortunes" => fortunes),
     ]
     .layer(rullst::server::from_fn(rullst::security::csrf_middleware))
     .merge_axum(rullst::health::health_router())

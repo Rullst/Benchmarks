@@ -10,6 +10,7 @@ tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "net"] }
 serde = { version = "1", features = ["derive"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 askama = "0.16"
+rand = "0.10"
 
 # The same release profile for every Rust implementation (the one
 # `cargo rullst new` generates), so compiler settings are not a variable.

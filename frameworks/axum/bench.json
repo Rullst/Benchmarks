@@ -11,6 +11,15 @@
   "database_layer": "SQLx 0.9 (Axum has no ORM; its examples use SQLx)",
   "template_engine": "Askama 0.16",
   "logging": "none",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes"
+  ],
   "startup_timeout_s": 120,
   "notes": "Baseline: every job measures it on the same runner as the framework under test."
 }

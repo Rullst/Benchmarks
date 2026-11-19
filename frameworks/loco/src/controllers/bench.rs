@@ -1,7 +1,7 @@
 use loco_rs::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::models::_entities::world;
+use crate::models::_entities::{fortune, world};
 
 #[derive(Serialize)]
 struct Message {
@@ -13,6 +13,41 @@ struct WorldBody {
     id: i32,
     #[serde(rename = "randomNumber")]
     random_number: i32,
+}
+
+impl From<world::Model> for WorldBody {
+    fn from(row: world::Model) -> Self {
+        Self {
+            id: row.id,
+            random_number: row.randomnumber,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct QueriesParams {
+    queries: Option<String>,
+}
+
+/// The `queries` parameter: an integer clamped to 1..=500, otherwise 1.
+fn query_count(params: &QueriesParams) -> usize {
+    let count = params
+        .queries
+        .as_deref()
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(1);
+    count.clamp(1, 500) as usize
+}
+
+fn random_id() -> i32 {
+    rand::random_range(1..=10_000)
+}
+
+async fn find_world(ctx: &AppContext, id: i32) -> Result<world::Model> {
+    world::Entity::find_by_id(id)
+        .one(&ctx.db)
+        .await?
+        .ok_or_else(|| Error::NotFound)
 }
 
 #[debug_handler]
@@ -27,14 +62,42 @@ async fn json() -> Result<Response> {
 
 #[debug_handler]
 async fn db_single(State(ctx): State<AppContext>) -> Result<Response> {
-    let row = world::Entity::find_by_id(1)
-        .one(&ctx.db)
-        .await?
-        .ok_or_else(|| Error::NotFound)?;
-    format::json(WorldBody {
-        id: row.id,
-        random_number: row.randomnumber,
-    })
+    format::json(WorldBody::from(find_world(&ctx, 1).await?))
+}
+
+#[debug_handler]
+async fn queries(State(ctx): State<AppContext>, Query(params): Query<QueriesParams>) -> Result<Response> {
+    let count = query_count(&params);
+    let mut worlds = Vec::with_capacity(count);
+    for _ in 0..count {
+        worlds.push(WorldBody::from(find_world(&ctx, random_id()).await?));
+    }
+    format::json(worlds)
+}
+
+/// Each row is read with `find_by_id`, given a new random number and saved with
+/// `ActiveModel::update` (one UPDATE per row, no transaction, no batching).
+#[debug_handler]
+async fn updates(State(ctx): State<AppContext>, Query(params): Query<QueriesParams>) -> Result<Response> {
+    let count = query_count(&params);
+    let mut worlds = Vec::with_capacity(count);
+    for _ in 0..count {
+        let mut row = find_world(&ctx, random_id()).await?.into_active_model();
+        row.randomnumber = Set(random_id());
+        worlds.push(WorldBody::from(row.update(&ctx.db).await?));
+    }
+    format::json(worlds)
+}
+
+#[debug_handler]
+async fn fortunes(ViewEngine(v): ViewEngine<TeraView>, State(ctx): State<AppContext>) -> Result<Response> {
+    let mut fortunes = fortune::Entity::find().all(&ctx.db).await?;
+    fortunes.push(fortune::Model {
+        id: 0,
+        message: "Additional fortune added at request time.".to_string(),
+    });
+    fortunes.sort_by(|a, b| a.message.cmp(&b.message));
+    format::render().view(&v, "bench/fortunes.html", data!({ "fortunes": fortunes }))
 }
 
 #[debug_handler]
@@ -48,4 +111,7 @@ pub fn routes() -> Routes {
         .add("/json", get(json))
         .add("/db-single", get(db_single))
         .add("/html", get(html))
+        .add("/queries", get(queries))
+        .add("/updates", get(updates))
+        .add("/fortunes", get(fortunes))
 }

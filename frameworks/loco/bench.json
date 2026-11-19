@@ -8,9 +8,18 @@
   "runtime": "Rust 1.99.1 (release build, thin LTO)",
   "server": "loco start (Axum/Hyper), LOCO_ENV=production",
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
-  "database_layer": "SeaORM 2.0 (Entity::find_by_id), pool max_connections = DB_POOL_SIZE",
-  "template_engine": "Tera (Loco TeraView)",
+  "database_layer": "SeaORM 2.0 (find_by_id, ActiveModel::update, Entity::find().all), pool max_connections = DB_POOL_SIZE",
+  "template_engine": "Tera 2 (Loco TeraView)",
   "logging": "Loco logger at warn level (no per-request logs)",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes"
+  ],
   "startup_timeout_s": 120,
   "notes": "Structure, features and production.yaml as loco new generates them for a PostgreSQL app with server-side views."
 }
