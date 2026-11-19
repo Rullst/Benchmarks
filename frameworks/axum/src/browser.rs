@@ -1,4 +1,4 @@
-//! Browser routes: `/form`, `/login` and `/me` (docs/v2-phase2-spec.md, sections 4-6).
+//! Browser routes: `/form`, `/login` and `/me` (docs/v3-spec.md, sections 4-6).
 //!
 //! Axum has no CSRF protection or sessions of its own. CSRF: `axum_csrf`
 //! (the most-used maintained crate): the token is kept in an encrypted

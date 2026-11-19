@@ -6,7 +6,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 /**
- * GET /form and POST /form (docs/v2-phase2-spec.md, section 4), in the web
+ * GET /form and POST /form (docs/v3-spec.md, section 4), in the web
  * group: PreventRequestForgery checks the request first (419 when forged),
  * then `$request->validate` checks the fields (an invalid post is redirected
  * back with the errors, 302).

@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 /**
- * GET /world/{id}, GET /worlds and PUT /world/{id} (docs/v2-phase2-spec.md,
+ * GET /world/{id}, GET /worlds and PUT /world/{id} (docs/v3-spec.md,
  * section 3). whereNumber('id') answers 404 for a non-integer id; failed
  * validation is answered 422 (bootstrap/app.php renders the api group's
  * exceptions as JSON).

@@ -99,8 +99,8 @@ Every implementation serves the same endpoints on port 8080. The first four
 measure framework overhead; the next three, added in November 2026, follow
 the [TechEmpower Framework Benchmarks](https://github.com/TechEmpower/FrameworkBenchmarks/wiki/Project-Information-Framework-Tests-Overview)
 (round 23) multiple-queries, updates and fortunes tests and measure database
-work through the framework's ORM and template engine; the last five (v2
-phase 2, [docs/v2-phase2-spec.md](docs/v2-phase2-spec.md)) measure what an
+work through the framework's ORM and template engine; the last five (v3
+phase 2, [docs/v3-spec.md](docs/v3-spec.md)) measure what an
 application does with a request: route parameters, query strings, JSON and
 form bodies, validation, a write of one record, CSRF verification and a
 signed-in session. An implementation serves the endpoints after `/html` once
@@ -260,7 +260,7 @@ Fixed settings, the same for every implementation:
   125 with two threads (the results record `connections_open`). It was chosen
   over bombardier (one fixed request per run) and oha (no per-request
   headers) because it varies URL, headers and body together and does the most
-  requests per client CPU-second ([measurements](docs/v2-phase2-spec.md#7-load-generator));
+  requests per client CPU-second ([measurements](docs/v3-spec.md#7-load-generator));
   its licence (Apache 2.0 plus a naming condition on changed derivatives)
   does not affect running it unmodified.
 - **Database pool.** 16 connections per server (`DB_POOL_SIZE`), split
@@ -634,29 +634,27 @@ except as ratios to Axum measured on the same machine.
 
 ## History
 
-**v1 and v2.** v1 (the results up to Rullst 13.0.0-alpha.5) measured only
-`/text`, `/json`, `/db-single` (always the row with id = 1) and `/html`. Its
-`/db-single` tier was client-bound in most rounds, because PostgreSQL shared
-the client vCPUs with the load generator, and its README table mixed
-absolute numbers from different runners. v2 (November 2026) adds `/queries`,
-`/updates` and `/fortunes`, measures server efficiency and PostgreSQL's CPU
-use in every run, scores client-bound runs by efficiency (giving PostgreSQL
-its own vCPU was measured and did not remove the client-bound runs), and
-leads the table with ratios, showing each absolute number with Axum's from
-the same runner, as described in [Method](#method) and [CPU split](#cpu-split).
-v2's second phase adds `GET /world/{id}`, `GET /worlds`, `PUT /world/{id}`,
-`POST /form` and `GET /me` (request input, validation, a write, CSRF and
-sessions), the Application category and the hot-rows contention run, and
-replaces the load generator: **v2 numbers come from wrk 4.2.0, v1 numbers
-from bombardier 2.0.2, so absolute requests/s and latencies before and after
-are not comparable** (wrk needs less client CPU per request, which raises
-client-bound results most). Ratios to Axum are always measured with the same
-tool in the same job.
-
-The suite was rebuilt in November 2026. The results published before that
-(measured by hand on a laptop on 22 June 2026) are kept in
-[history/2026-06-22-laptop.md](history/2026-06-22-laptop.md) with an
-explanation of why they are not comparable.
+**v1, v2 and v3.** v1 is the measurement made by hand on a laptop on 22 June
+2026, kept in [history/2026-06-22-laptop.md](history/2026-06-22-laptop.md)
+with an explanation of why it is not comparable. v2, the GitHub Actions
+rebuild of 15 November 2026 (the results up to Rullst 13.0.0-alpha.5),
+measured only `/text`, `/json`, `/db-single` (always the row with id = 1)
+and `/html`. Its `/db-single` tier was client-bound in most rounds, because
+PostgreSQL shared the client vCPUs with the load generator, and its README
+table mixed absolute numbers from different runners. v3 (November 2026)
+adds `/queries`, `/updates` and `/fortunes`, measures server efficiency and
+PostgreSQL's CPU use in every run, scores client-bound runs by efficiency
+(giving PostgreSQL its own vCPU was measured and did not remove the
+client-bound runs), and leads the table with ratios, showing each absolute
+number with Axum's from the same runner, as described in [Method](#method)
+and [CPU split](#cpu-split). v3's second phase adds `GET /world/{id}`,
+`GET /worlds`, `PUT /world/{id}`, `POST /form` and `GET /me` (request input,
+validation, a write, CSRF and sessions), the Application category and the
+hot-rows contention run, and replaces the load generator: **v3 numbers come
+from wrk 4.2.0, v2 numbers from bombardier 2.0.2, so absolute requests/s and
+latencies before and after are not comparable** (wrk needs less client CPU
+per request, which raises client-bound results most). Ratios to Axum are
+always measured with the same tool in the same job.
 
 ## License
 

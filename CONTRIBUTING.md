@@ -96,7 +96,7 @@ null)` and `fortune(id integer primary key, message varchar(2048) not null)`
 ### Phase-2 endpoints
 
 The contract of the five application endpoints is
-[docs/v2-phase2-spec.md](docs/v2-phase2-spec.md) (sections 2-6; section 10
+[docs/v3-spec.md](docs/v3-spec.md) (sections 2-6; section 10
 is the per-framework checklist and section 9 the expected mechanism for
 each framework). In short:
 

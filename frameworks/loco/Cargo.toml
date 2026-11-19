@@ -1,7 +1,7 @@
 # Dependencies as `loco new` generates them for a PostgreSQL app with
 # server-side views (loco-rs features: the defaults without db-sqlite), minus
 # the crates this app does not use (auth/mail models, uuid, ts-rs, i18n).
-# Phase 2 (docs/v2-phase2-spec.md) adds the `auth_session` feature (Loco's
+# Phase 2 (docs/v3-spec.md) adds the `auth_session` feature (Loco's
 # cookie session and `CurrentUser`) and axum_csrf for the browser forms (Loco
 # has no CSRF protection; it is built on Axum). The empty migrator lives in
 # src/migrator.rs instead of a separate `migration` crate: the `world` table

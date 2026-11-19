@@ -137,7 +137,7 @@ def framework_tables(entry: dict) -> list[str]:
     return list((entry.get("db_setup") or {}).get("tables", []))
 
 
-# What bench/db/phase2.sql must contain (docs/v2-phase2-spec.md section 2.2).
+# What bench/db/phase2.sql must contain (docs/v3-spec.md section 2.2).
 USER_CHECKS = {
     "accounts user1..user1000 with display names 'User N'":
         "SELECT count(*) = 1000 AND min(id) = 1 AND max(id) = 1000 AND bool_and(username = 'user' || id) "

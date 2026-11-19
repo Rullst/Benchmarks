@@ -1,6 +1,6 @@
 """Browser sessions for the phase-2 endpoints: form pages, CSRF pairs and logins.
 
-The harness acts as a browser that loaded a page once (docs/v2-phase2-spec.md
+The harness acts as a browser that loaded a page once (docs/v3-spec.md
 sections 4-6): it keeps the cookies the responses set (their attributes,
 `Secure` included, are ignored: the harness talks plain HTTP to 127.0.0.1),
 submits the hidden fields of the page's form, and sends `Origin` and

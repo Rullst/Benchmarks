@@ -2,7 +2,7 @@
 -- SQL its migration (create_table :sessions with t.references :user,
 -- foreign_key: true, ip_address, user_agent and timestamps) runs on
 -- PostgreSQL. The harness applies this file once per job and empties the
--- table at the start of every round (docs/v2-phase2-spec.md, section 2.2);
+-- table at the start of every round (docs/v3-spec.md, section 2.2);
 -- the server creates nothing at start-up.
 CREATE TABLE "sessions" (
     "id" bigserial PRIMARY KEY,

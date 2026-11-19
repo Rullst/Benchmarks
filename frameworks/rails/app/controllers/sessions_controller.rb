@@ -3,7 +3,7 @@
 class SessionsController < ApplicationController
   # Benchmark: the generator includes Authentication in ApplicationController;
   # here only the controllers of /login and /me include it, so the other
-  # endpoints keep their stack (docs/v2-phase2-spec.md, section 2.3).
+  # endpoints keep their stack (docs/v3-spec.md, section 2.3).
   include Authentication
   allow_unauthenticated_access only: %i[ new create ]
   # Benchmark: without the generated

@@ -1,4 +1,4 @@
-//! Browser routes: `/form`, `/login` and `/me` (docs/v2-phase2-spec.md,
+//! Browser routes: `/form`, `/login` and `/me` (docs/v3-spec.md,
 //! sections 4-6), with the mechanisms `cargo rullst new` and
 //! `cargo rullst auth` (13.0.0-alpha.6) generate.
 //!

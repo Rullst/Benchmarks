@@ -19,7 +19,7 @@ return [
     */
 
     // Benchmark: the cookie driver (skeleton default: database). Decision 4
-    // of docs/v2-phase2-spec.md (section 6.2, pending the maintainer's
+    // of docs/v3-spec.md (section 6.2, pending the maintainer's
     // confirmation), and the only place it is made: /html is in the web group
     // and the load sends it no cookies, so the database driver would insert a
     // sessions row on every /html request. Switching back to 'database' also

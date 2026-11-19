@@ -1,4 +1,4 @@
--- The session registry's table (docs/v2-phase2-spec.md, section 2.2): the
+-- The session registry's table (docs/v3-spec.md, section 2.2): the
 -- PostgreSQL schema that `cargo rullst auth`'s
 -- `*_create_rullst_auth_sessions_table` migration creates through
 -- `SessionRegistry::create_table` (rullst-auth 13.0.0-alpha.6,

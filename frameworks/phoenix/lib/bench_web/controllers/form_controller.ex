@@ -1,6 +1,6 @@
 defmodule BenchWeb.FormController do
   @moduledoc """
-  GET /form and POST /form (docs/v2-phase2-spec.md, section 4), in the
+  GET /form and POST /form (docs/v3-spec.md, section 4), in the
   browser pipeline: protect_from_forgery checks the token (403 when forged),
   then a schemaless changeset validates the fields (422).
   """

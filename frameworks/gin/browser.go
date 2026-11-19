@@ -1,4 +1,4 @@
-// The browser routes: /form, /login and /me (docs/v2-phase2-spec.md, sections 4-6).
+// The browser routes: /form, /login and /me (docs/v3-spec.md, sections 4-6).
 //
 // Both are middleware of this route group only, so the other routes keep
 // their stack. CSRF: Go's http.CrossOriginProtection, called through its

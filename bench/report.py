@@ -437,8 +437,10 @@ def render_results(data: dict) -> str:
                       "Templates"], lines), "",
               "Each folder under `frameworks/` has a README with its configuration and the reasons for it.", ""]
     parts += ["## Historical note", "",
-              f"Results published before the rebuild (22 June 2026, a laptop, not reproducible) are kept in "
-              f"[{HISTORY}]({HISTORY}). They used different hardware and code and are not comparable.", ""]
+              f"These are v3 results (wrk 4.2.0). The v1 results (22 June 2026, measured by hand on a laptop, not "
+              f"reproducible) are kept in [{HISTORY}]({HISTORY}); they used different hardware and code and are not "
+              "comparable. The v2 results (up to Rullst 13.0.0-alpha.5) were measured with bombardier 2.0.2: "
+              "compare them with these only as ratios to Axum.", ""]
     return "\n".join(parts)
 
 

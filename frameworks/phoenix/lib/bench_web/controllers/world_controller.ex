@@ -1,6 +1,6 @@
 defmodule BenchWeb.WorldController do
   @moduledoc """
-  GET /world/:id, GET /worlds and PUT /world/:id (docs/v2-phase2-spec.md,
+  GET /world/:id, GET /worlds and PUT /world/:id (docs/v3-spec.md,
   section 3). The router's `:id` is a string, cast to an integer with Ecto
   (400 when it is not one). The query string and the body are validated with
   schemaless changesets (422).

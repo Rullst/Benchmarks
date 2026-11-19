@@ -3,7 +3,7 @@
 //! Toasty (the database layer `topcoat new` sets up) for the database
 //! endpoints.
 //!
-//! Phase 2 (docs/v2-phase2-spec.md): `/world/{id}`, `/worlds`, `PUT /world/{id}`
+//! Phase 2 (docs/v3-spec.md): `/world/{id}`, `/worlds`, `PUT /world/{id}`
 //! and the browser routes `/form`, `/login` and `/me`. Cross-origin form posts
 //! are refused by the router's default `OriginPolicy` (on for every route, as
 //! Topcoat ships it); the session token is carried in a cookie, so the cookie

@@ -23,7 +23,7 @@ class User extends Authenticatable
     /**
      * The stored hash has bcrypt's "$2b$" prefix; PHP's password API names
      * the same algorithm "$2y$" and Laravel's bcrypt hasher refuses other
-     * prefixes (docs/v2-phase2-spec.md, section 9).
+     * prefixes (docs/v3-spec.md, section 9).
      */
     public function getAuthPassword()
     {

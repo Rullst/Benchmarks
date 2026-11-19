@@ -11,7 +11,7 @@ serde = { version = "1", features = ["derive"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 askama = "0.16"
 rand = "0.10"
-# Phase 2 (docs/v2-phase2-spec.md): CSRF for the browser form, sessions in
+# Phase 2 (docs/v3-spec.md): CSRF for the browser form, sessions in
 # PostgreSQL, Argon2id password verification for the login.
 axum_csrf = "0.12"
 tower-sessions = { version = "0.15", default-features = false, features = ["axum-core"] }

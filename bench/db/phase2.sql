@@ -1,4 +1,4 @@
--- Phase 2 (docs/v2-phase2-spec.md): the accounts that POST /login signs in
+-- Phase 2 (docs/v3-spec.md): the accounts that POST /login signs in
 -- and GET /me returns. Loaded after init.sql (the entrypoint runs the files of
 -- bench/db in name order). Every account has the password "bench-password".
 --

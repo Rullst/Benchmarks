@@ -45,7 +45,7 @@ ENDPOINTS = BASE_ENDPOINTS
 DATABASE_ENDPOINTS = EXTRA_ENDPOINTS
 APPLICATION_ENDPOINTS = PHASE2_ENDPOINTS
 # A phase-2 run with a higher median error rate gets no score in Application
-# (docs/v2-phase2-spec.md section 2.5): every request the load sends is valid.
+# (docs/v3-spec.md section 2.5): every request the load sends is valid.
 MAX_ERROR_RATE = 0.01
 CAPACITY = ("the requests/s ratio, or the ratio of requests per server CPU-second when the run was "
             "client-bound")

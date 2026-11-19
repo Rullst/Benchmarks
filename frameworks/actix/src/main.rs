@@ -1,6 +1,6 @@
 //! Actix Web: the suite's endpoints with SQLx and Askama.
 //!
-//! Phase 2 (docs/v2-phase2-spec.md): `/world/{id}`, `/worlds`, `PUT /world/{id}`
+//! Phase 2 (docs/v3-spec.md): `/world/{id}`, `/worlds`, `PUT /world/{id}`
 //! and the browser routes `/form`, `/login` and `/me`. Only the browser routes
 //! have the session middleware (actix-session's cookie store) and CSRF
 //! protection (actix-csrf); the other routes keep the plain stack.

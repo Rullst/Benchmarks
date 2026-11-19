@@ -15,12 +15,12 @@ FRAMEWORKS = ROOT / "frameworks"
 # How often a starting server is checked (GET /text) until it answers.
 READY_POLL_S = 0.25
 
-# The endpoints every implementation serves, and the ones added in v2 that an
+# The endpoints every implementation serves, and the ones added in v3 that an
 # implementation serves once its bench.json lists them in "endpoints" (the
 # harness checks and measures only the endpoints a folder declares).
 BASE_ENDPOINTS = ("text", "json", "db-single", "html")
 EXTRA_ENDPOINTS = ("queries", "updates", "fortunes")
-# Phase 2 (docs/v2-phase2-spec.md): request handling, writes, forms and sessions.
+# Phase 2 (docs/v3-spec.md): request handling, writes, forms and sessions.
 PHASE2_ENDPOINTS = ("world", "worlds", "world-update", "form", "me")
 ENDPOINTS = BASE_ENDPOINTS + EXTRA_ENDPOINTS + PHASE2_ENDPOINTS
 
@@ -33,7 +33,7 @@ ENDPOINT_LABELS = {
     "me": "GET /me",
 }
 
-# bench.json "phase2" block (docs/v2-phase2-spec.md section 2.1).
+# bench.json "phase2" block (docs/v3-spec.md section 2.1).
 CSRF_DESIGNS = ("token", "fetch-metadata")
 MECHANISM_SOURCES = ("built-in", "generator", "stdlib", "documented", "library")
 SESSION_STORES = ("cookie-signed", "cookie-encrypted", "postgresql", "memory")

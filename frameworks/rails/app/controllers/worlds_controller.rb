@@ -1,4 +1,4 @@
-# GET /world/:id, GET /worlds and PUT /world/:id (docs/v2-phase2-spec.md,
+# GET /world/:id, GET /worlds and PUT /world/:id (docs/v3-spec.md,
 # section 3). The route constraint answers 404 for a non-integer id.
 class WorldsController < ApplicationController
   # PUT /world/:id is a public JSON API call, sent without cookies: the

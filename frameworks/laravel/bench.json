@@ -40,5 +40,5 @@
     "write_csrf": null
   },
   "startup_timeout_s": 120,
-  "notes": "php artisan optimize runs at start-up. The web group (/html, /form, /login, /me) uses the cookie session driver, not Laravel's default database driver: the load sends /html no cookies, so the database driver would insert a sessions row on every /html request (decision 4 of docs/v2-phase2-spec.md, pending the maintainer's confirmation)."
+  "notes": "php artisan optimize runs at start-up. The web group (/html, /form, /login, /me) uses the cookie session driver, not Laravel's default database driver: the load sends /html no cookies, so the database driver would insert a sessions row on every /html request (decision 4 of docs/v3-spec.md, pending the maintainer's confirmation)."
 }

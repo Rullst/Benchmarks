@@ -10,7 +10,7 @@ serde = { version = "1", features = ["derive"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 askama = "0.16"
 rand = "0.10"
-# Phase 2 (docs/v2-phase2-spec.md): CSRF for the browser forms (actix-csrf,
+# Phase 2 (docs/v3-spec.md): CSRF for the browser forms (actix-csrf,
 # double-submit cookie), the signed-in session in actix-session's cookie
 # store, Argon2id password verification for the login.
 actix-csrf = "0.8"

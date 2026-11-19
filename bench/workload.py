@@ -4,7 +4,7 @@ A Workload is tool-neutral. bench/loadgen_wrk.py replays any workload (its
 Lua script cycles through the prebuilt requests); bench/loadgen_oha.py can
 replay one whose requests share the method and headers, choosing the path and
 the body independently (oha's --urls-from-file and -Z). The builders below
-are the phase-2 endpoints of docs/v2-phase2-spec.md.
+are the phase-2 endpoints of docs/v3-spec.md.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from urllib.parse import urlencode
 MAX_ID = 10000
 # Fixed seed: every implementation and every round gets the same request mix.
 SEED = 20261119
-# What a browser sends with a same-origin form submission (docs/v2-phase2-spec.md section 2.4).
+# What a browser sends with a same-origin form submission (docs/v3-spec.md section 2.4).
 ORIGIN = "http://127.0.0.1:8080"
 
 
@@ -125,7 +125,7 @@ def hot_rows(ids: int = 10, count: int = 2000, write_csrf: tuple[str, str, str] 
 
 @dataclass(frozen=True)
 class Session:
-    """What the harness obtained once before measuring (docs/v2-phase2-spec.md, CSRF and sessions)."""
+    """What the harness obtained once before measuring (docs/v3-spec.md, CSRF and sessions)."""
 
     cookie: str  # the Cookie header value to send
     fields: tuple[tuple[str, str], ...] = ()  # the hidden fields of the session's form page

@@ -97,7 +97,7 @@ end
 
 # Counts every response by status class. wrk then parses each response's
 # headers and body into Lua, which costs client CPU (measured in the
-# experiment, docs/v2-phase2-spec.md section 7).
+# experiment, docs/v3-spec.md section 7).
 LUA_STATUS = r"""
 s1xx, s2xx, s3xx, s4xx, s5xx = 0, 0, 0, 0, 0
 function response(status, headers, body)

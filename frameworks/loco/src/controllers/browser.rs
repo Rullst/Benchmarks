@@ -1,4 +1,4 @@
-//! Browser routes: `/form`, `/login` and `/me` (docs/v2-phase2-spec.md, sections 4-6).
+//! Browser routes: `/form`, `/login` and `/me` (docs/v3-spec.md, sections 4-6).
 //!
 //! Loco has no CSRF protection of its own; it is built on Axum, so the forms
 //! use `axum_csrf` (the most-used maintained CSRF crate for Axum) as a layer on

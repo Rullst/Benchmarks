@@ -35,7 +35,7 @@ Changes from the generated files, and why:
 - **Authentication, phase 2**: the generator includes the `Authentication`
   concern in `ApplicationController`, which puts every action behind a login.
   Here only `SessionsController` and `UsersController` include it, so the
-  other endpoints keep their stack (docs/v2-phase2-spec.md, section 2.3). The
+  other endpoints keep their stack (docs/v3-spec.md, section 2.3). The
   generated `rate_limit to: 10, within: 3.minutes` on the login is left out:
   it would refuse the harness's 125 logins from 127.0.0.1 in every round.
   The login form posts `username` (generated: `email_address`), and a login

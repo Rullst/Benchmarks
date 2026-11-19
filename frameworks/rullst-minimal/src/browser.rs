@@ -1,4 +1,4 @@
-//! Browser routes: `/form`, `/login` and `/me` (docs/v2-phase2-spec.md,
+//! Browser routes: `/form`, `/login` and `/me` (docs/v3-spec.md,
 //! sections 4-6), the same handlers as `../rullst`, without `Server`.
 //!
 //! CSRF: Rullst's `csrf_middleware` (the double-submit `rullst_csrf` cookie;

@@ -95,7 +95,7 @@ DATABASES = {
 }
 
 
-# Benchmark: phase 2 (docs/v2-phase2-spec.md, section 6). django.contrib.auth
+# Benchmark: phase 2 (docs/v3-spec.md, section 6). django.contrib.auth
 # with a custom user model on the shared users table (world.User), the default
 # database session backend (django_session, created by db.sql), and Django's
 # bcrypt hasher with the work factor of the stored hashes (world/hashers.py).

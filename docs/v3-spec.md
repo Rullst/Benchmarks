@@ -1,4 +1,11 @@
-# Benchmarks v2, phase 2: request handling, writes, forms and sessions
+# Benchmarks v3, phase 2: request handling, writes, forms and sessions
+
+v3 is the suite's third generation: v1 is the hand-run laptop measurement of
+22 June 2026 ([history/2026-06-22-laptop.md](../history/2026-06-22-laptop.md)),
+v2 the GitHub Actions rebuild of 15 November 2026 (results up to Rullst
+13.0.0-alpha.5, measured with bombardier), and v3 this work: phase 1 (the
+database endpoints, server efficiency) and phase 2 (this document). The
+branches keep their internal `feat/v2*` names.
 
 Status: integrated on branch `feat/v2` (fork `venelouis/Benchmarks`): the
 harness, the conformance checks and all 16 implementations follow this
@@ -1031,8 +1038,8 @@ by the integration of the 16 folders).
 5. **(pending) Hot-rows contention run added** (§3.4). In
    `bench/config.json` (`"hot_rows"`); removing the key removes the run.
 6. **wrk 4.2.0 for every endpoint**, built on the runner from the
-   SHA-256-pinned source tarball (§7.4). The README's History says v2
-   numbers are not comparable with v1's bombardier numbers.
+   SHA-256-pinned source tarball (§7.4). The README's History says v3
+   numbers are not comparable with v2's bombardier numbers.
 7. **Rullst as generated sends its CSRF cookie and `X-CSRF-Token` header**
    on `PUT /world/{id}` (`write_csrf`, §2.1); its README documents it.
 8. **No Application score for a run with more than 1% errors** (§2.5). In

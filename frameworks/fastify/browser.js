@@ -1,4 +1,4 @@
-// The browser routes: /form, /login and /me (docs/v2-phase2-spec.md, sections 4-6).
+// The browser routes: /form, /login and /me (docs/v3-spec.md, sections 4-6).
 //
 // Registered as one encapsulated plugin, so the cookie, session, form body
 // and CSRF plugins (and their hooks) apply to these routes only.

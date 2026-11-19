@@ -15,7 +15,7 @@ Rules (also in CONTRIBUTING.md):
   TechEmpower Framework Benchmarks round 23 rules: see check_queries,
   check_updates and check_fortunes. pg_stat_statements counts the statements
   each request runs;
-- the phase-2 endpoints (when declared) follow docs/v2-phase2-spec.md:
+- the phase-2 endpoints (when declared) follow docs/v3-spec.md:
   bench/conformance_phase2.py.
 """
 

@@ -1,4 +1,4 @@
-"""Conformance of the phase-2 endpoints (docs/v2-phase2-spec.md sections 3, 4 and 6).
+"""Conformance of the phase-2 endpoints (docs/v3-spec.md sections 3, 4 and 6).
 
 Each check returns None or the first problem it found. They run only for the
 endpoints a folder declares in bench.json and use the same browser code as

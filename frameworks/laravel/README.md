@@ -36,7 +36,7 @@ Changes from the skeleton and the documented setup, and why:
   deployment documentation requires; `APP_KEY` is a fixed dummy key (it
   protects nothing here); `DB_CONNECTION=pgsql`, with `DB_URL` taken from the
   harness's `DATABASE_URL`.
-- **Session driver** `cookie` (decision 4 of docs/v2-phase2-spec.md, pending
+- **Session driver** `cookie` (decision 4 of docs/v3-spec.md, pending
   the maintainer's confirmation; `phase2.session.store` is
   `cookie-encrypted`): Laravel's default is the `database` driver, which
   section 6.2's rule would pick. But `/html` is in the `web` group and the

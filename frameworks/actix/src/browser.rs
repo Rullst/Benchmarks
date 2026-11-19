@@ -1,4 +1,4 @@
-//! Browser routes: `/form`, `/login` and `/me` (docs/v2-phase2-spec.md, sections 4-6).
+//! Browser routes: `/form`, `/login` and `/me` (docs/v3-spec.md, sections 4-6).
 //!
 //! Actix Web has no CSRF protection of its own. CSRF: `actix-csrf`, the
 //! double-submit cookie middleware for Actix Web: `GET /form` and `GET /login`

@@ -2,7 +2,7 @@
 -- SESSION_ENGINE's default): the output of
 -- `manage.py sqlmigrate sessions 0001` for PostgreSQL, without its
 -- BEGIN/COMMIT. The harness applies this file once per job and empties the
--- table at the start of every round (docs/v2-phase2-spec.md, section 2.2);
+-- table at the start of every round (docs/v3-spec.md, section 2.2);
 -- the server creates nothing at start-up.
 CREATE TABLE "django_session" (
     "session_key" varchar(40) NOT NULL PRIMARY KEY,
