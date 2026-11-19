@@ -9,12 +9,14 @@ rust-version = "1.96.0"
 publish = false
 
 [dependencies]
-rullst = { version = "=13.0.0-alpha.5", default-features = false, features = ["orm", "strict-postgres"] }
+rullst = { version = "=13.0.0-alpha.6", default-features = false, features = ["orm", "strict-postgres", "auth-session-registry-postgres"] }
 rand = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
-rullst-orm = { version = "=13.0.0-alpha.5", default-features = false, features = ["strict-postgres"] }
+# Used by #[derive(rullst::Validate)] DTOs (the derive expands to ::validator paths).
+validator = { version = "0.21", features = ["derive"] }
+rullst-orm = { version = "=13.0.0-alpha.6", default-features = false, features = ["strict-postgres"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "postgres"] }
 
 [profile.release]
@@ -23,3 +25,15 @@ codegen-units = 1
 strip = "symbols"
 
 [workspace]
+
+# TEMPORARY, until 13.0.0-alpha.6 is published on crates.io (expected on
+# 2026-11-20): the release candidate (Rullst/Rullst main, 58438b6), so that
+# CI can check this folder before the release. Remove this section and
+# regenerate Cargo.lock once the release is published.
+[patch.crates-io]
+rullst = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
+rullst-auth = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
+rullst-core = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
+rullst-macros = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
+rullst-orm = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
+rullst-orm-macros = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
