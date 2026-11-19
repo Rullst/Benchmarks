@@ -118,7 +118,7 @@ implemented yet" for them.
 | `GET /fortunes` | every row of the `fortune` table (TechEmpower's 12 rows, one of them a `<script>` and one in Japanese) plus one added at request time (id 0, `Additional fortune added at request time.`), sorted by message and rendered as an HTML table by the framework's template engine, which escapes the messages; `text/html; charset=utf-8` |
 | `GET /world/{id}` | the row with that id, read by primary key through the ORM on every request, as `{"id":…,"randomNumber":…}`; 404 for an id without a row, 400, 404 or 422 for one that is not an integer. Measured with the 10,000 ids in a shuffled order |
 | `GET /worlds?min=&max=&limit=&page=` | the rows with `min <= id <= max`, ordered by id, `limit` rows of page `page`, as a JSON array, in one query (defaults 1, 10,000, 20, 1; `limit` 1-100, `page` 1-1000). Parameters are validated with the framework's mechanism: a value that is not an integer, out of range, or `min > max` is answered 400 or 422. Measured with 2,000 random 1,000-id windows, 20 rows per page, pages 1-5 |
-| `PUT /world/{id}` | body `{"randomNumber": n}` (an integer 1-10,000), validated (400 or 422 otherwise, with nothing written); the row is changed the ORM's usual way and returned as stored. A public JSON API call, sent without cookies (Rullst as generated, which refuses cookieless writes, gets its CSRF cookie and header). Measured with the 10,000 ids shuffled, random values |
+| `PUT /world/{id}` | body `{"randomNumber": n}` (a JSON integer 1-10,000), validated (400 or 422 otherwise, a JSON string such as `"5"` included, with nothing written); the row is changed the ORM's usual way and returned as stored. A public JSON API call, sent without cookies (Rullst as generated, which refuses cookieless writes, gets its CSRF cookie and header). Measured with the 10,000 ids shuffled, random values |
 | `POST /form` | an urlencoded form (`name`, 1-64 characters, and `randomNumber`, 1-10,000) checked by the framework's CSRF protection and validated, answered with a page that greets the name (escaped) rendered by the template engine. Sent like a browser that loaded `GET /form` once: its cookies and hidden fields, `Origin` and `Sec-Fetch-Site: same-origin`. Measured with 125 such sessions |
 | `GET /me` | `{"id":…,"username":…,"displayName":…}` for the signed-in user: the framework's default session mechanism, then the user's row read through the ORM on every request; 401, 403 or a redirect without a session. Measured with 125 sessions, one login each (`user1`..`user125`, made after Tier 4 and not timed) |
 
@@ -204,7 +204,9 @@ memory, the Docker version, image digests and tool versions with the results.
    `ORDER BY` (the rules are in [CONTRIBUTING.md](CONTRIBUTING.md)). The
    phase-2 endpoints are checked against the database the same way (the
    response follows rows changed between requests, `/worlds` runs one query,
-   refused writes write nothing), together with validation, the CSRF check
+   every `PUT` with a new value runs an `UPDATE`, refused writes write
+   nothing), together with validation (a JSON number sent as a string is
+   refused), the CSRF check
    (a forged cross-site post, a changed token and a post without the cookies
    are refused, and one session's cookies and token stay valid for repeated
    posts) and sessions (each session returns its own user, re-read on every
@@ -372,8 +374,19 @@ implementations whose loads differ a lot are not significant.
   Where the framework documents how to scope them, sessions, CSRF and
   authentication apply only to `/form`, `/login` and `/me`, so the other
   endpoints keep their stack; Rullst as generated keeps its global
-  production stack, as `cargo rullst new` generates it. The folder READMEs
-  name what each uses.
+  production stack, as `cargo rullst new` generates it, and NestJS's CSRF
+  check (`app.enableCsrfProtection()`) is global because Nest offers no
+  per-route form. The folder READMEs name what each uses.
+- **Settings the load needs.** The harness signs in 125 users from one
+  address at the start of every round, so the login rate limits that
+  generators add are relaxed (Rails' generated `rate_limit` is left out;
+  Rullst's generated `credential_rate_limit` allows 1,000 instead of 10
+  attempts per minute), and Laravel and Django use the stored hashes' bcrypt
+  cost so that a login does not rehash and rewrite the password. Validation
+  layers that read `"5"` as a number in a JSON body (Spring Boot's Jackson,
+  ASP.NET Core, Fastify's Ajv, Laravel, Pydantic, Django forms, Rails,
+  Ecto) are configured or extended to refuse it. Each folder README says
+  what it changed and why.
 - Rullst is not tuned more than the others. It is measured twice: **as
   generated** by `cargo rullst new` and `cargo rullst deploy` (its default
   production middleware included), and **minimal** (its router, ORM and

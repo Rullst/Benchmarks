@@ -1,12 +1,14 @@
 # Benchmarks v2, phase 2: request handling, writes, forms and sessions
 
 Status: integrated on branch `feat/v2` (fork `venelouis/Benchmarks`): the
-harness, the conformance checks and the Axum reference implementation follow
-this document, and the maintainer's decisions on the open questions are
-recorded in section 11 (two of them, 4 and 5, are pending confirmation and
-each lives in one place). Written on 2026-11-19 against `upstream/main`
-(2727378) and the phase-1 branch `feat/v2-phase1`. Section 10 is the
-checklist for the other fifteen folders.
+harness, the conformance checks and all 16 implementations follow this
+document (the Axum reference first, then the Rust, dynamic and compiled
+groups, merged from their implementation branches), and the maintainer's
+decisions on the open questions are recorded in section 11 (two of them, 4
+and 5, are still pending the maintainer's confirmation and each lives in one
+place). Written on 2026-11-19 against `upstream/main` (2727378) and the
+phase-1 branch `feat/v2-phase1`; sections 2, 3, 5, 6, 9 and 10 were updated
+with what the implementations found. Section 10 is the per-folder checklist.
 
 Phase 1 adds the TechEmpower-style `/queries`, `/updates` and `/fortunes`, a
 requests-per-server-CPU-second efficiency metric and the CPU split
@@ -112,6 +114,14 @@ be done in any order. Phase 2 adds to bench.json:
   that cannot run in a transaction).
 - `users` is not changed by any measured request. The conformance check
   changes `display_name` and restores it.
+- **Rehash on login.** The stored hashes are bcrypt cost 10 and Argon2id
+  `m=19456,t=2,p=1`. A framework that rehashes a password whose parameters
+  differ from its configured ones writes `users` on every login and slows
+  the 125 logins of every round: Laravel's `rehash_on_login` (on by default,
+  bcrypt cost 12) and Django's hasher upgrade (`must_update`, bcrypt cost 12
+  by default). Configure the hasher with the stored parameters, the way the
+  framework documents: Laravel `BCRYPT_ROUNDS=10` (its Dockerfile), Django a
+  `BCryptPasswordHasher` subclass with `rounds = 10` (`world/hashers.py`).
 
 ### 2.3 Framework mechanisms
 
@@ -163,12 +173,46 @@ and checks that nothing was written. Reasons:
 - the frameworks' default validation pipelines split: 422 in FastAPI,
   Laravel, Rullst (`ValidatedJson`/`ValidatedForm`), Axum's `Json` data
   errors and Phoenix's generated fallback controller; 400 in Spring,
-  ASP.NET Core, NestJS, Fastify, Loco's validators, Actix and Topcoat. A
-  single required code would make about half of the implementations replace
-  their framework's error handling.
+  ASP.NET Core, NestJS, Fastify, Actix and Topcoat, and in Loco's validators
+  for a failed rule (a body they cannot deserialize is Axum's `Json` or
+  `Form` rejection inside them: 422, as in the Loco folder). A single
+  required code would make about half of the implementations replace their
+  framework's error handling.
 
 422 is recommended when the framework makes it a one-line choice (decision
 1: 400 and 422 both conform).
+
+The refusal must be an error response, not a redirect: these are API
+requests (`Accept: */*` on `GET /worlds`, no `Accept` on the PUT). Laravel's
+`ValidationException` redirects back (302) unless the request expects JSON,
+so the Laravel folder renders the `api` group's exceptions as JSON with the
+skeleton's `shouldRenderJsonWhen` hook (`bootstrap/app.php`): 422 with the
+errors. (The skeleton's `is('api/*')` test does not match routes served
+without the `/api` prefix, so the hook recognises the group's middleware.)
+
+### 2.7 Strict numbers in JSON bodies
+
+`randomNumber` in a JSON body is a JSON integer: the string `"5"` is
+invalid (400 or 422, nothing written; conformance sends
+`{"randomNumber": "5"}`, §3.3). Query-string and form values are text by
+nature and are parsed from it. Many validation layers convert a string to a
+number by default, so the implementation sets the documented option or
+checks the parsed value's type:
+
+| Implementation | Default | What the folder does |
+| --- | --- | --- |
+| Spring Boot (Jackson) | coerces scalars | `spring.jackson.mapper.allow-coercion-of-scalars=false` (`application.properties`) |
+| ASP.NET Core (System.Text.Json, web defaults) | `AllowReadingFromString` | `ConfigureHttpJsonOptions(o => o.SerializerOptions.NumberHandling = JsonNumberHandling.Strict)` |
+| Fastify (Ajv) | `coerceTypes: 'array'` for every part of the request | a validator compiler without coercion for the body (`httpPart === 'body'`), as the Validation and Serialization reference shows for per-part options; the path parameter keeps coercion |
+| Laravel | `integer` accepts `"5"` | the `integer:strict` rule on the JSON body |
+| FastAPI (Pydantic, lax mode) | `int` accepts `"5"` | `StrictInt` on the body model |
+| Django | `forms.IntegerField` accepts `"5"` | `clean_randomNumber` also checks that the parsed JSON value is an `int` |
+| Rails | `numericality` accepts `"5"` | an extra validation that the value is an `Integer` |
+| Phoenix | Ecto's `cast/3` turns `"5"` into 5 | a changeset check that the raw value `is_integer` |
+
+The rest refuse a string with their defaults: serde in the Rust folders,
+class-validator's `@IsInt` without `transform` in NestJS, Go's
+`encoding/json` into an integer in Gin.
 
 ## 3. Read and write endpoints
 
@@ -191,7 +235,9 @@ and checks that nothing was written. Reasons:
    parsed JSON with the row (the response must follow the database).
 2. `GET /world/0` and `GET /world/10001`: 404.
 3. `GET /world/abc`: 400, 404 or 422.
-4. Media type and keep-alive as for the existing endpoints.
+4. Media type and keep-alive as for the existing endpoints (on 200
+   responses; after an error response the harness opens a new connection,
+   because a server may close it without `Connection: close`).
 5. pg_stat_statements (phase 1): 20 requests run at least 20 SELECT
    statements on `world`.
 
@@ -242,8 +288,8 @@ window (`min` in 1..9001, `max = min + 999`), `limit=20`, `page` 1..5
 
 **Contract**
 
-- Body: a JSON object with an integer `randomNumber`, 1..10000. Other keys
-  are ignored.
+- Body: a JSON object with an integer `randomNumber`, 1..10000 (a JSON
+  number: the string `"5"` is invalid, §2.7). Other keys are ignored.
 - Valid: the row's `randomnumber` is set to the value, and the response is
   200, `application/json`, `{"id": id, "randomNumber": n}`, the row as
   stored.
@@ -269,14 +315,17 @@ window (`min` in 1..9001, `max = min + 999`), `limit=20`, `page` 1..5
 
 **Conformance**
 
-1. For 5 random ids and values: the response equals the sent value, and
-   `psql` reads the same value back.
+1. For 5 random ids, each with a value other than the stored one: the
+   response equals the sent value, and `psql` reads the same value back.
 2. `{"randomNumber": 0}`, `{"randomNumber": 10001}`, `{"randomNumber": "5"}`,
    `{}`, `{"randomNumber": 5` (malformed): 400 or 422; the row keeps its
    value.
 3. `PUT /world/10001` with a valid body: 404.
-4. pg_stat_statements: 20 requests run at least 20 UPDATE statements on
-   `world`.
+4. pg_stat_statements: 20 requests to 20 different ids run at least 20
+   UPDATE statements on `world`. The harness reads the 20 rows first and
+   sends each a value other than the stored one, because an ORM that tracks
+   changes (Rullst's RowSnapshot, ActiveRecord, Eloquent, Ecto, SQLAlchemy)
+   rightly writes nothing when the value does not change.
 5. With `write_csrf`: the same PUT without the cookie and header is refused
    (403) and writes nothing.
 6. The table is restored afterwards (phase 1's `reset_tables`).
@@ -366,13 +415,25 @@ hidden token).
    NestJS, Laravel's first check) see the headers a browser sends; without
    them those checks would pass by default without doing any work.
 3. **Obtaining the pair:** once per session, before measuring (§4). Every
-   chosen mechanism accepts the same pair for the whole session (the
-   research for §9 found no per-request rotation; `asgi-csrf` is still to
-   be confirmed, and conformance step 3 of §4 catches a rotating token).
-   ASP.NET Core binds its token to the user, so the pair is fetched while
-   anonymous and used anonymously.
-4. **Reporting:** the results name the design (`token` or
+   chosen mechanism accepts the same pair for the whole session: the
+   research for §9 found no per-request rotation, the implementations
+   confirmed it (`asgi-csrf` included: its token is the signed value of the
+   `csrftoken` cookie, which does not change during the session), and
+   conformance step 3 of §4 would catch a rotating token. ASP.NET Core binds
+   its token to the user, so the pair is fetched while anonymous and used
+   anonymously.
+4. **Cookieless posts:** `asgi-csrf` checks a form post only when it
+   carries the `csrftoken` cookie, unless the path is listed in
+   `always_protect`; the FastAPI folder lists `/form` and `/login`, so the
+   forged post without cookies (§4, step 5b) is refused (403).
+5. **Reporting:** the results name the design (`token` or
    `fetch-metadata`), the mechanism and its source next to `/form`.
+6. **Scope:** as §2.3 and decision 2. NestJS's `app.enableCsrfProtection()`
+   has no per-route form (its `exclude` option is consulted only for a
+   request it would refuse), so it runs for every request: for a `GET` it is
+   a method check, and the cookieless `PUT /world/{id}` carries no browser
+   headers and passes. Rullst as generated keeps its global stack, so its
+   PUT carries the CSRF pair (`write_csrf`, §3.3). The folder READMEs say so.
 
 ### 5.2 Is it fair to keep CSRF in the timing?
 
@@ -421,7 +482,11 @@ check's cost from the rest; it is not part of this phase (decision 3).
   PostgreSQL through the ORM on every request**, by the id the session holds.
   Frameworks that keep the principal in the session or cookie (Spring
   Security, ASP.NET Core cookie auth, the cookie stores) still read the row,
-  as an application does to get the current user's data.
+  as an application does to get the current user's data. `GET /me` is sent
+  with `Accept: application/json`, so a browser pipeline that negotiates the
+  format must accept JSON: Phoenix's generated `:browser` pipeline has
+  `plug :accepts, ["html"]` (406 otherwise), and the Phoenix folder makes it
+  `["html", "json"]`.
 - `GET /me` without a valid session: 401 (recommended), 403, or a 302/303
   redirect to the login page (Rails', Django's, Phoenix's and Spring's
   default for browser routes); never 200.
@@ -750,20 +815,20 @@ checked while implementing.
 | --- | --- | --- | --- | --- |
 | Axum 0.8.9 | `Path<i32>`: 400 | none built in; `validator`/`garde` or manual; `Json` syntax 400, data 422, `Form` 422 | token: `axum_csrf` 0.12 (most-used; cookie + hashed form token) | `tower-sessions` 0.15 + `tower-sessions-sqlx-store` 0.16 `PostgresStore` (postgresql); axum-login does not support SQLx 0.9 yet |
 | Actix Web 4.19 | `web::Path<i32>`: 404 (default `PathConfig`) | manual or `validator`; `Json`/`Query`/`Form` errors 400 | token: `actix-csrf` 0.8 (double-submit cookie; last release 2024-11) | `actix-session` 0.11 `CookieSessionStore` (cookie-signed or -encrypted; no PostgreSQL store) |
-| Loco 1.3.1 | axum `Path`: 400 | built in: `QueryValidate`/`JsonValidate`/`FormValidate` (`validator` 0.20): 400 | token: `axum_csrf` (Loco has none; it is built on Axum) | built-in `auth_session` feature, default signed cookie (cookie-signed); its `database` store is the alternative. Enable the feature (the folder has only `auth`) |
+| Loco 1.3.1 | axum `Path`: 400 | built in: `QueryValidate`/`JsonValidate`/`FormValidate` (`validator` 0.20): 400 for a failed rule; a body they cannot deserialize is Axum's `Json`/`Form` rejection: 422 | token: `axum_csrf` (Loco has none; it is built on Axum) | built-in `auth_session` feature, default signed cookie (cookie-signed); its `database` store is the alternative. Enable the feature (the folder has only `auth`) |
 | Topcoat 0.12.1 | `path_param!(id: i32)`: the app chooses (`else not_found`) | `#[query_params(error = bad_request)]`: 400; `Json`/`Form`: 400; range checks manual | fetch-metadata: built-in `OriginPolicy` (Sec-Fetch-Site, then Origin vs Host), on by default, 403 | built-in `session` feature: tokens hashed in an app table read through Toasty (postgresql). Enable `session` and `cookie`; the cookie is `__Host-`/`Secure` (the harness replays it over HTTP) |
 | Rullst 13 (as generated) | `routes!` on axum `Path`: 400 | `Validate` + `ValidatedJson`/`ValidatedForm`: 422; query: `Validate` on `Query<T>` by hand **(?)** | token: built-in `csrf_middleware`, double-submit `rullst_csrf` cookie, masked `_token` field or `X-CSRF-Token` (already in the generated router) | `make:auth` session registry: `rullst_session` cookie sealed with `APP_KEY`, one primary-key lookup per request, at most one write per hour (postgresql) |
-| Rullst (minimal) | as above | as above | token: the same `csrf_middleware`, on the `/form` routes only | as above (no production middleware otherwise) |
+| Rullst (minimal) | as above | as above | token: the same `csrf_middleware`, on the `/form` and `/login` routes only | as above (no production middleware otherwise) |
 | Ruby on Rails 8.1.4.1 | `constraints: {id: /\d+/}`: 404 | no typed query validation; `ActiveModel` validations, 422 by convention; malformed JSON 400 | token: `protect_from_forgery`, token in the encrypted cookie session, masked `authenticity_token`, Origin checked when present; failure 422. Header-only mode exists only from 8.2 | `bin/rails generate authentication`: `sessions` row via signed cookie, 1 SELECT (+ `users` **(?)**) (postgresql) |
-| Laravel 13.42 | `whereNumber('id')`: 404 | `$request->validate`: 422; malformed JSON becomes empty input: 422 | token: `PreventRequestForgery` (web group): accepts `Sec-Fetch-Site: same-origin`, else session token `_token`/`X-CSRF-TOKEN`; failure 419 | session guard + default `database` driver: SELECT and UPDATE of `sessions` on every request, + `users` (postgresql). bcrypt hashes need the `$2y$` prefix |
+| Laravel 13.42 | `whereNumber('id')`: 404 | `$request->validate`: 422 (JSON only when the request expects JSON, else a 302 back: render the `api` group's errors as JSON, §2.6); malformed JSON becomes empty input: 422; `integer:strict` for JSON numbers (§2.7) | token: `PreventRequestForgery` (web group): accepts `Sec-Fetch-Site: same-origin`, else session token `_token`/`X-CSRF-TOKEN`; failure 419 | session guard + default `database` driver: SELECT and UPDATE of `sessions` on every request, + `users` (postgresql). bcrypt hashes need the `$2y$` prefix |
 | Django 6.1.3 | `<int:id>`: 404 | Django forms (`Form(request.GET)`, `Form(request.POST)`); status chosen by the view; malformed JSON needs a `try` | token: `CsrfViewMiddleware`, secret in the `csrftoken` cookie, masked `csrfmiddlewaretoken`; Origin checked when present; no session needed; 403 | `contrib.auth` + default database sessions (`django_session`): 1 SELECT session + 1 SELECT user, no write **(?)** (postgresql). Hashers need `bcrypt$`/`argon2` prefixes |
-| Phoenix 1.8.16 | `:id` is a string; `Repo.get` cast error: 400 (phoenix_ecto) | Ecto changesets (schemaless for query/forms); 422 by the generator's convention; malformed JSON 400 | token: `protect_from_forgery` (`:browser` pipeline), token in the signed cookie session, `_csrf_token`; 403 | `mix phx.gen.auth`: session cookie holds a token, 1 SELECT joining `users_tokens` and users (postgresql); bcrypt `$2b$` **(?)** |
-| Spring Boot 4.1.2 | `@PathVariable int`: 400; `{id:\d+}`: 404 | `@RequestParam @Min @Max`, `@Valid @RequestBody`, `@ModelAttribute @Valid`: 400 (needs `spring-boot-starter-validation`) | token: Spring Security CSRF, token in the `HttpSession`, XOR-masked `_csrf`; 403 (needs `spring-boot-starter-security`) | Spring Security form login, `SecurityContext` in Tomcat's in-memory session **(?)** (memory; one JVM process). `{bcrypt}` prefix for `DelegatingPasswordEncoder` |
-| ASP.NET Core 10 | `{id:int}`: 404; unconstrained `int id`: 400 | DataAnnotations (`[Range]`) on minimal APIs/Razor Pages: 400 | token: built-in antiforgery (cookie token + `__RequestVerificationToken`, Data Protection, bound to the user); 400 | cookie authentication (`AddCookie`, `SignInAsync`) (cookie-encrypted). Identity's hasher reads only its PBKDF2 format: verify bcrypt with BCrypt.Net-Next **(?)** |
-| NestJS 12.5 (NodeAdapter) | `ParseIntPipe`: 400 | `ValidationPipe` + class-validator: 400 (`errorHttpStatusCode` to change) | fetch-metadata: built-in `app.enableCsrfProtection()` (since 12.1; Sec-Fetch-Site/Origin; 403) | `@nestjs/authentication` 0.1.x (server-side `__Host-sid`, PostgreSQL store hand-written) if it runs on NodeAdapter **(?)**, else `express-session` + `connect-pg-simple` (postgresql) |
-| FastAPI 0.163 | `id: int`: 422 | `Query(ge=, le=)`, Pydantic bodies, `Form()` (needs `python-multipart`): 422 | token: `asgi-csrf` 0.11 (listed in Starlette's docs; signed `csrftoken` cookie, form field; 403); token rotation **(?)** | Starlette `SessionMiddleware` (cookie-signed; no server-side store) |
-| Fastify 5.12.8 | `params` schema `integer`: 400 | JSON schema for `querystring`/`body`: 400; urlencoded needs `@fastify/formbody` | token: `@fastify/csrf-protection` 7 with `@fastify/cookie` (secret in `_csrf` cookie, token `_csrf`; 403) | `@fastify/secure-session` (cookie-encrypted). `@fastify/session` has no PostgreSQL store |
-| Gin 1.12 (Go 1.27) | `ShouldBindUri`: the handler chooses (400) | `ShouldBindQuery`/`ShouldBindJSON`/`ShouldBind` with validator tags; the handler chooses | fetch-metadata: Go standard library `http.CrossOriginProtection` wrapping the engine (403); `gorilla/csrf` has an unfixed advisory | `gin-contrib/sessions` v1.1 cookie store (cookie-signed); its PostgreSQL store is built on a stale 2022 package |
+| Phoenix 1.8.16 | `:id` is a string; `Repo.get` cast error: 400 (phoenix_ecto) | Ecto changesets (schemaless for query/forms); 422 by the generator's convention; malformed JSON 400; `cast/3` turns `"5"` into 5 (§2.7) | token: `protect_from_forgery` (`:browser` pipeline), token in the signed cookie session, `_csrf_token`; 403 | `mix phx.gen.auth`: session cookie holds a token, 1 SELECT joining `users_tokens` and users (postgresql); bcrypt `$2b$` **(?)** |
+| Spring Boot 4.1.2 | `@PathVariable int`: 400; `{id:\d+}`: 404 | `@RequestParam @Min @Max`, `@Valid @RequestBody`, `@ModelAttribute @Valid`: 400 (needs `spring-boot-starter-validation`); Jackson coerces `"5"` unless `allow-coercion-of-scalars=false` (§2.7) | token: Spring Security CSRF, token in the `HttpSession`, XOR-masked `_csrf`; 403 (needs `spring-boot-starter-security`) | Spring Security form login, `SecurityContext` in Tomcat's in-memory session **(?)** (memory; one JVM process). `{bcrypt}` prefix for `DelegatingPasswordEncoder` |
+| ASP.NET Core 10 | `{id:int}`: 404; unconstrained `int id`: 400 | DataAnnotations (`[Range]`) on minimal APIs/Razor Pages: 400; the web JSON defaults read `"5"` as a number unless `NumberHandling = Strict` (§2.7) | token: built-in antiforgery (cookie token + `__RequestVerificationToken`, Data Protection, bound to the user); 400 | cookie authentication (`AddCookie`, `SignInAsync`) (cookie-encrypted). Identity's hasher reads only its PBKDF2 format: verify bcrypt with BCrypt.Net-Next **(?)** |
+| NestJS 12.5 (NodeAdapter) | `ParseIntPipe`: 400 | `ValidationPipe` + class-validator: 400 (`errorHttpStatusCode` to change) | fetch-metadata: built-in `app.enableCsrfProtection()` (since 12.1; Sec-Fetch-Site/Origin; 403) | `express-session` + `connect-pg-simple` (postgresql; table in `db.sql`), Nest middleware of `/form`, `/login` and `/me` only (`MiddlewareConsumer.forRoutes`). `@nestjs/authentication` runs on NodeAdapter but always registers a global interceptor (`AuthenticationScopeInterceptor`) that would wrap every handler, so it is not used |
+| FastAPI 0.163 | `id: int`: 422 | `Query(ge=, le=)`, Pydantic bodies, `Form()` (needs `python-multipart`): 422 | token: `asgi-csrf` 0.11 (listed in Starlette's docs; signed `csrftoken` cookie, form field; 403); the token does not rotate; `always_protect` for `/form` and `/login` (cookieless posts are otherwise not checked) | Starlette `SessionMiddleware` (cookie-signed; no server-side store) |
+| Fastify 5.12.8 | `params` schema `integer`: 400 | JSON schema for `querystring`/`body`: 400; Ajv coerces `"5"` unless the body's validator has `coerceTypes: false` (§2.7); urlencoded needs `@fastify/formbody` | token: `@fastify/csrf-protection` 7 with `@fastify/cookie` (secret in `_csrf` cookie, token `_csrf`; 403) | `@fastify/secure-session` (cookie-encrypted). `@fastify/session` has no PostgreSQL store |
+| Gin 1.12 (Go 1.27) | `ShouldBindUri`: the handler chooses (400) | `ShouldBindQuery`/`ShouldBindJSON`/`ShouldBind` with validator tags; the handler chooses | fetch-metadata: Go standard library `http.CrossOriginProtection`, its `Check` called by a middleware of the browser route group (`/form`, `/login`, `/me`; 403), not `Handler` around the engine (decision 2); `gorilla/csrf` has an unfixed advisory | `gin-contrib/sessions` v1.1 cookie store (cookie-signed); its PostgreSQL store is built on a stale 2022 package |
 
 Sources (one or more per row; checked on 2026-11-19):
 
@@ -800,10 +865,23 @@ Notes that change implementation work:
 - Topcoat, Gin and NestJS (fetch-metadata designs) allow requests without
   `Sec-Fetch-Site` and `Origin`; the harness sends them (§2.4) so the check
   runs.
+- Found while implementing (the folders do this): JSON numbers must be
+  strict (§2.7: Spring, ASP.NET Core, Fastify and Laravel need a setting,
+  FastAPI, Django, Rails and Phoenix a type check); Laravel renders the
+  `api` group's validation errors as JSON (§2.6); Phoenix's `:browser`
+  pipeline accepts `json` for `/me` (§6.1); Laravel and Django are
+  configured with the stored bcrypt cost so a login does not rehash (§2.2);
+  the generators' login rate limits are relaxed for the 125 logins (§10.1).
+- Scoping (decision 2): Gin runs `CrossOriginProtection` and the session
+  middleware on its browser route group; NestJS applies `express-session`
+  to `/form`, `/login` and `/me` with `MiddlewareConsumer.forRoutes`, while
+  `app.enableCsrfProtection()` is global (§5.1).
 
 ## 10. Implementation checklist per framework (phase 1 and 2 in one pass)
 
-The Axum folder (`frameworks/axum`) is the reference implementation: read its
+All 16 folders are done on `feat/v2` and pass conformance; the checklist
+stays as the contract for changes and new folders. The Axum folder
+(`frameworks/axum`) is the reference implementation: read its
 `src/browser.rs`, `db.sql`, `bench.json` and README before starting. For
 every folder, in one pull request per group of frameworks:
 
@@ -851,13 +929,22 @@ contract.
   the token must not rotate per request, sessions must not expire or be
   limited within a round, and nothing may throttle 125 logins from 127.0.0.1
   within a few seconds (login rate limits, jails, captchas must not trigger;
-  say in the README if one had to be configured).
+  say in the README if one had to be configured). Two generators add one
+  that would: Rails 8's authentication generator puts
+  `rate_limit to: 10, within: 3.minutes, only: :create` on the login (the
+  Rails folder leaves it out), and Rullst's generated `credential_rate_limit`
+  allows 10 credential submissions per client per minute (the Rullst folder
+  raises its generated constant, `CREDENTIAL_ATTEMPTS_PER_MINUTE`, to 1,000
+  and keeps the limiter; rullst-minimal leaves it out with the rest of the
+  production stack). Rullst's Login Jail (`rullst-security`'s `LoginGuard`)
+  is not part of the generated application, so it needs no setting.
 - **Logins.** In every round, after Tier 4 (§8): `GET /login` then `POST /login`
   for `user1`..`user125`, 8 at a time; a status other than 200, 204, 302 or
   303, or no cookie and no bearer token, fails the round. Hashing cost is
   not timed but slows the start of every round: use the framework's
   standard hasher with the column whose prefix it reads (§2.2), not a
-  weaker one.
+  weaker one, configured with the stored parameters so that a login does not
+  rehash and rewrite the password (§2.2).
 - **`GET /me`** is sent with `Accept: application/json` and the session's
   cookies (or `Authorization: Bearer`).
 - **`PUT /world/{id}`** is sent with `Content-Type: application/json` and,
@@ -874,8 +961,17 @@ Conformance, beyond the statuses listed in §3, §4 and §6:
   `GET /world/{id}` must keep the connection alive.
 - `GET /worlds` is also checked with `?page=2&unknown=1` (ids 21..40), and
   one request must run exactly one `SELECT` naming `world`.
-- Refused `PUT` bodies: the row keeps its value **and** no `UPDATE` changed
-  a row of `world` (`pg_stat_statements`), so validate before saving.
+- Refused `PUT` bodies (`{"randomNumber": "5"}` among them, §2.7): the row
+  keeps its value **and** no `UPDATE` changed a row of `world`
+  (`pg_stat_statements`), so validate before saving. The checks that count
+  `UPDATE`s send values that differ from the stored ones.
+- Phase 1's `/updates`: every returned row must be the stored one after the
+  request, and the `UPDATE` statements must change at least as many rows as
+  there are returned ids whose value changed (an ORM may skip a row whose
+  new random value equals the old one, 1 in 10,000, or a repeated id that
+  ends where it started).
+- After an error response the harness opens a new connection: a server may
+  close it after a 4xx without `Connection: close`.
 - `POST /form` success: `text/html` with `charset=utf-8` declared (the name
   has non-ASCII characters), compared as tokens with the page of §4 (escape
   forms and trailing whitespace may differ, an unescaped `<b>` fails). The
@@ -894,20 +990,20 @@ Conformance, beyond the statuses listed in §3, §4 and §6:
 | --- | --- |
 | axum | **done** (reference): `Path`, `Query`, `Json`, `Form` extractors with ranges checked by hand; `axum_csrf` 0.12; `tower-sessions` 0.15 + `tower-sessions-sqlx-store` 0.16 `PostgresStore` (table in `db.sql`, no `migrate()` at start); Argon2id login; `/me` loads the user with SQLx; Askama |
 | actix | `web::Path/Query/Json/Form`; manual ranges; `actix-csrf`; `actix-session` cookie store; SQLx; Askama |
-| loco | Loco controllers with `QueryValidate`/`JsonValidate`/`FormValidate`; `axum_csrf` layer on the form routes; enable `auth_session` (default cookie store); SeaORM for `world`, `users`; Tera |
+| loco | Loco controllers with `QueryValidate`/`JsonValidate`/`FormValidate` (400, or Axum's 422 for a body that does not deserialize); `axum_csrf` layer on the form routes; enable `auth_session` (default cookie store); SeaORM for `world`, `users`; Tera |
 | topcoat | `path_param!`, `#[query_params]`, `content::Json`/`Form`; `OriginPolicy` (on by default); enable `session` + `cookie`, session table in `db.sql` read with Toasty; `view!` |
-| rullst | `routes!` with typed params; `Validate` + `ValidatedJson`/`ValidatedForm`; generated `csrf_middleware` (already on); `"write_csrf": {"cookie": "rullst_csrf", "header": "X-CSRF-Token"}` for the PUT (decision 7; the README states the finding: an unauthenticated JSON write needs the CSRF pair or a `MachineEndpointPolicy` endpoint); `make:auth` session registry (table in `db.sql`), Argon2 column; check that Login Jail does not throttle the 125 logins; `html!` |
-| rullst-minimal | same handlers; `csrf_middleware` only on `/form` (and `/login`); same session registry; no production `Server` stack; `write_csrf: null` |
-| rails | routes with constraints; ActiveModel form objects for `/worlds` and `/form`; `protect_from_forgery` (default); `bin/rails generate authentication` adapted to `users` (`password_bcrypt` via `has_secure_password` attribute mapping); `sessions` table in `db.sql`; ERB; exempt `PUT /world/{id}` (`ActionController::API` or `skip_forgery_protection`) |
-| laravel | `whereNumber`; `$request->validate`; `/form`, `/login`, `/me` in the `web` group; **keep the `cookie` session driver** (decision 4, pending: `phase2.session.store` `cookie-encrypted`; say why in the README, §6.2), so no `sessions` table; `PUT /world/{id}` in the `api` routes; `Auth::attempt` with a `$2y$` hash; Blade |
-| django | `<int:id>`; Django forms for `/worlds`, `/form`, PUT body; `CsrfViewMiddleware` (on) and `csrf_exempt` for the PUT; custom user model on `users` (`db_table`), `contrib.auth` login, `django_session` in `db.sql`; templates |
-| phoenix | router `:id` + Ecto cast; schemaless changesets; `:browser` pipeline with `protect_from_forgery` for `/form`, `/login`, `/me`, `:api` for the PUT; `phx.gen.auth`-style token table (`users_tokens` in `db.sql`) adapted to `users`; HEEx |
-| spring-boot | `@PathVariable`, `@RequestParam @Min @Max`, `@Valid` bodies (validation starter); Spring Security (starter) with `securityMatcher` on `/form`, `/login`, `/me`, form login, default CSRF, in-memory session; JPA; Thymeleaf |
-| aspnet-core | route `{id:int}`; DataAnnotations validation; antiforgery on `/form` (fetched anonymously, §5.1); cookie authentication; BCrypt.Net-Next for the login check; EF Core; Razor Pages |
-| nestjs | `ParseIntPipe`, `ValidationPipe` + class-validator DTOs; `app.enableCsrfProtection()`; `@nestjs/authentication` if it works on NodeAdapter, else `express-session` + `connect-pg-simple` (`session` table in `db.sql`); TypeORM; hbs |
-| fastapi | `id: int`, `Query(ge, le)`, Pydantic model for PUT, `Form()`; `asgi-csrf` (confirm the token does not rotate: §10.1); Starlette `SessionMiddleware`; pwdlib/bcrypt for login; SQLModel; Jinja2 |
-| fastify | JSON schemas for params, querystring, body; `@fastify/formbody`, `@fastify/cookie`, `@fastify/csrf-protection`, `@fastify/secure-session`; node-postgres; EJS |
-| gin | `ShouldBindUri/Query/JSON/ShouldBind` with validator tags; `http.CrossOriginProtection` around the engine; `gin-contrib/sessions` cookie store; GORM; html/template |
+| rullst | `routes!` with typed params; `Validate` + `ValidatedJson`/`ValidatedForm`; generated `csrf_middleware` (already on); `"write_csrf": {"cookie": "rullst_csrf", "header": "X-CSRF-Token"}` for the PUT (decision 7; the README states the finding: an unauthenticated JSON write needs the CSRF pair or a `MachineEndpointPolicy` endpoint); `make:auth` session registry (table in `db.sql`), Argon2 column; the generated `credential_rate_limit` on `POST /login` raised to 1,000 per minute for the 125 logins (§10.1; Login Jail is not part of the generated application); `html!` |
+| rullst-minimal | same handlers; `csrf_middleware` only on `/form` and `/login`; same session registry, without `credential_rate_limit`; no production `Server` stack; `write_csrf: null` |
+| rails | routes with constraints; ActiveModel form objects for `/worlds` and `/form`; `protect_from_forgery` (default); `bin/rails generate authentication` adapted to `users` (`password_bcrypt` via `has_secure_password` attribute mapping); `sessions` table in `db.sql`; the generated login `rate_limit` left out (§10.1); a JSON-integer check on the PUT body (§2.7); ERB; exempt `PUT /world/{id}` (`ActionController::API` or `skip_forgery_protection`) |
+| laravel | `whereNumber`; `$request->validate`; `/form`, `/login`, `/me` in the `web` group; **keep the `cookie` session driver** (decision 4, pending: `phase2.session.store` `cookie-encrypted`; say why in the README, §6.2), so no `sessions` table; `PUT /world/{id}` in the `api` routes, `integer:strict` on its body (§2.7) and the `api` group's errors rendered as JSON 422 (§2.6); `Auth::attempt` with a `$2y$` hash and `BCRYPT_ROUNDS=10` (no rehash, §2.2); Blade |
+| django | `<int:id>`; Django forms for `/worlds`, `/form`, PUT body; `CsrfViewMiddleware` (on) and `csrf_exempt` for the PUT; custom user model on `users` (`db_table`), `contrib.auth` login with a cost-10 `BCryptPasswordHasher` subclass (no rehash, §2.2), `django_session` in `db.sql`; a JSON-integer check on the PUT body (§2.7); templates |
+| phoenix | router `:id` + Ecto cast; schemaless changesets (an `is_integer` check on the PUT body, §2.7); `:browser` pipeline with `protect_from_forgery` for `/form`, `/login`, `/me`, accepting `json` as well as `html` (§6.1), `:api` for the PUT; `phx.gen.auth`-style token table (`users_tokens` in `db.sql`) adapted to `users`; HEEx |
+| spring-boot | `@PathVariable`, `@RequestParam @Min @Max`, `@Valid` bodies (validation starter); Spring Security (starter) with `securityMatcher` on `/form`, `/login`, `/me`, form login, default CSRF, in-memory session; `spring.jackson.mapper.allow-coercion-of-scalars=false` (§2.7); JPA; Thymeleaf |
+| aspnet-core | route `{id:int}`; DataAnnotations validation; antiforgery on `/form` (fetched anonymously, §5.1); cookie authentication; BCrypt.Net-Next for the login check; `NumberHandling = Strict` (§2.7); EF Core; Razor Pages |
+| nestjs | `ParseIntPipe`, `ValidationPipe` + class-validator DTOs; `app.enableCsrfProtection()` (global: Nest has no per-route form, §5.1); `express-session` + `connect-pg-simple` (`session` table in `db.sql`) applied to `/form`, `/login` and `/me` with `MiddlewareConsumer.forRoutes` (`@nestjs/authentication`'s global interceptor would wrap every handler); TypeORM; hbs |
+| fastapi | `id: int`, `Query(ge, le)`, Pydantic model with `StrictInt` for PUT (§2.7), `Form()`; `asgi-csrf` with `always_protect` for `/form` and `/login` (its token does not rotate, §5.1); Starlette `SessionMiddleware`; pwdlib/bcrypt for login; SQLModel; Jinja2 |
+| fastify | JSON schemas for params, querystring, body (the body without type coercion, §2.7); `@fastify/formbody`, `@fastify/cookie`, `@fastify/csrf-protection`, `@fastify/secure-session`; node-postgres; EJS |
+| gin | `ShouldBindUri/Query/JSON/ShouldBind` with validator tags; `http.CrossOriginProtection` (`Check`) and the `gin-contrib/sessions` cookie store as middleware of the browser route group (`/form`, `/login`, `/me`; decision 2); GORM; html/template |
 
 Multi-process servers (Node.js cluster, Python and Ruby workers, PHP-FPM):
 the CSRF secret and the session signing or encryption key must be the same
@@ -917,13 +1013,18 @@ bench.json `env`), or a session obtained from one process fails on another.
 ## 11. Decisions on the open questions (maintainer, 2026-11-19)
 
 Each decision lives in one place, so a change is local. **(pending)** marks
-the two that await the maintainer's confirmation.
+the two that still await the maintainer's confirmation (4 and 5, unchanged
+by the integration of the 16 folders).
 
 1. **Invalid input: 400 or 422**, and conformance verifies nothing was
    written (§2.6, §3.3). In `bench/conformance_phase2.py` (`INVALID`).
 2. **Browser stack scope:** sessions, CSRF and authentication only on the new
    routes where the framework documents how (§2.3); Rullst as generated
-   keeps its global production stack as generated.
+   keeps its global production stack as generated. As implemented: route
+   groups, pipelines, matchers or mounted sub-applications in most folders
+   (Gin: the browser route group; NestJS: `forRoutes` for the session
+   middleware); global where the framework has no per-route form (NestJS's
+   `app.enableCsrfProtection()`, §5.1), said in the folder README.
 3. **No CSRF-free control endpoint** in this phase.
 4. **(pending) Laravel keeps the `cookie` session driver** (§6.2); the
    folder README and the results say why. In the Laravel folder only.
