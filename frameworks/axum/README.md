@@ -11,6 +11,7 @@ reference point, not a contender.
 | Server | `axum::serve` on a Tokio multi-threaded runtime; Tokio starts one worker thread per CPU the process may use (2) |
 | Database | SQLx 0.9 `PgPool` with `DB_POOL_SIZE` connections (16); Axum has no ORM and its examples use SQLx |
 | Templates | Askama 0.16 (`templates/hello.html`), compiled at build time |
+| Database endpoints | `/queries`: one `SELECT id, randomnumber FROM world WHERE id = $1` per row through the pool. `/updates`: per row, that `SELECT`, then `UPDATE world SET randomnumber = $1 WHERE id = $2` (one statement per row, autocommit: no transaction, no batching). `/fortunes`: `SELECT id, message FROM fortune`, sorted in Rust, rendered by Askama (`templates/fortunes.html`, HTML-escaped). Random ids from `rand::random_range` (rand 0.10) |
 | Logging | none |
 | Image | `gcr.io/distroless/cc-debian12:nonroot` |
 

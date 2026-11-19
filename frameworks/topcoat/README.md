@@ -15,6 +15,7 @@ framework.
 | Routing | `#[route(GET "./text")]`, `#[route(GET "./json")]` (`Json<T>`), `#[route(GET "./db-single")]` and `#[page("./html")]` in the root module |
 | Database | Toasty, the database layer `topcoat new --recommended` sets up, with its PostgreSQL driver: `#[derive(toasty::Model)] #[table = "world"]`, `World::get_by_id(&mut db, 1)`; `max_pool_size` = `DB_POOL_SIZE` (16) |
 | Templates | `view!` |
+| Database endpoints | `/queries`: `World::get_by_id(&mut db, id)` per row. `/updates`: per row, `get_by_id`, then `world.update().randomnumber(n).exec(&mut db)` (one `UPDATE` per row, no transaction, no batching). `/fortunes`: a `#[derive(toasty::Model)] #[table = "fortune"]` model, `Fortune::all().exec(&mut db)`, sorted in Rust, rendered with `view!` in a `#[page]` (escaped). `#[query_params]` reads `queries`; random ids from `rand::random_range` (rand 0.10) |
 | Logging | none |
 | Image | `gcr.io/distroless/cc-debian12:nonroot` |
 

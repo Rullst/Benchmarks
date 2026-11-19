@@ -14,6 +14,7 @@ production middleware stack, which [`../rullst`](../rullst) measures.
 | Middleware | none, like the Axum baseline |
 | Database | `#[derive(Orm)]` model, `World::find(1)`; pool of `DB_POOL_SIZE` (16) connections via `Orm::init_with_options` |
 | Templates | `html!` |
+| Database endpoints | the same handlers as [`../rullst`](../rullst): `World::find` per row for `/queries`; `World::find` and `save()` per row for `/updates` (each `save()` in its own transaction, no batching); `Fortune::all()` and `html!` for `/fortunes` |
 | Logging | none |
 | Image | `gcr.io/distroless/cc-debian12:nonroot` |
 
