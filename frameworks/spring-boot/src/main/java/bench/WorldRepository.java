@@ -12,8 +12,8 @@ public interface WorldRepository extends JpaRepository<World, Integer> {
 
     /**
      * One row by id with a JPQL query, which always runs its SELECT; findById
-     * would return a row already loaded in the request's persistence context
-     * (open-in-view) without one, so a repeated id in /queries would not be read.
+     * would return a row already loaded in the persistence context without one,
+     * so a repeated id in /updates (one transaction) would not be read again.
      */
     @Query("SELECT w FROM World w WHERE w.id = :id")
     Optional<World> fetchById(@Param("id") int id);

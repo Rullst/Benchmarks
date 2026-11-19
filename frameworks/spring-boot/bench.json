@@ -39,5 +39,6 @@
     },
     "write_csrf": null
   },
-  "startup_timeout_s": 120
+  "startup_timeout_s": 120,
+  "jit": true
 }
