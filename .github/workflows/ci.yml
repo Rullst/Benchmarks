@@ -64,6 +64,13 @@ jobs:
           slugs = resolve_frameworks(spec)
           base = load_config()["baseline"]
           print(json.dumps(sorted(set(slugs) | ({base} if spec.strip().lower() in ("", "all") else set()))))' "${IN_FRAMEWORKS:-all}")"
+          elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA" 2>/dev/null \
+              && git diff --name-only "$BASE_SHA"...HEAD -- bench | grep -E \
+                '^bench/(harness|conformance|conformance_phase2|load_check|measure|containers|loadgen|loadgen_wrk|loadgen_process|sessions|workload|common|config)\.(py|json)$|^bench/db/' \
+                > /dev/null; then
+            # A change to the conformance checks or what they run checks every folder.
+            changed="$(python3 -c 'import json,sys; sys.path.insert(0, "bench"); from common import framework_slugs
+          print(json.dumps(framework_slugs()))')"
           elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA" 2>/dev/null; then
             changed="$(git diff --name-only "$BASE_SHA"...HEAD -- frameworks | cut -d/ -f2 | sort -u \
               | while read -r slug; do [ -f "frameworks/$slug/bench.json" ] && echo "$slug"; done \
@@ -79,7 +86,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.max_parallel) || 2 }}
+      max-parallel: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.max_parallel) || 4 }}
       matrix:
         framework: ${{ fromJson(needs.harness.outputs.changed) }}
     steps:
