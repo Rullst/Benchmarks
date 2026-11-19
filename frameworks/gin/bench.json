@@ -6,7 +6,7 @@
   "framework_version": "1.12.0",
   "version_package": "github.com/gin-gonic/gin",
   "runtime": "Go 1.27.4 (CGO_ENABLED=0), GIN_MODE=release",
-  "server": "net/http (http.Server.ListenAndServe, as router.Run does) with the engine wrapped in http.CrossOriginProtection",
+  "server": "net/http via router.Run",
   "workers": "One process; the Go scheduler runs goroutines on GOMAXPROCS threads, which defaults to the 2 available CPUs",
   "database_layer": "GORM 1.31 with gorm.io/driver/postgres 1.6 (pgx 5), one database/sql pool of DB_POOL_SIZE connections",
   "template_engine": "html/template via router.LoadHTMLGlob",
@@ -29,7 +29,7 @@
     "validation": "ShouldBindUri, ShouldBindQuery, ShouldBindJSON and ShouldBind with validator tags; the handlers answer 400",
     "csrf": {
       "design": "fetch-metadata",
-      "mechanism": "net/http.CrossOriginProtection wrapping the engine (Sec-Fetch-Site, then Origin against Host; 403)",
+      "mechanism": "net/http.CrossOriginProtection (Check) as middleware of the /form, /login and /me group (Sec-Fetch-Site, then Origin against Host; 403)",
       "source": "stdlib"
     },
     "session": {

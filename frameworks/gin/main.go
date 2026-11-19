@@ -246,13 +246,7 @@ func main() {
 
 	browserRoutes(router, db)
 
-	// Go's standard CSRF protection wraps the engine: unsafe requests whose
-	// Sec-Fetch-Site (or, without it, Origin) shows another origin get a 403.
-	server := &http.Server{
-		Addr:    ":" + strconv.Itoa(envInt("PORT", 8080)),
-		Handler: http.NewCrossOriginProtection().Handler(router),
-	}
-	if err := server.ListenAndServe(); err != nil {
+	if err := router.Run(":" + strconv.Itoa(envInt("PORT", 8080))); err != nil {
 		log.Fatal(err)
 	}
 }

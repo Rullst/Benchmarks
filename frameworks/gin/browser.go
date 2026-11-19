@@ -1,8 +1,9 @@
 // The browser routes: /form, /login and /me (docs/v2-phase2-spec.md, sections 4-6).
 //
-// CSRF: Go's http.CrossOriginProtection around the engine (main.go), so
-// the forms carry no token. Sessions: gin-contrib/sessions with its cookie
-// store (a signed cookie), as middleware of this route group only.
+// Both are middleware of this route group only, so the other routes keep
+// their stack. CSRF: Go's http.CrossOriginProtection, called through its
+// Check method, so the forms carry no token. Sessions: gin-contrib/sessions
+// with its cookie store (a signed cookie).
 package main
 
 import (
@@ -51,6 +52,7 @@ func browserRoutes(router *gin.Engine, db *gorm.DB) {
 		log.Fatalf("session key: %v", err)
 	}
 	browser := router.Group("")
+	browser.Use(crossOriginProtection(http.NewCrossOriginProtection()))
 	browser.Use(sessions.Sessions("session", cookie.NewStore(key)))
 
 	browser.GET("/form", func(c *gin.Context) {
@@ -121,4 +123,17 @@ func browserRoutes(router *gin.Engine, db *gorm.DB) {
 		}
 		c.JSON(http.StatusOK, gin.H{"id": user.ID, "username": user.Username, "displayName": user.DisplayName})
 	})
+}
+
+// crossOriginProtection runs Go's CSRF check as Gin middleware: an unsafe
+// request whose Sec-Fetch-Site (or, without it, Origin compared with Host)
+// shows another origin is refused with 403, as the Handler wrapper does.
+func crossOriginProtection(protection *http.CrossOriginProtection) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if err := protection.Check(c.Request); err != nil {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		c.Next()
+	}
 }

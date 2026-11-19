@@ -4,11 +4,11 @@
 | --- | --- |
 | Version | gin 1.12.0, gin-contrib/sessions 1.1.4, GORM 1.31.2, gorm.io/driver/postgres 1.6.3, pgx 5.13.0, golang.org/x/crypto 0.58.0 (exact versions in `go.mod` and `go.sum`) |
 | Build | `CGO_ENABLED=0 go build -trimpath -ldflags="-s -w"` with Go 1.27.4 |
-| Server | `http.Server.ListenAndServe` (`net/http`, what `router.Run` does) with the engine wrapped in `http.CrossOriginProtection`, `GIN_MODE=release`; one process, and the Go runtime sets `GOMAXPROCS` to the CPUs it may use (2) |
+| Server | `router.Run` (`net/http`) with `GIN_MODE=release`; one process, and the Go runtime sets `GOMAXPROCS` to the CPUs it may use (2) |
 | Database | GORM with its PostgreSQL driver (pgx 5 through `database/sql`), models `World`, `Fortune` and `User` (`users`); one pool of `DB_POOL_SIZE` connections (16), with as many idle connections kept open |
 | Templates | `html/template` through `router.LoadHTMLGlob("templates/*")` and `c.HTML` (`templates/`) |
 | Validation | `ShouldBindUri`, `ShouldBindQuery` (defaults in the `form` tags), `ShouldBindJSON` and `ShouldBind` with `binding` tags (go-playground/validator); the handlers answer 400, as Gin's binding examples do |
-| CSRF | Go's standard `net/http.CrossOriginProtection` (Go 1.25+), around the engine |
+| CSRF | Go's standard `net/http.CrossOriginProtection` (Go 1.25+), its `Check` called by a middleware of the `/form`, `/login` and `/me` group |
 | Sessions | `gin-contrib/sessions` with its cookie store (a gorilla/sessions cookie signed with HMAC), middleware of the `/form`, `/login` and `/me` group |
 | Logging | none: `gin.New()` with `gin.Recovery()` (what `gin.Default()` adds, without its Logger), and GORM's logger silenced |
 | Image | `gcr.io/distroless/static-debian13:nonroot` |
@@ -62,10 +62,11 @@ Browser routes (`browser.go`):
   `gorilla/csrf` has an unfixed advisory (GO-2025-3884). It refuses unsafe
   requests whose `Sec-Fetch-Site` (or, without it, `Origin` compared with
   `Host`) shows another origin, with 403. There is no token, so the forms have
-  no hidden field. It wraps the whole engine, as its documentation shows, so
-  every request passes through it: for the other endpoints that is a method
-  check (GET) or, for `PUT /world/:id`, which carries neither header, a check
-  that ends at "no browser headers".
+  no hidden field. Its documentation shows `Handler`, which wraps a whole
+  handler; it also exposes `Check(*http.Request)`, which a small Gin
+  middleware calls on the browser route group only (aborting with 403, as
+  `Handler` answers), so the other endpoints, `PUT /world/:id` included, keep
+  their stack, as Gin's route-group middleware is meant for.
 - Sessions: Gin has no session package of its own; `gin-contrib/sessions` is
   the one its middleware list points to. Its PostgreSQL store is built on a
   package last released in 2022, so the suite's rule takes its cookie store:
