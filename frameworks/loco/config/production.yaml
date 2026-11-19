@@ -27,6 +27,13 @@ database:
   dangerously_recreate: false
 auth:
   jwt:
-    # Unused by this app (no auth routes); required by the `auth` feature.
+    # Unused by this app (it signs in with the session); required by the
+    # `auth` feature.
     secret: <%= get_env(name="JWT_SECRET", default="benchmark-only-not-a-secret") %>
     expiration: 604800
+  # The `auth_session` section Loco's generator writes: the session cookie is
+  # signed with SESSION_SECRET (set in bench.json `env`; Loco refuses the
+  # development default in production) and the data lives in the cookie.
+  session:
+    secret: <%= get_env(name="SESSION_SECRET") %>
+    store: cookie
