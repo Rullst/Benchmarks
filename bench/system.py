@@ -63,7 +63,27 @@ def split_cpus(cpus: list[int], server_count: int, groups: list[list[int]]) -> t
     return sorted(server), sorted(client)
 
 
-def cpu_split(server_count: int, min_cpus: int) -> dict:
+def split_database(client: list[int], database_count: int) -> tuple[list[int], list[int]]:
+    """Give PostgreSQL its own CPUs (the last ones of the client side), or share them (0).
+
+    Returns (load generator CPUs, database CPUs); with 0 both are the whole
+    client side, as in the default configuration.
+    """
+    if database_count <= 0:
+        return client, client
+    if len(client) <= database_count:
+        raise BenchError(f"need more than {database_count} client CPUs to give the database its own, "
+                         f"found {len(client)}")
+    return client[:-database_count], client[-database_count:]
+
+
+def cpu_split(server_count: int, min_cpus: int, database_count: int = 0) -> dict:
+    """The server, load generator ("client") and database CPU sets.
+
+    "client" is where the load generator and the harness run; "database" is
+    where PostgreSQL runs, the same CPUs as "client" unless database_count
+    gives it its own.
+    """
     cpus = sorted(os.sched_getaffinity(0))
     if len(cpus) < min_cpus:
         raise BenchError(
@@ -71,7 +91,9 @@ def cpu_split(server_count: int, min_cpus: int) -> dict:
         )
     groups = sibling_groups(cpus)
     server, client = split_cpus(cpus, server_count, groups)
-    return {"all": cpus, "server": server, "client": client, "core_groups": groups}
+    loadgen, database = split_database(client, database_count)
+    return {"all": cpus, "server": server, "client": loadgen, "database": database,
+            "database_shared": database == loadgen, "core_groups": groups}
 
 
 def read_cpu_times(cpus: list[int], stat_text: str | None = None) -> tuple[int, int]:

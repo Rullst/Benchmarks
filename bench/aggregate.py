@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import GROUPS, ROOT, framework_slugs, load_manifest, write_json  # noqa: E402
+from common import ENDPOINTS, GROUPS, ROOT, declared_endpoints, framework_slugs, load_manifest, write_json  # noqa: E402
 import rankings  # noqa: E402
 from measure import summarize  # noqa: E402
 from release_check import semver_key  # noqa: E402
@@ -49,7 +49,10 @@ SITE_RUNS = {"json_rps": "tier1.json", "db_single_rps": "tier1.db-single", "avg_
 RESULTS = ROOT / "results"
 RULLST_SLUGS = ("rullst", "rullst-minimal")
 HISTORY_METRICS = ("tier1.json.rps", "tier1.db-single.rps", "tier1.html.rps", "tier1.text.rps",
+                   "tier1.queries.rps", "tier1.updates.rps", "tier1.fortunes.rps",
                    "tier2.latency_ms.p99", "tier3.idle_ram_mib", "tier3.load_ram_peak_mib", "tier4.error_rate")
+# Absolute numbers shown next to the Axum value measured on the same runner.
+PAIRED_METRICS = tuple(f"tier1.{ep}.rps" for ep in ENDPOINTS) + ("tier2.rps", "tier4.rps")
 
 
 def load_jobs(folder: Path) -> list[dict]:
@@ -92,6 +95,7 @@ def _row(slug: str, manifest: dict, entry: dict | None) -> dict:
         "template_engine": manifest.get("template_engine", ""),
         "logging": manifest.get("logging", ""),
         "maturity_note": manifest.get("maturity_note", ""),
+        "endpoints": declared_endpoints(manifest),
         "status": "missing" if entry is None else entry.get("status", "unknown"),
         "problem": "",
         "versions": {},
@@ -127,6 +131,13 @@ def _row(slug: str, manifest: dict, entry: dict | None) -> dict:
     return row
 
 
+def paired_baseline(job: dict) -> dict:
+    """The baseline's medians in this job (same runner), for the metrics shown as absolute numbers."""
+    base = job.get("implementations", {}).get(job.get("baseline", "axum")) or {}
+    metrics = (base.get("summary") or {}).get("metrics", {})
+    return {m: metrics[m]["median"] for m in PAIRED_METRICS if m in metrics}
+
+
 def _manifest(slug: str) -> dict:
     try:
         return load_manifest(slug)
@@ -140,7 +151,7 @@ def _env_brief(job: dict) -> dict:
     return {
         "cpu_model": env.get("cpu_model"),
         "cpu_count": env.get("cpu_count"),
-        "cpu_split": {k: env.get("cpu_split", {}).get(k) for k in ("server", "client")},
+        "cpu_split": {k: env.get("cpu_split", {}).get(k) for k in ("server", "client", "database")},
         "memory_total_mib": env.get("memory_total_mib"),
         "kernel": env.get("kernel"),
         "os": env.get("os"),
@@ -171,6 +182,7 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
         if job and row["status"] in ("measured", "crashed"):
             row["ratios"] = job.get("ratios", {})
             row["environment"] = _env_brief(job)
+            row["paired_baseline"] = paired_baseline(job)
         rows.append(row)
 
     # The baseline row pools the baseline rounds of every job (each job

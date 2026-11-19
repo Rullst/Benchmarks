@@ -1,50 +1,69 @@
 """Per-category and overall rankings, computed from the ratios to the Axum baseline.
 
-Five categories, each scored so that higher is better and Axum is 1.0:
+Six categories, each scored so that higher is better and Axum is 1.0:
 
-  speed      Tier 1: geometric mean of the four endpoints' requests/s ratios
-  pressure   Tier 2: requests/s ratio (300 connections)
+  speed      Tier 1: geometric mean of the capacity ratios of /text, /json,
+             /db-single and /html
+  database   Tier 1: geometric mean of the capacity ratios of /queries,
+             /updates and /fortunes
+  pressure   Tier 2: capacity ratio (300 connections on /json)
   memory     Tier 3: 1 / peak RAM ratio (lower RAM is better)
-  endurance  Tier 4: requests/s ratio (500 connections for 2 minutes)
+  endurance  Tier 4: capacity ratio (500 connections on /json for 2 minutes)
   startup    Axum's median start-up time / the implementation's, both at least
              one readiness poll interval (0.25 s)
 
-The overall score is the geometric mean of the five category scores with equal
+A run's capacity ratio (`<run>.capacity`, measure.capacity_ratio) is the
+requests/s ratio when neither server's run was client-bound, and the ratio of
+requests per server CPU-second (server efficiency) when either was: a
+client-bound server had idle CPU, so its requests/s says less than its cost
+per request. Client-bound results therefore get positions instead of ties.
+Rows without capacity ratios (results measured before they existed) use the
+requests/s ratios.
+
+The overall score is the geometric mean of the six category scores with equal
 weights. An implementation without every metric is listed as incomplete, with
 no overall position, instead of being ranked on fewer metrics.
 
-Ties: when the load generator's vCPUs were busy (client-bound) in at least half
-of the rounds of every run of a throughput category, the server may have been
-able to answer more, so close results (within TIE_TOLERANCE of the best one of
-their group) share a position. Start-up times within one readiness poll
-interval of each other share a position.
+Ties: equal scores share a position, and start-up times within one readiness
+poll interval of each other share a position.
 """
 
 from __future__ import annotations
 
 import math
 
-from common import READY_POLL_S
+from common import BASE_ENDPOINTS, EXTRA_ENDPOINTS, READY_POLL_S
 
-TIE_TOLERANCE = 0.10
-ENDPOINTS = ("text", "json", "db-single", "html")
+# Client-bound results are scored by server efficiency instead of sharing a
+# position, so there is no tolerance; the published field stays (as 0).
+TIE_TOLERANCE = 0.0
+ENDPOINTS = BASE_ENDPOINTS
+DATABASE_ENDPOINTS = EXTRA_ENDPOINTS
+CAPACITY = ("the requests/s ratio, or the ratio of requests per server CPU-second when the run was "
+            "client-bound")
 
 CATEGORIES = [
     {"key": "speed", "title": "Speed", "tier": "Tier 1",
      "metrics": [f"tier1.{ep}.rps" for ep in ENDPOINTS], "runs": [f"tier1.{ep}" for ep in ENDPOINTS],
      "lower_is_better": False, "throughput": True,
-     "description": "geometric mean of the requests/s ratios of /text, /json, /db-single and /html "
-                    "(125 connections for 10 s each)"},
+     "description": "geometric mean over /text, /json, /db-single and /html (125 connections for 10 s each) "
+                    f"of {CAPACITY}"},
+    {"key": "database", "title": "Database", "tier": "Tier 1",
+     "metrics": [f"tier1.{ep}.rps" for ep in DATABASE_ENDPOINTS],
+     "runs": [f"tier1.{ep}" for ep in DATABASE_ENDPOINTS],
+     "lower_is_better": False, "throughput": True,
+     "description": "geometric mean over /queries?queries=20, /updates?queries=20 and /fortunes (125 connections "
+                    f"for 10 s each) of {CAPACITY}"},
     {"key": "pressure", "title": "Under pressure", "tier": "Tier 2",
      "metrics": ["tier2.rps"], "runs": ["tier2"], "lower_is_better": False, "throughput": True,
-     "description": "requests/s ratio on /json with 300 connections for 30 s"},
+     "description": f"on /json with 300 connections for 30 s, {CAPACITY}"},
     {"key": "memory", "title": "Memory", "tier": "Tier 3",
      "metrics": ["tier3.load_ram_peak_mib"], "runs": ["tier3_load"], "lower_is_better": True, "throughput": False,
      "description": "peak RAM ratio on /json with 200 connections; lower RAM is better, so the score is "
                     "1 / ratio"},
     {"key": "endurance", "title": "Endurance", "tier": "Tier 4",
      "metrics": ["tier4.rps"], "runs": ["tier4"], "lower_is_better": False, "throughput": True,
-     "description": "requests/s ratio on /json with 500 connections for 2 minutes"},
+     "description": f"on /json with 500 connections for 2 minutes, {CAPACITY}"},
     {"key": "startup", "title": "Startup", "tier": "",
      "metrics": ["startup_s"], "runs": [], "lower_is_better": True, "throughput": False,
      "description": "time from starting the container to the first answer; lower is better, so the score is "
@@ -57,23 +76,25 @@ CATEGORY_KEYS = [c["key"] for c in CATEGORIES]
 STARTUP_FLOOR_S = READY_POLL_S
 
 METHOD = {
-    "overall": "geometric mean of the five category scores, each weighted equally (1/5); every score is "
+    "overall": "geometric mean of the six category scores, each weighted equally (1/6); every score is "
                "oriented so that higher is better and Axum is 1.00. The weighting is a choice; the "
                "per-category rankings are the detail.",
     "ratios": "medians of the per-round ratios to Axum measured on the same runner (results[].ratios), "
               f"except start-up: the harness checks a starting server every {READY_POLL_S} s, so a start-up "
               f"time is known only to {READY_POLL_S} s; the score divides Axum's median time by the "
               f"implementation's, with times below {READY_POLL_S} s counted as {READY_POLL_S} s, instead of "
-              "dividing by Axum's 0.01-0.02 s",
-    "ties": f"in Speed, Under pressure and Endurance, implementations that were client-bound (load generator "
-            f"vCPUs at least 90% busy) in at least half of the rounds of every run of the category, and whose "
-            f"scores are within {TIE_TOLERANCE:.0%} of the best score of their group, share a position (Memory "
-            "compares RAM, not requests/s, so it has no client-bound ties); in "
-            f"Startup, times within {READY_POLL_S} s (the readiness poll interval) of the fastest of their group "
-            "share a position; equal scores always share a position; overall, implementations that share a "
-            "position in all five categories share a position",
-    "incomplete": "an implementation without a value for every metric of a category (not measured, or left out "
-                  "by a correction) has no position in that category and no overall position",
+              "dividing by Axum's 0.01-0.02 s; in Speed, Database, Under pressure and Endurance, each run's "
+              "ratio is its capacity ratio (results[].ratios['<run>.capacity']): the requests/s ratio, or, in "
+              "the rounds where either server's run was client-bound (load generator or database vCPUs at "
+              "least 90% busy), the ratio of requests per server CPU-second, because a client-bound server "
+              "had idle CPU and its requests/s understates what it could serve",
+    "ties": f"equal scores share a position; in Startup, times within {READY_POLL_S} s (the readiness poll "
+            "interval) of the fastest of their group share a position; overall, implementations that share a "
+            "position in all six categories share a position. Client-bound results do not tie: they are "
+            "scored by server efficiency",
+    "incomplete": "an implementation without a value for every metric of a category (not measured, not served "
+                  "yet according to its bench.json \"endpoints\", or left out by a correction) has no position "
+                  "in that category and no overall position",
     "reference": "Axum is the reference (1.00) and is listed without a position",
 }
 
@@ -99,6 +120,8 @@ def _client_bound_runs(row: dict) -> list[str]:
 def _detail(category: str, row: dict, ratios: dict) -> dict:
     if category == "speed":
         return {ep: ratios.get(f"tier1.{ep}.rps") for ep in ENDPOINTS}
+    if category == "database":
+        return {ep: ratios.get(f"tier1.{ep}.rps") for ep in DATABASE_ENDPOINTS}
     if category == "pressure":
         return {"rps": _median(row, "tier2.rps"), "p99_ms": _median(row, "tier2.latency_ms.p99"),
                 "p99_ratio": ratios.get("tier2.latency_ms.p99")}
@@ -116,6 +139,29 @@ def _measured(row: dict) -> bool:
     return row.get("status") in ("measured", "crashed")
 
 
+def _capacity(row: dict, metric: str) -> tuple[float | None, bool]:
+    """The capacity ratio of the run a requests/s metric belongs to, and whether efficiency decided it.
+
+    Falls back to the requests/s ratio for results without capacity ratios.
+    """
+    ratios = row.get("ratios", {})
+    stat = ratios.get(metric[: -len(".rps")] + ".capacity")
+    if stat:
+        rounds = stat.get("n") or 0
+        return stat["median"], bool(rounds and stat.get("efficiency_rounds", 0) * 2 >= rounds)
+    rps = ratios.get(metric)
+    return (rps["median"] if rps else None), False
+
+
+def _not_served(row: dict, metrics: list[str]) -> list[str]:
+    """Endpoints of these tier 1 metrics that the row's bench.json does not declare."""
+    declared = row.get("endpoints")
+    if declared is None:
+        return []
+    names = [m.split(".")[1] for m in metrics if m.startswith("tier1.")]
+    return [f"/{name}" for name in names if name not in declared]
+
+
 def _category_entry(category: dict, row: dict, base: dict | None, name) -> dict:
     """One implementation's value and score in one category, or the reason it has none."""
     key = category["key"]
@@ -129,12 +175,17 @@ def _category_entry(category: dict, row: dict, base: dict | None, name) -> dict:
         "slug": row["slug"], "framework": name(row), "position": None, "tie": False, "tied_with": [],
         "status": "reference" if is_reference else "ranked", "score": None, "ratio": None,
         "client_bound": bool(category["throughput"] and category["runs"] and set(runs) == set(category["runs"])),
-        "client_bound_runs": runs, "detail": _detail(key, row, ratios), "reason": "",
+        "client_bound_runs": runs, "efficiency_runs": [], "detail": _detail(key, row, ratios), "reason": "",
     }
     if not _measured(row):
         entry.update(status="not measured", reason=f"not measured ({row.get('status')})", client_bound=False)
         return entry
     missing = [m for m in category["metrics"] if m not in ratios]
+    not_served = _not_served(row, missing)
+    if not_served:
+        entry.update(status="incomplete", reason=f"does not serve {', '.join(not_served)} yet (bench.json "
+                                                 "\"endpoints\")")
+        return entry
     if key == "startup":
         own, ref = _median(row, "startup_s"), _median(base, "startup_s") if base else None
         missing = [] if own is not None and ref is not None else ["startup_s"]
@@ -153,6 +204,15 @@ def _category_entry(category: dict, row: dict, base: dict | None, name) -> dict:
             entry.update(status="incomplete", reason="ratio is zero")
             return entry
         score = 1.0 / value
+    elif category["throughput"] and not is_reference:
+        capacities = {m: _capacity(row, m) for m in category["metrics"]}
+        if any(c is None for c, _ in capacities.values()):
+            entry.update(status="incomplete", reason="no capacity ratio")
+            return entry
+        score = geometric_mean([c for c, _ in capacities.values()])
+        entry["efficiency_runs"] = [m[: -len(".rps")] for m, (_, used) in capacities.items() if used]
+        entry["detail"]["capacity"] = {m.split(".")[1] if m.startswith("tier1.") else m.split(".")[0]: round(c, 4)
+                                       for m, (c, _) in capacities.items()}
     else:
         score = value
     entry.update(score=round(score, 4), ratio=round(value, 4))
@@ -168,9 +228,7 @@ def _same_group(category: dict, leader: dict, entry: dict) -> bool:
         return True
     if category["key"] == "startup":
         return _startup(entry) - _startup(leader) < READY_POLL_S
-    if not (leader["client_bound"] and entry["client_bound"]):
-        return False
-    return leader["score"] <= entry["score"] * (1 + TIE_TOLERANCE)
+    return False
 
 
 def _assign_positions(scored: list[dict], same_group) -> None:

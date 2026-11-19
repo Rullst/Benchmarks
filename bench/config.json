@@ -27,12 +27,16 @@
     "port": 5432,
     "max_connections": 200,
     "rows": 10000,
-    "row_id": 1
+    "fortune_rows": 12,
+    "row_id": 1,
+    "cpus": 0,
+    "settings": {"synchronous_commit": "off", "shared_preload_libraries": "pg_stat_statements"}
   },
+  "endpoint_paths": {"queries": "/queries?queries=20", "updates": "/updates?queries=20"},
   "sampling_interval_s": 0.1,
   "warmup": {"connections": 125, "duration_s": 5},
   "tiers": {
-    "tier1": {"connections": 125, "duration_s": 10, "endpoints": ["text", "json", "db-single", "html"]},
+    "tier1": {"connections": 125, "duration_s": 10, "endpoints": ["text", "json", "db-single", "html", "queries", "updates", "fortunes"]},
     "tier2": {"connections": 300, "duration_s": 30, "endpoint": "json"},
     "tier3": {"connections": 200, "duration_s": 15, "endpoint": "json", "idle_s": 10},
     "tier4": {"connections": 500, "duration_s": 120, "endpoint": "json"}

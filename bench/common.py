@@ -15,6 +15,13 @@ FRAMEWORKS = ROOT / "frameworks"
 # How often a starting server is checked (GET /text) until it answers.
 READY_POLL_S = 0.25
 
+# The endpoints every implementation serves, and the ones added in v2 that an
+# implementation serves once its bench.json lists them in "endpoints" (the
+# harness checks and measures only the endpoints a folder declares).
+BASE_ENDPOINTS = ("text", "json", "db-single", "html")
+EXTRA_ENDPOINTS = ("queries", "updates", "fortunes")
+ENDPOINTS = BASE_ENDPOINTS + EXTRA_ENDPOINTS
+
 GROUPS = {
     "rust": "Rust",
     "full-stack": "Full-stack frameworks",
@@ -70,7 +77,28 @@ def validate_manifest(slug: str, manifest: dict) -> list[str]:
             problems.append(f"{slug}: invalid build argument name '{arg}'")
     if not isinstance(manifest.get("env", {}), dict):
         problems.append(f"{slug}: 'env' must be an object")
+    endpoints = manifest.get("endpoints", list(BASE_ENDPOINTS))
+    if not isinstance(endpoints, list) or not all(isinstance(e, str) for e in endpoints):
+        problems.append(f"{slug}: 'endpoints' must be a list of endpoint names")
+    else:
+        unknown = [e for e in endpoints if e not in ENDPOINTS]
+        missing = [e for e in BASE_ENDPOINTS if e not in endpoints]
+        if unknown:
+            problems.append(f"{slug}: unknown endpoints {', '.join(unknown)} (known: {', '.join(ENDPOINTS)})")
+        if missing:
+            problems.append(f"{slug}: 'endpoints' must include {', '.join(missing)}")
     return problems
+
+
+def declared_endpoints(manifest: dict) -> list[str]:
+    """The endpoints a framework folder serves, in the suite's order (bench.json "endpoints")."""
+    declared = set(manifest.get("endpoints") or BASE_ENDPOINTS)
+    return [e for e in ENDPOINTS if e in declared]
+
+
+def endpoint_path(config: dict, endpoint: str) -> str:
+    """The request path the load generator uses for an endpoint (with its query string)."""
+    return config.get("endpoint_paths", {}).get(endpoint, f"/{endpoint}")
 
 
 def load_manifest(slug: str) -> dict:

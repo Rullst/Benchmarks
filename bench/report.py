@@ -73,8 +73,10 @@ def _measured(rows: list[dict]) -> list[dict]:
 
 
 TEXT_COLUMNS = {"Implementation", "Version", "Language", "Notes", "Status", "Reason", "Group", "Runtime",
-                "Server", "Workers", "Database layer", "Templates", "Overall", "Speed", "Under pressure",
-                "Memory (RAM)", "Endurance", "Startup"}
+                "Server", "Workers", "Database layer", "Templates", "Overall", "Speed", "Database",
+                "Under pressure", "Memory (RAM)", "Endurance", "Startup"}
+# Tier 1 endpoints in the summary table, as ratios to Axum.
+SUMMARY_ENDPOINTS = ("json", "html", "db-single", "queries", "updates", "fortunes")
 
 
 def _table(header: list[str], lines: list[list[str]]) -> str:
@@ -100,31 +102,47 @@ def notice(data: dict) -> str:
                 f"{_num((env.get('memory_total_mib') or 0) / 1024, 0)} GiB RAM; each server limited to 2 vCPUs "
                 "and 2 GiB)")
     return (f"> Measured on {measured} with **Rullst {data.get('rullst_version') or 'unknown'}** on {hardware}. "
-            f"Values are medians of {run.get('rounds')} rounds. \"vs Axum\" is the ratio to the Axum baseline "
-            "measured in alternating rounds on the same runner, which cancels most of the difference between "
-            "runners; compare ratios rather than absolute numbers across runs. These results update "
-            "automatically when a new Rullst version is published on crates.io. "
+            f"Values are medians of {run.get('rounds')} rounds. Each implementation ran on its own runner, "
+            "alternating rounds with the Axum baseline; the ratios to Axum (1.00 = Axum) cancel most of the "
+            "difference between runners, so the table leads with them. Absolute requests per second differ "
+            "between runners: each one is shown with, in brackets, Axum's value on the same runner. These results "
+            "update automatically when a new Rullst version is published on crates.io. "
             f"Last update: {data['generated_at'][:10]}."
             + (f"\n>\n> **Note:** {data['note']}" if data.get("note") else ""))
 
 
+def _paired(row: dict, path: str) -> str:
+    """An absolute median with, in brackets, the baseline's median from the same runner."""
+    text = _median(row, path)
+    base = (row.get("paired_baseline") or {}).get(path)
+    if text != "–" and base is not None and not row.get("is_baseline"):
+        text += f" ({_num(base)})"
+    return text
+
+
+def _served(row: dict, endpoint: str) -> bool:
+    return endpoint in row.get("endpoints", (endpoint,))
+
+
 def summary_table(rows: list[dict]) -> str:
-    header = ["Implementation", "Version", "Language", "/json req/s", "vs Axum", "/db-single req/s", "vs Axum",
-              "/html req/s", "Tier 2 p99 (ms)", "Idle RAM (MiB)", "Peak RAM (MiB)", "Tier 4 errors",
-              "req/s per MiB"]
+    header = ["Implementation", "Version", "Language", *(f"/{ep} vs Axum" for ep in SUMMARY_ENDPOINTS),
+              "/json req/s (Axum)", "Idle RAM (MiB)", "Peak RAM (MiB)", "Tier 4 errors"]
     lines = []
     for row in _measured(rows):
         lines.append([
             _label(row), row["framework_version"], row["language"],
-            _median(row, "tier1.json.rps"), _ratio(row, "tier1.json.rps"),
-            _median(row, "tier1.db-single.rps"), _ratio(row, "tier1.db-single.rps"),
-            _median(row, "tier1.html.rps"),
-            _median(row, "tier2.latency_ms.p99", 2),
+            *(_ratio(row, f"tier1.{ep}.rps") if _served(row, ep) else "n/i" for ep in SUMMARY_ENDPOINTS),
+            _paired(row, "tier1.json.rps"),
             _median(row, "tier3.idle_ram_mib", 1), _median(row, "tier3.load_ram_peak_mib", 1),
             _errors(row, "tier4.error_rate"),
-            _num(row.get("rps_per_mib"), 1),
         ])
     return _table(header, lines)
+
+
+SUMMARY_NOTE = ("Ratios are requests/s divided by Axum's on the same runner (higher is better). \"/json req/s "
+                "(Axum)\" is the absolute number, with Axum's on the same runner in brackets: compare absolute "
+                "numbers only within a row. \"n/i\": not implemented yet (the folder's bench.json does not list "
+                "the endpoint). /queries and /updates use queries=20.")
 
 
 def _rank_text(entry: dict) -> str:
@@ -153,12 +171,19 @@ def _times(value: float) -> str:
     return f"{value:.2f}" if value >= 0.1 else f"{value:.3f}"
 
 
+THROUGHPUT = ("speed", "database", "pressure", "endurance")
+CATEGORY_COLUMNS = (("speed", "Speed"), ("database", "Database"), ("pressure", "Under pressure"),
+                    ("memory", "Memory (RAM)"), ("endurance", "Endurance"), ("startup", "Startup"))
+
+
 def _category_cell(key: str, entry: dict) -> str:
-    """Position and the measured value: a ratio to Axum, or seconds for start-up."""
+    """Position and the measured value: a score or ratio to Axum, or seconds for start-up."""
     if entry["score"] is None:
         return entry["status"]
     if key == "startup":
         value = f"{entry['detail']['startup_s']:.2f} s"
+    elif key in THROUGHPUT:
+        value = f"{_times(entry['score'])}×" + ("*" if entry.get("efficiency_runs") else "")
     else:
         value = f"{_times(entry['ratio'])}×"
     if key == "endurance" and _endurance_flags(entry["detail"]):
@@ -182,17 +207,21 @@ def rankings_section(data: dict, level: str = "###") -> list[str]:
     poll = rankings.get("startup_resolution_s")
     labels = {r["slug"]: _label(r) for r in data["implementations"]}
     cells = {c["key"]: {e["slug"]: e for e in c["entries"]} for c in rankings["categories"]}
-    header = ["Implementation", "Overall", "Speed", "Under pressure", "Memory (RAM)", "Endurance", "Startup"]
+    keys = [key for key, _ in CATEGORY_COLUMNS if key in cells]
+    header = ["Implementation", "Overall", *(title for key, title in CATEGORY_COLUMNS if key in cells)]
     lines = []
     for entry in rankings["overall"]["entries"]:
         slug = entry["slug"]
         lines.append([labels.get(slug, entry["framework"]), _overall_cell(entry),
-                      *(_category_cell(key, cells[key][slug]) for key in ("speed", "pressure", "memory",
-                                                                          "endurance", "startup"))])
+                      *(_category_cell(key, cells[key][slug]) for key in keys)])
     return [
         f"{level} Rankings", "",
-        f"- **Speed (Tier 1):** requests per second on each of the four endpoints with {t1.get('connections')} "
-        f"connections for {t1.get('duration_s')} s; the score is the geometric mean of the four ratios to Axum.",
+        f"- **Speed (Tier 1):** /text, /json, /db-single and /html with {t1.get('connections')} "
+        f"connections for {t1.get('duration_s')} s each; the score is the geometric mean of the four ratios to "
+        "Axum.",
+        f"- **Database (Tier 1):** /queries and /updates (20 random rows per request) and /fortunes, with the "
+        f"same {t1.get('connections')} connections for {t1.get('duration_s')} s each; the score is the geometric "
+        "mean of the three ratios to Axum.",
         f"- **Under pressure (Tier 2):** requests per second on /{t2.get('endpoint')} with "
         f"{t2.get('connections')} connections for {t2.get('duration_s')} s.",
         f"- **Memory (Tier 3):** the most RAM the server used while answering /{t3.get('endpoint')} with "
@@ -203,15 +232,17 @@ def rankings_section(data: dict, level: str = "###") -> list[str]:
         "growing and stops are listed with it.",
         f"- **Startup:** time from starting the container to its first answer; lower is better. The harness "
         f"checks every {poll} s, so times below {poll} s count as equal.",
-        "- **Overall:** the geometric mean of the five category scores, each weighted equally (1/5), with every "
-        "score oriented so that higher is better and Axum at 1.00. The weighting is a choice; the per-category "
-        "positions are the detail.",
+        f"- **Overall:** the geometric mean of the {len(keys)} category scores, each weighted equally "
+        f"(1/{len(keys)}), with every score oriented so that higher is better and Axum at 1.00. The weighting "
+        "is a choice; the per-category positions are the detail.",
         "",
-        "Each cell is the position and the ratio to Axum (seconds for Startup). \"(tie)\": the load generator "
-        "was the limit (client-bound) for both and the results are within "
-        f"{rankings.get('tie_tolerance', 0):.0%} of each other, or the start-up times are within {poll} s, so "
-        "they share the position. Axum is the reference and has no position. \"incomplete\": a result is "
-        "missing or left out, so there is no position rather than one computed from fewer metrics.",
+        "Each cell is the position and the score: a ratio to Axum (the RAM ratio for Memory, seconds for "
+        "Startup). In the throughput categories each run counts with its requests/s ratio, except that a run "
+        "where either server was client-bound (the load generator or the database was the limit) counts with "
+        "its server efficiency ratio (requests per server CPU-second) instead; \"*\" marks a score where that "
+        f"happened. \"(tie)\": equal scores, or start-up times within {poll} s. Axum is the reference and has "
+        "no position. \"incomplete\": a result is missing, left out, or the endpoint is not implemented yet, so "
+        "there is no position rather than one computed from fewer metrics.",
         "",
         _table(header, lines),
     ]
@@ -246,11 +277,13 @@ def render_results(data: dict) -> str:
     parts += ["", "## How to read these numbers", "",
               "- Each implementation ran on its own GitHub-hosted runner, alternating rounds with the Axum "
               "baseline on the same machine. The \"vs Axum\" columns are the median of the per-round ratios; "
-              "they are more stable than absolute numbers, which vary between runners.",
+              "they are more stable than absolute numbers, which vary between runners. The summary shows Axum's "
+              "value from the same runner next to each absolute number.",
               "- Values are medians over rounds; the range in brackets is the lowest and highest round.",
               "- The server had 2 vCPUs and 2 GiB of RAM. The load generator and PostgreSQL shared the other "
               "vCPUs. \"client-bound\" means those vCPUs were at least 90% busy during the test: the server "
-              "might have answered more requests, so results close to each other at the top are ties.",
+              "might have answered more requests, so its requests/s understate it; compare the efficiency "
+              "(requests per server CPU-second) instead, as the rankings do.",
               "- RAM is the container's memory use without inactive file cache, sampled every 100 ms.",
               "- Methodology and limitations: [README](README.md).", ""]
     if env:
@@ -260,32 +293,39 @@ def render_results(data: dict) -> str:
                   f"PostgreSQL {env.get('postgres')}, {(env.get('load_generator') or {}).get('name')} "
                   f"{(env.get('load_generator') or {}).get('version')}. Full details per job are in "
                   "`results/raw/`.", ""]
-    parts += ["## Summary", "", summary_table(rows), ""]
+    parts += ["## Summary", "", summary_table(rows), "", SUMMARY_NOTE, ""]
     if _corrections(rows):
         parts += ["Corrections (left-out results are shown as –):", "", _corrections(rows), ""]
     if data.get("rankings"):
         parts += [*rankings_section(data, "##"), ""]
 
     t1 = tiers.get("tier1", {})
-    parts += [f"## Tier 1: {t1.get('connections')} connections, {t1.get('duration_s')} s per endpoint", ""]
+    paths = data.get("config", {}).get("endpoint_paths", {})
+    parts += [f"## Tier 1: {t1.get('connections')} connections, {t1.get('duration_s')} s per endpoint", "",
+              "Efficiency is requests per server CPU-second (req/s divided by the server's CPU use in cores): what "
+              "a request costs the server, which stays comparable when the load generator or the database was "
+              "the limit (client-bound). DB CPU is PostgreSQL's CPU use, on the client vCPUs.", ""]
     for endpoint in t1.get("endpoints", []):
         base = f"tier1.{endpoint}"
         lines = [[_label(r), _range(r, f"{base}.rps"), _ratio(r, f"{base}.rps"),
+                  _median(r, f"{base}.rps_per_cpu"), _ratio(r, f"{base}.rps_per_cpu"),
                   _median(r, f"{base}.latency_ms.p50", 2), _median(r, f"{base}.latency_ms.p99", 2),
                   _errors(r, f"{base}.error_rate"), _median(r, f"{base}.server_cpu_cores", 2),
-                  _bound(r, base)] for r in _measured(rows)]
-        parts += [f"### /{endpoint}", "", _table(
-            ["Implementation", "req/s", "vs Axum", "p50 (ms)", "p99 (ms)", "Errors", "Server CPU (cores)", "Notes"],
-            lines), ""]
+                  _median(r, f"{base}.db_cpu_cores", 2),
+                  _bound(r, base) if _served(r, endpoint) else "not implemented yet"] for r in _measured(rows)]
+        parts += [f"### {paths.get(endpoint, '/' + endpoint)}", "", _table(
+            ["Implementation", "req/s", "vs Axum", "Efficiency (req/CPU-s)", "vs Axum", "p50 (ms)", "p99 (ms)",
+             "Errors", "Server CPU (cores)", "DB CPU (cores)", "Notes"], lines), ""]
 
     t2 = tiers.get("tier2", {})
     parts += [f"## Tier 2: /{t2.get('endpoint')}, {t2.get('connections')} connections, {t2.get('duration_s')} s", ""]
-    lines = [[_label(r), _range(r, "tier2.rps"), _ratio(r, "tier2.rps"), _median(r, "tier2.latency_ms.p50", 2),
+    lines = [[_label(r), _range(r, "tier2.rps"), _ratio(r, "tier2.rps"), _median(r, "tier2.rps_per_cpu"),
+              _ratio(r, "tier2.rps_per_cpu"), _median(r, "tier2.latency_ms.p50", 2),
               _range(r, "tier2.latency_ms.p99", 2), _ratio(r, "tier2.latency_ms.p99"),
               _errors(r, "tier2.error_rate"), _median(r, "tier2.timeouts"), _bound(r, "tier2")]
              for r in _measured(rows)]
-    parts += [_table(["Implementation", "req/s", "vs Axum", "p50 (ms)", "p99 (ms)", "p99 vs Axum", "Errors",
-                      "Timeouts", "Notes"], lines), ""]
+    parts += [_table(["Implementation", "req/s", "vs Axum", "Efficiency (req/CPU-s)", "vs Axum", "p50 (ms)",
+                      "p99 (ms)", "p99 vs Axum", "Errors", "Timeouts", "Notes"], lines), ""]
 
     t3 = tiers.get("tier3", {})
     parts += [f"## Tier 3: idle, then /{t3.get('endpoint')} with {t3.get('connections')} connections for "
@@ -294,20 +334,23 @@ def render_results(data: dict) -> str:
     lines = [[_label(r), _range(r, "tier3.idle_ram_mib", 1), _ratio(r, "tier3.idle_ram_mib"),
               _median(r, "tier3.idle_cpu_cores", 3), _range(r, "tier3.load_ram_peak_mib", 1),
               _ratio(r, "tier3.load_ram_peak_mib"), _median(r, "tier3.load_cpu_cores", 2),
-              _median(r, "tier3.rps"), _median(r, "idle.tasks"), _bound(r, "tier3_load")] for r in _measured(rows)]
+              _median(r, "tier3.rps"), _num(r.get("rps_per_mib"), 1), _median(r, "idle.tasks"),
+              _bound(r, "tier3_load")] for r in _measured(rows)]
     parts += [_table(["Implementation", "Idle RAM (MiB)", "vs Axum", "Idle CPU", "Peak RAM (MiB)", "vs Axum",
-                      "Load CPU", "req/s", "Threads", "Notes"], lines), ""]
+                      "Load CPU", "req/s", "Tier 1 /json req/s per MiB", "Threads", "Notes"], lines), ""]
 
     t4 = tiers.get("tier4", {})
     parts += [f"## Tier 4: /{t4.get('endpoint')}, {t4.get('connections')} connections for "
               f"{t4.get('duration_s')} s", "",
               "RAM growth compares the middle and the last tenth of the test. \"Still growing\" means it rose by "
               "more than 10% and 8 MiB; for garbage-collected runtimes this can be heap growth rather than a leak.", ""]
-    lines = [[_label(r), _range(r, "tier4.rps"), _ratio(r, "tier4.rps"), _median(r, "tier4.latency_ms.p99", 2),
+    lines = [[_label(r), _range(r, "tier4.rps"), _ratio(r, "tier4.rps"), _median(r, "tier4.rps_per_cpu"),
+              _median(r, "tier4.latency_ms.p99", 2),
               _errors(r, "tier4.error_rate"), _median(r, "tier4.timeouts"), _median(r, "tier4.ram_end_mib", 1),
               _median(r, "tier4.ram_growth_mib", 1), _median(r, "after.memory_peak_mib", 1), _flags(r)]
              for r in _measured(rows)]
-    parts += [_table(["Implementation", "req/s", "vs Axum", "p99 (ms)", "Errors", "Timeouts", "RAM at end (MiB)",
+    parts += [_table(["Implementation", "req/s", "vs Axum", "Efficiency (req/CPU-s)", "p99 (ms)", "Errors",
+                      "Timeouts", "RAM at end (MiB)",
                       "RAM growth (MiB)", "memory.peak (MiB)", "Notes"], lines), ""]
 
     nm = _not_measured(rows)
@@ -332,7 +375,7 @@ def render_readme_table(data: dict) -> str:
     lines = [notice(data), "",
              f"Source: {ref}. Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); "
              "dashboard: <https://rullst.win/Benchmarks/>.", "",
-             summary_table(data["implementations"])]
+             summary_table(data["implementations"]), "", SUMMARY_NOTE]
     if _corrections(data["implementations"]):
         lines += ["", "Corrections (left-out results are shown as –):", "", _corrections(data["implementations"])]
     failed = [r for r in data["implementations"] if r["status"] not in ("measured", "crashed")]

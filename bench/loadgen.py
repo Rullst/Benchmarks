@@ -82,28 +82,49 @@ def parse_result(raw: dict) -> dict:
     }
 
 
+def efficiency(run: dict | None) -> float | None:
+    """Requests per server CPU-second of one load run (rps / server_cpu_cores)."""
+    if not run:
+        return None
+    if run.get("rps_per_cpu") is not None:
+        return run["rps_per_cpu"]
+    cores = run.get("server_cpu_cores")
+    return round(run["rps"] / cores, 1) if cores and run.get("rps") is not None else None
+
+
 def run_load(binary: Path, url: str, *, connections: int, duration_s: int, config: dict,
-             client_cpus: list[int], server=None) -> dict:
-    """Run one bombardier test and measure both sides of it."""
+             client_cpus: list[int], server=None, database=None, db_cpus: list[int] | None = None) -> dict:
+    """Run one bombardier test and measure both sides of it.
+
+    client_cpus run the load generator; db_cpus run PostgreSQL (the same CPUs
+    unless the database has its own). The run is client-bound when the
+    load generator's or the database's CPUs were at least
+    `saturation_threshold` busy.
+    """
+    db_cpus = db_cpus or client_cpus
+    all_client = sorted(set(client_cpus) | set(db_cpus))
     lg = config["load_generator"]
     cmd = ["taskset", "-c", format_cpu_list(client_cpus), str(binary), f"--{lg['client']}",
            "-c", str(connections), "-d", f"{duration_s}s", "-t", f"{lg['timeout_s']}s",
            "-l", "-p", "r", "-o", "j", url]
     sampler = None
-    server_cpu_before = 0
+    server_cpu_before = db_cpu_before = 0
     if server is not None:
         sampler = RamSampler(server, config["sampling_interval_s"])
         server_cpu_before = server.cpu_usec()
         sampler.start()
-    client_before = read_cpu_times(client_cpus)
+    if database is not None:
+        db_cpu_before = database.cpu_usec()
+    stat_before = Path("/proc/stat").read_text()
     usage_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=duration_s + 120, check=False)
     wall = time.monotonic() - started
     usage_after = resource.getrusage(resource.RUSAGE_CHILDREN)
-    client_after = read_cpu_times(client_cpus)
+    stat_after = Path("/proc/stat").read_text()
     samples = sampler.stop() if sampler else []
     server_cpu_after = server.cpu_usec() if server is not None else 0
+    db_cpu_after = database.cpu_usec() if database is not None else 0
 
     if proc.returncode != 0:
         raise BenchError(f"bombardier failed ({proc.returncode}): {proc.stderr.strip()[-500:]}")
@@ -113,16 +134,28 @@ def run_load(binary: Path, url: str, *, connections: int, duration_s: int, confi
         raise BenchError(f"could not parse bombardier output: {exc}: {proc.stdout[:300]}") from exc
 
     loadgen_cpu = (usage_after.ru_utime - usage_before.ru_utime) + (usage_after.ru_stime - usage_before.ru_stime)
-    client_busy = busy_fraction(client_before, client_after)
+
+    def busy(cpus: list[int]) -> float:
+        return busy_fraction(read_cpu_times(cpus, stat_before), read_cpu_times(cpus, stat_after))
+
+    client_busy = busy(all_client)
+    loadgen_busy = busy(client_cpus)
+    db_busy = busy(db_cpus)
     threshold = lg["saturation_threshold"]
     metrics.update({
         "connections": connections,
         "client_cpu_busy": round(client_busy, 3),
+        "loadgen_cpu_busy": round(loadgen_busy, 3),
+        "db_cpu_busy": round(db_busy, 3),
         "loadgen_cpu_share": round(loadgen_cpu / (wall * len(client_cpus)), 3),
-        "client_bound": client_busy >= threshold,
+        "loadgen_cpu_cores": round(loadgen_cpu / wall, 3),
+        "client_bound": max(client_busy, loadgen_busy, db_busy) >= threshold,
     })
+    if database is not None:
+        metrics["db_cpu_cores"] = round((db_cpu_after - db_cpu_before) / 1e6 / wall, 3)
     if server is not None:
         metrics["server_cpu_cores"] = round((server_cpu_after - server_cpu_before) / 1e6 / wall, 3)
+        metrics["rps_per_cpu"] = efficiency(metrics)
         values = [ram for _, ram in samples]
         metrics["server_ram_peak_mib"] = round(max(values) / MIB, 1) if values else None
         metrics["_ram_samples"] = samples

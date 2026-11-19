@@ -6,26 +6,31 @@ import statistics
 import time
 from pathlib import Path
 
-from common import BenchError, log
-from containers import Server, start_server
-from loadgen import MIB, run_load
+from common import ENDPOINTS, BenchError, declared_endpoints, endpoint_path, log
+from containers import Server, database_handle, reset_tables, start_server
+from loadgen import MIB, efficiency, run_load
 from stats import get_path, ratio, summary, window_median
 
 # Metrics summarized over rounds. Ratios to the baseline are computed for
-# every metric except error counts and rates.
+# every metric except error counts and rates and the database's CPU use.
+# rps_per_cpu is the server efficiency: requests per server CPU-second.
 METRICS = [
-    *(f"tier1.{ep}.{m}" for ep in ("text", "json", "db-single", "html")
+    *(f"tier1.{ep}.{m}" for ep in ENDPOINTS
       for m in ("rps", "latency_ms.mean", "latency_ms.p50", "latency_ms.p99", "error_rate",
-                "server_cpu_cores")),
+                "server_cpu_cores", "rps_per_cpu", "db_cpu_cores")),
     "tier2.rps", "tier2.latency_ms.p50", "tier2.latency_ms.p99", "tier2.error_rate", "tier2.timeouts",
+    "tier2.server_cpu_cores", "tier2.rps_per_cpu",
     "tier3.idle_ram_mib", "tier3.idle_cpu_cores", "tier3.load_ram_peak_mib", "tier3.load_cpu_cores",
     "tier3.rps",
     "tier4.rps", "tier4.latency_ms.p99", "tier4.error_rate", "tier4.transport_errors", "tier4.timeouts",
+    "tier4.server_cpu_cores", "tier4.rps_per_cpu",
     "tier4.ram_mid_mib", "tier4.ram_end_mib", "tier4.ram_growth_mib",
     "startup_s", "idle.tasks", "after.ram_mib", "after.memory_peak_mib",
 ]
-NO_RATIO = ("error_rate", "transport_errors", "timeouts", "ram_growth_mib", "tasks")
-LOAD_RUNS = ["tier1.text", "tier1.json", "tier1.db-single", "tier1.html", "tier2", "tier3_load", "tier4"]
+NO_RATIO = ("error_rate", "transport_errors", "timeouts", "ram_growth_mib", "tasks", "db_cpu_cores")
+LOAD_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "tier2", "tier3_load", "tier4"]
+# Throughput runs whose capacity ratio the rankings use (see capacity_ratio).
+CAPACITY_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "tier2", "tier4"]
 
 
 class Crashed(Exception):
@@ -89,12 +94,18 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
     tiers = config["tiers"]
     srv = config["server"]
     record: dict = {"round": number, "implementation": manifest["slug"], "crashed": None}
+    # Every round starts from the same `world` table (/updates rewrites rows).
+    reset_tables(config)
     server = start_server(manifest, config, split["server"], keep_logs=False)
     client = split["client"]
+    database = database_handle(config)
+    served = declared_endpoints(manifest)
+    endpoints = [ep for ep in tiers["tier1"]["endpoints"] if ep in served]
 
     def load(path: str, connections: int, duration_s: int) -> dict:
         return run_load(binary, server.base_url + path, connections=connections,
-                        duration_s=duration_s, config=config, client_cpus=client, server=server)
+                        duration_s=duration_s, config=config, client_cpus=client, server=server,
+                        database=database, db_cpus=split.get("database", client))
 
     try:
         record["startup_s"] = server.wait_ready(manifest.get("startup_timeout_s", 120))
@@ -104,16 +115,17 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
 
         warm = config["warmup"]
         warmup_errors = 0
-        for endpoint in tiers["tier1"]["endpoints"]:
-            result = load(f"/{endpoint}", warm["connections"], warm["duration_s"])
+        for endpoint in endpoints:
+            result = load(endpoint_path(config, endpoint), warm["connections"], warm["duration_s"])
             warmup_errors += result["non_2xx"] + result["transport_errors"]
             _check_alive(server, f"warm-up /{endpoint}")
         record["warmup_errors"] = warmup_errors
 
         t1 = tiers["tier1"]
         record["tier1"] = {}
-        for endpoint in t1["endpoints"]:
-            record["tier1"][endpoint] = _strip_samples(load(f"/{endpoint}", t1["connections"], t1["duration_s"]))
+        for endpoint in endpoints:
+            record["tier1"][endpoint] = _strip_samples(
+                load(endpoint_path(config, endpoint), t1["connections"], t1["duration_s"]))
             _check_alive(server, f"tier 1 /{endpoint}")
             time.sleep(srv["cooldown_s"])
 
@@ -183,21 +195,55 @@ def summarize(rounds: list[dict]) -> dict:
     }
     for run in LOAD_RUNS:
         path = "tier3.client_bound" if run == "tier3_load" else f"{run}.client_bound"
-        flags["client_bound_rounds"][run] = sum(1 for r in rounds if get_path(r, path))
+        run_path = "tier3" if run == "tier3_load" else run
+        if run in BASE_RUNS or any(get_path(r, run_path) is not None for r in rounds):
+            flags["client_bound_rounds"][run] = sum(1 for r in rounds if get_path(r, path))
     return {"metrics": metrics, "flags": flags}
 
 
+BASE_RUNS = ("tier1.text", "tier1.json", "tier1.db-single", "tier1.html", "tier2", "tier3_load", "tier4")
+
+
+def capacity_ratio(run: dict | None, base: dict | None) -> tuple[float | None, bool]:
+    """One round pair's capacity ratio for a load run, and whether efficiency decided it.
+
+    When neither side was client-bound, both servers were the limit and the
+    requests/s ratio measures their capacity. When either side was
+    client-bound, that server had idle CPU, so its requests/s says less than
+    its cost per request: the ratio of requests per server CPU-second
+    (efficiency) is used instead.
+    """
+    if not run or not base:
+        return None, False
+    if run.get("client_bound") or base.get("client_bound"):
+        value = ratio(efficiency(run), efficiency(base))
+        if value is not None:
+            return value, True
+    return ratio(run.get("rps"), base.get("rps")), False
+
+
 def ratios(framework_rounds: list[dict], baseline_rounds: list[dict]) -> dict:
-    """Per-round ratio framework / baseline, summarized over the rounds."""
+    """Per-round ratio framework / baseline, summarized over the rounds.
+
+    `<run>.capacity` (for example tier1.json.capacity) is the capacity ratio
+    of capacity_ratio(); its `efficiency_rounds` counts the round pairs in
+    which efficiency was used.
+    """
     out = {}
+    pairs = list(zip(framework_rounds, baseline_rounds))
     for path in METRICS:
         if path.rsplit(".", 1)[-1] in NO_RATIO or any(part in path for part in NO_RATIO):
             continue
-        values = [ratio(get_path(f, path), get_path(b, path))
-                  for f, b in zip(framework_rounds, baseline_rounds)]
+        values = [ratio(get_path(f, path), get_path(b, path)) for f, b in pairs]
         stat = summary(values)
         if stat:
             out[path] = stat
+    for run in CAPACITY_RUNS:
+        results = [capacity_ratio(get_path(f, run), get_path(b, run)) for f, b in pairs]
+        stat = summary([value for value, _ in results])
+        if stat:
+            stat["efficiency_rounds"] = sum(1 for value, used in results if used and value is not None)
+            out[f"{run}.capacity"] = stat
     return out
 
 

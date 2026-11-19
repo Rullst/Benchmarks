@@ -120,6 +120,7 @@ def start_database(config: dict, cpus: list[int]) -> dict:
         db["image"],
         "-c", "listen_addresses=127.0.0.1", "-c", f"port={db['port']}",
         "-c", f"max_connections={db['max_connections']}", "-c", "shared_buffers=256MB",
+        *(arg for key, value in db.get("settings", {}).items() for arg in ("-c", f"{key}={value}")),
     ], timeout=600)
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
@@ -133,9 +134,40 @@ def start_database(config: dict, cpus: list[int]) -> dict:
     rows = psql(config, "SELECT count(*) FROM world")
     if rows != str(db["rows"]):
         raise BenchError(f"world table has {rows} rows, expected {db['rows']}")
+    fortunes = psql(config, "SELECT count(*) FROM fortune")
+    if fortunes != str(db.get("fortune_rows", 12)):
+        raise BenchError(f"fortune table has {fortunes} rows, expected {db.get('fortune_rows', 12)}")
     version = psql(config, "SHOW server_version")
     log(f"PostgreSQL {version} ready on CPUs {format_cpu_list(cpus)}")
-    return {"image": db["image"], "digest": repo_digest(db["image"]), "version": version}
+    return {"image": db["image"], "digest": repo_digest(db["image"]), "version": version,
+            "cpus": cpus, "settings": dict(db.get("settings", {}))}
+
+
+def set_statement_tracking(config: dict, enabled: bool) -> str:
+    """Turn pg_stat_statements on (conformance) or off (measurement) for every session.
+
+    The conformance check counts the queries each request runs; measurements
+    run without that bookkeeping. Returns the setting new sessions see.
+    """
+    value = "top" if enabled else "none"
+    psql(config, f"ALTER SYSTEM SET pg_stat_statements.track = '{value}'")
+    psql(config, "SELECT pg_reload_conf()")
+    return psql(config, "SHOW pg_stat_statements.track")
+
+
+def reset_tables(config: dict) -> None:
+    """Give every round the same `world` table: init.sql's values, rewritten without dead rows.
+
+    /updates leaves dead row versions behind; VACUUM FULL rewrites the
+    10,000-row table so that later rounds do not measure a bloated table.
+    """
+    psql(config, "UPDATE world SET randomnumber = 1 + (id * 7919) % 10000")
+    psql(config, "VACUUM (FULL, ANALYZE) world")
+
+
+def database_handle(config: dict) -> "Server":
+    """The PostgreSQL container, for its cgroup CPU counter."""
+    return Server(DB_CONTAINER, config["database"]["port"])
 
 
 def psql(config: dict, sql: str) -> str:
