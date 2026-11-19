@@ -22,27 +22,31 @@ export function HowToRead() {
           on a GitHub-hosted machine, and those machines differ (CPU model, other virtual machines on the same host),
           so two absolute numbers in different rows can come from different hardware. The ratio compares a framework
           with Axum on its own machine, which cancels most of that difference. Differences of a few percent are
-          noise, and &quot;client-bound&quot; means the load generator, not the server, was the limit, so close
-          results at the top are ties.
+          noise. &quot;Client-bound&quot; means the load generator or the database, not the server, was the limit:
+          the server could have answered more, so for those runs compare its efficiency (requests per server
+          CPU-second), as the ranking does. The summary shows, next to each absolute number, Axum&apos;s value from the
+          same machine.
         </li>
         <li>
           <strong>How the ranking is computed.</strong> Each category has a score where higher is better and Axum
-          is 1.00. <em>Speed</em> (Tier 1, 125 connections) is the geometric mean of the requests/s ratios of the
-          four endpoints. <em>Under pressure</em> (Tier 2, 300 connections for 30 s) and <em>Endurance</em> (Tier 4,
-          500 connections for 2 minutes) are requests/s ratios; Endurance also lists errors, timeouts, RAM still
-          growing and stops. <em>Memory</em> (Tier 3) is 1 divided by the peak RAM ratio, so using half of
+          is 1.00. <em>Speed</em> (Tier 1, 125 connections) is the geometric mean of the requests/s ratios of
+          /text, /json, /db-single and /html; <em>Database</em> (Tier 1) of /queries and /updates (20 random rows
+          per request) and /fortunes. <em>Under pressure</em> (Tier 2, 300 connections for 30 s) and{' '}
+          <em>Endurance</em> (Tier 4, 500 connections for 2 minutes) are requests/s ratios; Endurance also lists
+          errors, timeouts, RAM still growing and stops. In these four categories, a run where either server was
+          client-bound counts with its server efficiency ratio instead of its requests/s ratio (marked
+          &quot;*&quot;). <em>Memory</em> (Tier 3) is 1 divided by the peak RAM ratio, so using half of
           Axum&apos;s RAM scores 2.00 (the table also shows the RAM ratio itself). <em>Startup</em> is Axum&apos;s
           start-up time divided by the framework&apos;s; the harness checks every 0.25 s, so times below 0.25 s
-          count as equal. The <strong>overall score</strong> is the geometric mean of the five category scores,
-          each weighted equally (one fifth). That weighting is a choice, not a fact about the frameworks: the
+          count as equal. The <strong>overall score</strong> is the geometric mean of the six category scores,
+          each weighted equally (one sixth). That weighting is a choice, not a fact about the frameworks: the
           per-category rankings are the detail, and the one that matters depends on your application.
         </li>
         <li>
-          <strong>Ties and incomplete rows.</strong> When the load generator was the limit (client-bound) for two
-          frameworks and their scores are within 10%, they share a position, written &quot;1=&quot;; start-up
-          times within 0.25 s also share a position. A framework with a missing or left-out result (for example a
-          correction) is listed as incomplete, without a position in that category or overall, rather than ranked
-          on fewer metrics.
+          <strong>Ties and incomplete rows.</strong> Equal scores share a position, written &quot;1=&quot;, and
+          so do start-up times within 0.25 s. A framework with a missing or left-out result (for example a
+          correction), or one that does not serve an endpoint yet, is listed as incomplete, without a position in
+          that category or overall, rather than ranked on fewer metrics.
         </li>
         <li>
           <strong>Rullst is measured twice.</strong> <em>Rullst (as generated)</em> is the application that{' '}

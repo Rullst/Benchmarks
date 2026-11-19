@@ -42,4 +42,15 @@ export function clientBound(row, run) {
   return count ? `client-bound ${count}/${row.flags.rounds}` : '';
 }
 
+// An absolute median with, in brackets, Axum's median from the same runner.
+export function paired(row, path) {
+  const text = num(median(row, path));
+  const base = row.paired_baseline?.[path];
+  if (text === '–' || row.is_baseline || base === undefined || base === null) return text;
+  return `${text} (${num(base)})`;
+}
+
+// Whether the implementation serves an endpoint (bench.json "endpoints"; older results list none).
+export const serves = (row, endpoint) => !row.endpoints || row.endpoints.includes(endpoint);
+
 export const date = (iso) => (iso ? iso.slice(0, 10) : '–');

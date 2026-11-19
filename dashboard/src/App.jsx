@@ -68,8 +68,9 @@ export default function App() {
         <h1>Rullst Benchmarks</h1>
         <p className="lede">
           HTTP benchmarks of Rullst and other web frameworks, measured by a GitHub Actions workflow that anyone can
-          rerun. Four endpoints (<code>/text</code>, <code>/json</code>, <code>/db-single</code>, <code>/html</code>),
-          four load tiers, conformance-checked responses.
+          rerun. Seven endpoints (<code>/text</code>, <code>/json</code>, <code>/db-single</code>, <code>/html</code>,
+          and the database endpoints <code>/queries</code>, <code>/updates</code>, <code>/fortunes</code>), four load
+          tiers, conformance-checked responses.
         </p>
         <nav className="links">
           <a href={`${REPO}#method`}>Method and limitations</a>
@@ -93,10 +94,11 @@ export default function App() {
           <section>
             <h2>Ranking</h2>
             <p className="note">
-              An overall ranking and one per category: Speed (Tier 1), Under pressure (Tier 2), Memory (Tier 3),
-              Endurance (Tier 4) and Startup. &quot;3=&quot; is a shared position (a tie); Axum is the reference and
-              has no position; an implementation with a missing or left-out result is listed as incomplete, without a
-              position. &quot;How to read these results&quot; above explains the scores.
+              An overall ranking and one per category: Speed and Database (Tier 1), Under pressure (Tier 2), Memory
+              (Tier 3), Endurance (Tier 4) and Startup. &quot;3=&quot; is a shared position (a tie); Axum is the
+              reference and has no position; an implementation with a missing or left-out result, or an endpoint it
+              does not serve yet, is listed as incomplete, without a position. &quot;How to read these results&quot;
+              above explains the scores.
             </p>
             <Ranking rankings={state.data.rankings} rows={state.rows} />
           </section>

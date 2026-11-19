@@ -16,7 +16,17 @@ function position(entry) {
   return entry.tie ? `${entry.position}=` : String(entry.position);
 }
 
-const RUN_NAMES = { 'tier1.text': '/text', 'tier1.json': '/json', 'tier1.db-single': '/db-single', 'tier1.html': '/html' };
+const RUN_NAMES = {
+  'tier1.text': '/text',
+  'tier1.json': '/json',
+  'tier1.db-single': '/db-single',
+  'tier1.html': '/html',
+  'tier1.queries': '/queries',
+  'tier1.updates': '/updates',
+  'tier1.fortunes': '/fortunes',
+  tier2: 'Tier 2',
+  tier4: 'Tier 4',
+};
 
 function notes(entry, names) {
   if (entry.status === 'not measured' || entry.status === 'incomplete') return entry.reason;
@@ -25,6 +35,9 @@ function notes(entry, names) {
   if (entry.client_bound) out.push('client-bound');
   else if (entry.client_bound_runs?.length && RUN_NAMES[entry.client_bound_runs[0]]) {
     out.push(`client-bound on ${entry.client_bound_runs.map((r) => RUN_NAMES[r] ?? r).join(', ')}`);
+  }
+  if (entry.efficiency_runs?.length) {
+    out.push(`scored by efficiency on ${entry.efficiency_runs.map((r) => RUN_NAMES[r] ?? r).join(', ')}`);
   }
   return out.join('; ');
 }
@@ -49,16 +62,25 @@ function errors(d) {
 }
 
 // The measured value shown next to the score, and the extra columns, per category.
+// Throughput scores come from capacity ratios ("*": efficiency decided at least one run).
+const score = (e) => `${times(e.score ?? e.ratio)}${e.efficiency_runs?.length ? '*' : ''}`;
+
 const DETAIL = {
   speed: {
-    title: 'vs Axum',
-    value: (e) => times(e.ratio),
+    title: 'Score',
+    value: score,
     columns: ['/text', '/json', '/db-single', '/html'],
     cells: (e) => ['text', 'json', 'db-single', 'html'].map((ep) => times(e.detail[ep])),
   },
+  database: {
+    title: 'Score',
+    value: score,
+    columns: ['/queries', '/updates', '/fortunes'],
+    cells: (e) => ['queries', 'updates', 'fortunes'].map((ep) => times(e.detail[ep])),
+  },
   pressure: {
-    title: 'req/s vs Axum',
-    value: (e) => times(e.ratio),
+    title: 'Score',
+    value: score,
     columns: ['req/s', 'p99 (ms)', 'p99 vs Axum'],
     cells: (e) => [num(e.detail.rps), num(e.detail.p99_ms, 2), e.status === 'reference' ? '1.00×' : times(e.detail.p99_ratio)],
   },
@@ -69,8 +91,8 @@ const DETAIL = {
     cells: (e) => [num(e.detail.peak_ram_mib, 1)],
   },
   endurance: {
-    title: 'req/s vs Axum',
-    value: (e) => times(e.ratio),
+    title: 'Score',
+    value: score,
     columns: ['req/s', 'Errors, timeouts, RAM growth, stops'],
     cells: (e) => [num(e.detail.rps), e.status === 'not measured' ? '–' : errors(e.detail)],
   },
@@ -143,7 +165,7 @@ export function Ranking({ rankings, rows }) {
       </div>
       {category ? (
         <RankTable
-          caption={`${category.title}${category.tier ? ` (${category.tier})` : ''}: ${category.description}. The bar shows the score (longer is better); the line marks Axum.`}
+          caption={`${category.title}${category.tier ? ` (${category.tier})` : ''}: ${category.description}. The bar shows the score (longer is better); the line marks Axum.${['speed', 'database', 'pressure', 'endurance'].includes(category.key) ? ' Endpoint columns are requests/s ratios; "*" marks a score where a client-bound run counted with its server efficiency.' : ''}`}
           title={DETAIL[category.key]?.title ?? 'vs Axum'}
           entries={category.entries}
           extra={DETAIL[category.key]?.columns ?? []}
@@ -154,7 +176,7 @@ export function Ranking({ rankings, rows }) {
         />
       ) : (
         <RankTable
-          caption="Overall: geometric mean of the five category scores, equal weights. Category columns: position · score (higher is better). The line marks Axum (1.00)."
+          caption={`Overall: geometric mean of the ${categories.length} category scores, equal weights. Category columns: position · score (higher is better). The line marks Axum (1.00).`}
           title="Score"
           entries={rankings.overall.entries}
           extra={categories.map((c) => c.title)}

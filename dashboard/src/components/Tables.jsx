@@ -1,4 +1,4 @@
-import { clientBound, errorRate, isMeasured, label, median, num, range, ratio } from '../format';
+import { clientBound, errorRate, isMeasured, label, median, num, paired, range, ratio, serves } from '../format';
 
 function Table({ caption, columns, rows }) {
   return (
@@ -32,23 +32,33 @@ function Table({ caption, columns, rows }) {
 
 const name = { title: 'Implementation', text: true, value: label };
 
+const SUMMARY_ENDPOINTS = ['json', 'html', 'db-single', 'queries', 'updates', 'fortunes'];
+
 export function SummaryTable({ rows }) {
   const columns = [
     name,
     { title: 'Version', text: true, value: (r) => r.framework_version },
     { title: 'Language', text: true, value: (r) => r.language },
-    { title: '/json req/s', value: (r) => num(median(r, 'tier1.json.rps')) },
-    { title: 'vs Axum', value: (r) => ratio(r, 'tier1.json.rps') },
-    { title: '/db-single req/s', value: (r) => num(median(r, 'tier1.db-single.rps')) },
-    { title: 'vs Axum', value: (r) => ratio(r, 'tier1.db-single.rps') },
-    { title: '/html req/s', value: (r) => num(median(r, 'tier1.html.rps')) },
-    { title: 'Tier 2 p99 (ms)', value: (r) => num(median(r, 'tier2.latency_ms.p99'), 2) },
+    ...SUMMARY_ENDPOINTS.map((ep) => ({
+      title: `/${ep} vs Axum`,
+      value: (r) => (serves(r, ep) ? ratio(r, `tier1.${ep}.rps`) : 'n/i'),
+    })),
+    { title: '/json req/s (Axum)', value: (r) => paired(r, 'tier1.json.rps') },
     { title: 'Idle RAM (MiB)', value: (r) => num(median(r, 'tier3.idle_ram_mib'), 1) },
     { title: 'Peak RAM (MiB)', value: (r) => num(median(r, 'tier3.load_ram_peak_mib'), 1) },
     { title: 'Tier 4 errors', value: (r) => errorRate(r, 'tier4.error_rate') },
-    { title: 'req/s per MiB', value: (r) => num(r.rps_per_mib ?? null, 1) },
   ];
-  return <Table columns={columns} rows={rows.filter(isMeasured)} />;
+  return (
+    <>
+      <Table columns={columns} rows={rows.filter(isMeasured)} />
+      <p className="note">
+        Ratios are requests/s divided by Axum&apos;s on the same runner (higher is better). &quot;/json req/s
+        (Axum)&quot; is the absolute number with, in brackets, Axum&apos;s on the same runner: absolute numbers come
+        from different runners, so compare them only within a row. &quot;n/i&quot;: not implemented yet.
+        /queries and /updates use queries=20.
+      </p>
+    </>
+  );
 }
 
 function tier1(endpoint) {
@@ -57,11 +67,14 @@ function tier1(endpoint) {
     name,
     { title: 'req/s', value: (r) => range(r, `${base}.rps`) },
     { title: 'vs Axum', value: (r) => ratio(r, `${base}.rps`) },
+    { title: 'Efficiency (req/CPU-s)', value: (r) => num(median(r, `${base}.rps_per_cpu`)) },
+    { title: 'vs Axum', value: (r) => ratio(r, `${base}.rps_per_cpu`) },
     { title: 'p50 (ms)', value: (r) => num(median(r, `${base}.latency_ms.p50`), 2) },
     { title: 'p99 (ms)', value: (r) => num(median(r, `${base}.latency_ms.p99`), 2) },
     { title: 'Errors', value: (r) => errorRate(r, `${base}.error_rate`) },
     { title: 'Server CPU (cores)', value: (r) => num(median(r, `${base}.server_cpu_cores`), 2) },
-    { title: 'Notes', text: true, value: (r) => clientBound(r, base) },
+    { title: 'DB CPU (cores)', value: (r) => num(median(r, `${base}.db_cpu_cores`), 2) },
+    { title: 'Notes', text: true, value: (r) => (serves(r, endpoint) ? clientBound(r, base) : 'not implemented yet') },
   ];
 }
 
@@ -70,6 +83,8 @@ const TIER_COLUMNS = {
     name,
     { title: 'req/s', value: (r) => range(r, 'tier2.rps') },
     { title: 'vs Axum', value: (r) => ratio(r, 'tier2.rps') },
+    { title: 'Efficiency (req/CPU-s)', value: (r) => num(median(r, 'tier2.rps_per_cpu')) },
+    { title: 'vs Axum', value: (r) => ratio(r, 'tier2.rps_per_cpu') },
     { title: 'p50 (ms)', value: (r) => num(median(r, 'tier2.latency_ms.p50'), 2) },
     { title: 'p99 (ms)', value: (r) => range(r, 'tier2.latency_ms.p99', 2) },
     { title: 'p99 vs Axum', value: (r) => ratio(r, 'tier2.latency_ms.p99') },
@@ -86,12 +101,14 @@ const TIER_COLUMNS = {
     { title: 'vs Axum', value: (r) => ratio(r, 'tier3.load_ram_peak_mib') },
     { title: 'Load CPU', value: (r) => num(median(r, 'tier3.load_cpu_cores'), 2) },
     { title: 'req/s', value: (r) => num(median(r, 'tier3.rps')) },
+    { title: 'Tier 1 /json req/s per MiB', value: (r) => num(r.rps_per_mib ?? null, 1) },
     { title: 'Threads', value: (r) => num(median(r, 'idle.tasks')) },
   ],
   tier4: [
     name,
     { title: 'req/s', value: (r) => range(r, 'tier4.rps') },
     { title: 'vs Axum', value: (r) => ratio(r, 'tier4.rps') },
+    { title: 'Efficiency (req/CPU-s)', value: (r) => num(median(r, 'tier4.rps_per_cpu')) },
     { title: 'p99 (ms)', value: (r) => num(median(r, 'tier4.latency_ms.p99'), 2) },
     { title: 'Errors', value: (r) => errorRate(r, 'tier4.error_rate') },
     { title: 'Timeouts', value: (r) => num(median(r, 'tier4.timeouts')) },
@@ -122,8 +139,17 @@ export function TierTables({ data, rows: all }) {
   return (
     <>
       <h3>Tier 1: {t1.connections} connections, {t1.duration_s} s per endpoint</h3>
+      <p className="note">
+        Efficiency is requests per server CPU-second: what a request costs the server, comparable even when the load
+        generator or the database was the limit (client-bound). DB CPU is PostgreSQL&apos;s CPU use.
+      </p>
       {t1.endpoints.map((endpoint) => (
-        <Table key={endpoint} caption={`/${endpoint}`} columns={tier1(endpoint)} rows={rows} />
+        <Table
+          key={endpoint}
+          caption={data.config?.endpoint_paths?.[endpoint] ?? `/${endpoint}`}
+          columns={tier1(endpoint)}
+          rows={rows}
+        />
       ))}
       <h3>Tier 2: /{t2.endpoint}, {t2.connections} connections, {t2.duration_s} s</h3>
       <Table columns={TIER_COLUMNS.tier2} rows={rows} />
