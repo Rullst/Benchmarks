@@ -28,20 +28,19 @@ defmodule BenchWeb.BenchController do
   end
 
   # Each row read with its own query, given a new random value and updated
-  # through a changeset, in one transaction; the ids are sorted so that
-  # concurrent requests lock rows in the same order.
+  # through a changeset (one UPDATE per row, no transaction). Every Repo call
+  # checks a connection out of the pool and returns it, as for /queries, so
+  # no request holds a connection while its 20 reads and writes run (a
+  # transaction did, and under 125 connections the pool's queue dropped
+  # requests: see README.md).
   def updates(conn, params) do
-    ids = Enum.sort(for _ <- 1..query_count(params["queries"]), do: random_id())
-
-    {:ok, worlds} =
-      Repo.transaction(fn ->
-        Enum.map(ids, fn id ->
-          world = Repo.get!(World, id)
-          value = new_random_number(world.randomnumber)
-          world |> Ecto.Changeset.change(randomnumber: value) |> Repo.update!()
-          %{id: id, randomNumber: value}
-        end)
-      end)
+    worlds =
+      for _ <- 1..query_count(params["queries"]) do
+        world = Repo.get!(World, random_id())
+        value = new_random_number(world.randomnumber)
+        world |> Ecto.Changeset.change(randomnumber: value) |> Repo.update!()
+        %{id: world.id, randomNumber: value}
+      end
 
     json(conn, worlds)
   end
