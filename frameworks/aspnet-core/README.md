@@ -4,7 +4,7 @@
 | --- | --- |
 | Version | ASP.NET Core 10.0.15 (.NET 10 LTS), Entity Framework Core 10.0.15, Npgsql and its EF Core provider 10.0.3, BCrypt.Net-Next 4.2.1 (exact versions in `packages.lock.json`) |
 | Build | `dotnet restore --locked-mode` and `dotnet publish --configuration Release` (framework-dependent) with the .NET SDK 10.0.404 |
-| Server | Kestrel on `0.0.0.0:$PORT` (`app.Run(url)`); the pipeline has routing, the authentication and authorization middleware, and the endpoints |
+| Server | Kestrel on `0.0.0.0:$PORT` (`app.Run(url)`); the pipeline has routing, the authentication and authorization middleware (see below) and the endpoints |
 | Workers | the .NET thread pool, sized by the runtime for the 2 vCPUs; Server GC (the Web SDK's default, with DATAS since .NET 9), heap limit at the runtime's default of 75% of the container's memory |
 | Endpoints | Minimal APIs for `/text`, `/json`, `/db-single`, `/queries`, `/updates`, `/world/{id:int}` (GET and PUT), `/worlds` and `/me`; Razor Pages for `/html`, `/fortunes`, `/form` and `/login` (`Pages/`) |
 | Database | EF Core `DbContext` registered with `AddDbContext` (`world`, `fortune` and `users` entities); Npgsql `Maximum Pool Size` = `DB_POOL_SIZE` (16) in a connection string built from `DATABASE_URL` in `Program.cs`; no migrations |
@@ -101,7 +101,18 @@ Browser routes:
   authentication cookie) is the same for every request. No login throttling
   exists in this setup.
 - Global: `UseAuthentication()` and `UseAuthorization()` run for every
-  request (ASP.NET Core has no documented way to scope them to some routes);
-  for the other endpoints that is a look for the authentication cookie (none
-  is sent) and no authorization policy. The antiforgery services were already
-  registered by `AddRazorPages()`.
+  request, as they already did before phase 2: `AddRazorPages()` registers the
+  authentication and authorization services (`AddMvcCore().AddAuthorization()`,
+  which calls `AddAuthenticationCore()`), and `WebApplication` adds both
+  middlewares to the main pipeline whenever those services exist, unless
+  `UseAuthentication()`/`UseAuthorization()` were called on the application
+  itself. Scoping them with `app.UseWhen()` does not work: the branch is built
+  with `IApplicationBuilder.New()`, whose properties are a copy, so
+  `WebApplication` does not see the calls and still adds both middlewares to
+  every request. They are therefore called on the application, in the same
+  place `WebApplication` would put them. What phase 2 adds for the other
+  endpoints is the cookie scheme: the authentication middleware now asks the
+  cookie handler to authenticate, which finds no cookie (none is sent) and
+  returns; no authorization policy applies to them. Antiforgery is already
+  scoped: Razor Pages validate it in a page filter on `POST` page handlers
+  only.
