@@ -23,3 +23,20 @@ Why: this is the plain setup the Axum documentation and examples show, with
 no extra middleware. The release profile is the same for every Rust
 implementation (the one `cargo rullst new` generates), so compiler settings
 are not a variable.
+
+## Production settings
+
+| Setting | Value | Source |
+| --- | --- | --- |
+| Logging | none: no tracing subscriber, no request logging layer | Axum has no logging of its own; its examples add `tower-http`'s `TraceLayer` only to show tracing |
+| Pool | SQLx `PgPoolOptions::new().max_connections(DB_POOL_SIZE)`, every other option SQLx's default | <https://docs.rs/sqlx/0.9/sqlx/pool/struct.PoolOptions.html> |
+| Connection test | SQLx's default `test_before_acquire(true)`: an idle connection taken from the pool is pinged first (`check_idle_conn`, `sqlx-core` 0.9.0 `src/pool/inner.rs`); and every connection is pinged again when it returns to the pool, whatever that setting (`return_to_pool`, `src/pool/connection.rs`). A PostgreSQL ping is a round trip (Sync, then ReadyForQuery). With `&pool` as the executor, as the examples use it, each statement takes and returns a connection, so it can cost up to two extra round trips | `sqlx-core` 0.9.0 source (`src/pool/options.rs`: "Defaults to `true`") |
+| Prepared statements | SQLx prepares each query on first use per connection and caches it (100 statements per connection by default) | <https://docs.rs/sqlx/0.9/sqlx/postgres/struct.PgConnectOptions.html#method.statement_cache_capacity> |
+| Server and workers | `axum::serve`, Tokio's multi-threaded runtime with one worker per CPU the process may use (2) | <https://docs.rs/axum/0.8/axum/fn.serve.html> |
+
+The connection test is SQLx's default, so this baseline keeps it, as do the
+other SQLx implementations (Actix Web, Loco, both Rullst folders).
+[`../axum-no-ping`](../axum-no-ping) is the same app with
+`test_before_acquire(false)`, an unranked diagnostic that bounds the cost of
+the acquire-side ping; the release-side ping cannot be turned off in SQLx 0.9.
+[`../axum-control`](../axum-control) is an identical copy, the A/A control.
