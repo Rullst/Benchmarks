@@ -15,7 +15,7 @@ COPY --from=build /src/target/app.jar application.jar
 RUN java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 # Record the resolved versions of the main libraries for the results.
 RUN find extracted -name '*.jar' -printf '%f\n' \
-    | sed -nE 's/^(spring-boot|spring-webmvc|spring-data-jpa|hibernate-core|HikariCP|thymeleaf|tomcat-embed-core|jackson-databind|postgresql)-([0-9][^-]*)\.jar$/\1 \2/p' \
+    | sed -nE 's/^(spring-boot|spring-webmvc|spring-data-jpa|hibernate-core|hibernate-validator|spring-security-web|HikariCP|thymeleaf|tomcat-embed-core|jackson-databind|postgresql)-([0-9][^-]*)\.jar$/\1 \2/p' \
     | sort > versions.txt \
     && echo "java ${JAVA_VERSION#jdk-}" >> versions.txt \
     && cat versions.txt

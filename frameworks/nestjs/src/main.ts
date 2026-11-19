@@ -9,6 +9,9 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestNodeApplication>(AppModule, new NodeAdapter());
   app.setBaseViewsDir(join(import.meta.dirname, '..', 'views'));
   app.setViewEngine('hbs');
+  // Built-in CSRF protection (Nest 12.1+): unsafe requests whose
+  // Sec-Fetch-Site or Origin shows another origin are refused (403).
+  app.enableCsrfProtection();
   await app.listen(port, '0.0.0.0');
 }
 

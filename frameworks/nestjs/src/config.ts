@@ -15,3 +15,12 @@ export const poolSizePerProcess = Math.max(
 );
 
 export const port = positiveInteger(process.env.PORT, 8080);
+
+/**
+ * The secret express-session signs its cookie with: the same in every
+ * cluster process (bench.json `env`), so each one accepts the others' cookies.
+ */
+export const sessionSecret = process.env.SESSION_SECRET ?? '';
+if (sessionSecret === '') {
+  throw new Error('SESSION_SECRET must be set');
+}
