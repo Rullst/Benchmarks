@@ -1,0 +1,1 @@
+<!DOCTYPE html><html><head><title>Form</title></head><body><%= form_with url: "/form" do |form| %><%= form.text_field :name, value: @form.name %><%= form.number_field :randomNumber, value: @form.randomNumber %><%= form.submit "Send" %><% end %></body></html>

@@ -19,7 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Benchmark: the api group is served without the /api prefix, so its
+        // routes are recognised by their middleware group rather than by
+        // is('api/*'): their errors (validation 422, 404) are JSON.
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request) => $request->expectsJson()
+                || in_array('api', $request->route()?->middleware() ?? [], true),
         );
     })->create();

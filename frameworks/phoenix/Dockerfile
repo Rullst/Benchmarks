@@ -104,8 +104,8 @@ COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/bench ./
 COPY --from=builder /out/versions.txt /bench/versions.txt
 
 # Benchmark: a fixed dummy secret (the generated release reads it from the
-# deployment's environment). There are no sessions or cookies to protect in
-# this benchmark.
+# deployment's environment). It signs the session cookie of the benchmark's
+# test accounts and protects nothing else.
 ENV SECRET_KEY_BASE="benchmark-dummy-secret-key-base-it-protects-nothing-0123456789abcdef0123456789abcdef"
 
 USER nobody

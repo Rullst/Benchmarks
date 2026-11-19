@@ -22,8 +22,13 @@ COPY templates ./templates
 # Record the resolved versions of the main packages for the results.
 RUN mkdir /bench && python -c "import importlib.metadata as m, platform; \
 print('python', platform.python_version()); \
-[print(n, m.version(n)) for n in ('fastapi', 'starlette', 'pydantic', 'uvicorn', 'uvloop', 'httptools', 'sqlmodel', 'sqlalchemy', 'psycopg', 'psycopg-binary', 'jinja2')]" \
+[print(n, m.version(n)) for n in ('fastapi', 'starlette', 'pydantic', 'uvicorn', 'uvloop', 'httptools', 'sqlmodel', 'sqlalchemy', 'psycopg', 'psycopg-binary', 'jinja2', 'python-multipart', 'asgi-csrf', 'itsdangerous', 'pwdlib', 'argon2-cffi')]" \
     > /bench/versions.txt && cat /bench/versions.txt
+# Fixed dummy keys, the same in every Uvicorn worker process: Starlette's
+# session cookie and asgi-csrf's token are signed with them. They protect only
+# the benchmark's test accounts.
+ENV SESSION_SECRET_KEY="benchmark-dummy-session-key-it-protects-nothing-0123456789abcdef" \
+    ASGI_CSRF_SECRET="benchmark-dummy-csrf-key-it-protects-nothing-0123456789abcdef"
 USER nobody
 EXPOSE 8080
 # Uvicorn with BENCH_WORKERS worker processes, as in the FastAPI "Server
