@@ -96,12 +96,13 @@ export default function App() {
           <section>
             <h2>Ranking</h2>
             <p className="note">
-              An overall ranking and one per category: Speed, Database and Application (Tier 1), Under pressure
-              (Tier 2), Memory (Tier 3), Endurance (Tier 4) and Startup. &quot;3=&quot; is a shared position (a tie); Axum is the
-              reference and has no position; an implementation with a missing or left-out result, or an endpoint it
-              does not serve yet, is listed as incomplete, without a position, and an Application run with more than
-              1% errors gets no score. &quot;How to read these results&quot;
-              above explains the scores.
+              One ranking per category: Hello world, Database and Application (Tier 1), Memory (Tier 3) and
+              Startup, plus the Stability check (Tiers 2 and 4: pass, warn or fail). &quot;3=&quot; is a shared
+              position: scores within the A/A control&apos;s tie margin. Axum is the reference; diagnostics (Rullst
+              minimal, an Axum variant) and the A/A control have scores but no position. A run with more than 1%
+              errors gets no score; an implementation with a missing or left-out result is incomplete. An overall
+              ranking is shown only when the results publish one. &quot;How to read these results&quot; above
+              explains the scores.
             </p>
             <Ranking rankings={state.data.rankings} rows={state.rows} />
           </section>

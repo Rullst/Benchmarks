@@ -29,27 +29,28 @@ export function HowToRead() {
         </li>
         <li>
           <strong>How the ranking is computed.</strong> Each category has a score where higher is better and Axum
-          is 1.00. <em>Speed</em> (Tier 1, 125 connections) is the geometric mean of the requests/s ratios of
-          /text, /json, /db-single and /html; <em>Database</em> (Tier 1) of /queries and /updates (20 random rows
-          per request) and /fortunes; <em>Application</em> (Tier 1) of GET /world/{'{id}'}, GET /worlds, PUT
-          /world/{'{id}'}, POST /form (with each framework&apos;s CSRF check) and GET /me (each framework&apos;s
-          default session store), where a run with more than 1% errors gets no score. <em>Under pressure</em> (Tier
-          2, 300 connections for 30 s) and{' '}
-          <em>Endurance</em> (Tier 4, 500 connections for 2 minutes) are requests/s ratios; Endurance also lists
-          errors, timeouts, RAM still growing and stops. In these five categories, a run where either server was
-          client-bound counts with its server efficiency ratio instead of its requests/s ratio (marked
-          &quot;*&quot;). <em>Memory</em> (Tier 3) is 1 divided by the peak RAM ratio, so using half of
-          Axum&apos;s RAM scores 2.00 (the table also shows the RAM ratio itself). <em>Startup</em> is Axum&apos;s
-          start-up time divided by the framework&apos;s; the harness checks every 0.25 s, so times below 0.25 s
-          count as equal. The <strong>overall score</strong> is the geometric mean of the seven category scores,
-          each weighted equally (one seventh). That weighting is a choice, not a fact about the frameworks: the
-          per-category rankings are the detail, and the one that matters depends on your application.
+          is 1.00. <em>Hello world</em> (Tier 1, 125 connections) is the geometric mean of the capacity ratios of
+          /text, /json and /html; <em>Database</em> of /db-single, /queries and /updates (20 random rows per
+          request) and /fortunes; <em>Application</em> of GET /world/{'{id}'}, GET /worlds, PUT /world/{'{id}'},
+          POST /form (with each framework&apos;s CSRF check) and GET /me (each framework&apos;s default session
+          store). A run counts with its requests/s ratio when neither server was client-bound, and otherwise with
+          its ratio of requests per CPU-second of the server and PostgreSQL together (marked &quot;*&quot;), so a
+          framework is charged for the database work its queries cause; a run limited by the load generator while
+          a server used less than 75% of its vCPUs is not comparable. A run with more than 1% errors gets no
+          score. <em>Memory</em> is Axum&apos;s RAM high-water mark (after the load tiers) divided by the
+          framework&apos;s, and <em>Startup</em> Axum&apos;s start-up time divided by the framework&apos;s, with
+          every value counted as at least 64 MiB and 1 s. <em>Stability</em> (Tiers 2 and 4 on /json, 300 and 500
+          connections) is a pass, warn or fail check, not a score. An overall score (the geometric mean of the
+          five) is shown only when the results publish one; the weighting would be a choice, not a fact about the
+          frameworks.
         </li>
         <li>
-          <strong>Ties and incomplete rows.</strong> Equal scores share a position, written &quot;1=&quot;, and
-          so do start-up times within 0.25 s. A framework with a missing or left-out result (for example a
-          correction), or one that does not serve an endpoint yet, is listed as incomplete, without a position in
-          that category or overall, rather than ranked on fewer metrics.
+          <strong>Ties and incomplete rows.</strong> Scores within the tie margin of their category share a
+          position, written &quot;1=&quot;; the margin is the largest deviation from 1.00 of the A/A control (an
+          identical copy of Axum measured like the others), so smaller differences are noise. Start-up times within
+          0.25 s also share a position. A framework with a missing or left-out result, or one that does not serve
+          an endpoint yet, is listed as incomplete, without a position in that category, rather than ranked on
+          fewer metrics.
         </li>
         <li>
           <strong>Rullst is measured twice.</strong> <em>Rullst (as generated)</em> is the application that{' '}
@@ -58,8 +59,9 @@ export function HowToRead() {
           13.0.0-alpha.5 results, a release that cannot turn it off; off from 13.0.0-alpha.6, like logging in every
           implementation).{' '}
           <em>Rullst (minimal)</em> is Rullst&apos;s router, ORM and <code>html!</code> served like the Axum app,
-          without that middleware; it is not how <code>cargo rullst new</code> sets up an application. The gap
-          between the two rows shows what the default stack costs.
+          without that middleware; it is not how <code>cargo rullst new</code> sets up an application, so it is
+          an unranked diagnostic shown next to the reference. The gap between the two rows shows what the default
+          stack costs.
         </li>
       </ul>
     </section>

@@ -32,12 +32,24 @@ export function label(row) {
   let text = row.name;
   if (row.variant) text += ` (${row.variant})`;
   if (row.is_baseline) text += ' – baseline';
+  else if (row.role === 'diagnostic') text += ' – diagnostic, unranked';
+  else if (row.role === 'control') text += ' – A/A control, unranked';
   return text;
 }
 
 export const isMeasured = (row) => row.status === 'measured' || row.status === 'crashed';
 
+const LIMIT_NAMES = { postgresql: 'PostgreSQL-bound', 'load-generator': 'load-generator-bound' };
+
+// What limited a run in how many rounds: PostgreSQL or the load generator (older results: client-bound).
 export function clientBound(row, run) {
+  const limited = row.flags?.limited_rounds?.[run];
+  if (limited) {
+    return Object.entries(limited)
+      .filter(([, n]) => n)
+      .map(([name, n]) => `${LIMIT_NAMES[name] ?? name} ${n}/${row.flags.rounds}`)
+      .join(', ');
+  }
   const count = row.flags?.client_bound_rounds?.[run] ?? 0;
   return count ? `client-bound ${count}/${row.flags.rounds}` : '';
 }
