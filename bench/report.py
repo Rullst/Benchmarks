@@ -242,7 +242,9 @@ def rankings_section(data: dict, level: str = "###") -> list[str]:
         "its server efficiency ratio (requests per server CPU-second) instead; \"*\" marks a score where that "
         f"happened. \"(tie)\": equal scores, or start-up times within {poll} s. Axum is the reference and has "
         "no position. \"incomplete\": a result is missing, left out, or the endpoint is not implemented yet, so "
-        "there is no position rather than one computed from fewer metrics.",
+        "there is no position rather than one computed from fewer metrics. \"not comparable\": a run was "
+        "client-bound in most rounds for both the implementation and Axum and server efficiency could not "
+        "score it, so its requests/s ratio would compare two load generators; there is no position.",
         "",
         _table(header, lines),
     ]

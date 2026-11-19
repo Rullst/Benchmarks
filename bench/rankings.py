@@ -92,6 +92,11 @@ METHOD = {
             "interval) of the fastest of their group share a position; overall, implementations that share a "
             "position in all six categories share a position. Client-bound results do not tie: they are "
             "scored by server efficiency",
+    "not comparable": "in Speed, Database, Under pressure and Endurance, a run that was client-bound in most "
+                      "rounds for both the implementation and its paired Axum run, and that server efficiency "
+                      "could not score, compares two load generators rather than two servers: the category "
+                      "lists the implementation as not comparable, without a position, and it has no overall "
+                      "position",
     "incomplete": "an implementation without a value for every metric of a category (not measured, not served "
                   "yet according to its bench.json \"endpoints\", or left out by a correction) has no position "
                   "in that category and no overall position",
@@ -139,18 +144,34 @@ def _measured(row: dict) -> bool:
     return row.get("status") in ("measured", "crashed")
 
 
-def _capacity(row: dict, metric: str) -> tuple[float | None, bool]:
-    """The capacity ratio of the run a requests/s metric belongs to, and whether efficiency decided it.
+def _capacity(row: dict, metric: str) -> tuple[float | None, bool, bool]:
+    """The capacity ratio of the run a requests/s metric belongs to, whether efficiency decided it,
+    and whether it is comparable.
 
-    Falls back to the requests/s ratio for results without capacity ratios.
+    A run is not comparable when the implementation and its paired Axum run
+    were both client-bound in most rounds and server efficiency was not used
+    for it: the requests/s ratio would then compare two load generators.
+    Results without capacity ratios fall back to the requests/s ratio, and to
+    the client-bound flags of both sides for that check.
     """
     ratios = row.get("ratios", {})
-    stat = ratios.get(metric[: -len(".rps")] + ".capacity")
+    run = metric[: -len(".rps")]
+    stat = ratios.get(run + ".capacity")
     if stat:
         rounds = stat.get("n") or 0
-        return stat["median"], bool(rounds and stat.get("efficiency_rounds", 0) * 2 >= rounds)
+        used = bool(rounds and stat.get("efficiency_rounds", 0) * 2 >= rounds)
+        comparable = not (rounds and stat.get("not_comparable_rounds", 0) * 2 > rounds)
+        return stat["median"], used, comparable
     rps = ratios.get(metric)
-    return (rps["median"] if rps else None), False
+    comparable = not (_mostly_bound(row.get("flags", {}), run)
+                      and _mostly_bound(row.get("paired_baseline_flags", {}), run))
+    return (rps["median"] if rps else None), False, comparable
+
+
+def _mostly_bound(flags: dict, run: str) -> bool:
+    """Client-bound in more than half of the rounds."""
+    rounds = flags.get("rounds") or 0
+    return bool(rounds and flags.get("client_bound_rounds", {}).get(run, 0) * 2 > rounds)
 
 
 def _not_served(row: dict, metrics: list[str]) -> list[str]:
@@ -206,13 +227,19 @@ def _category_entry(category: dict, row: dict, base: dict | None, name) -> dict:
         score = 1.0 / value
     elif category["throughput"] and not is_reference:
         capacities = {m: _capacity(row, m) for m in category["metrics"]}
-        if any(c is None for c, _ in capacities.values()):
+        if any(c is None for c, _, _ in capacities.values()):
             entry.update(status="incomplete", reason="no capacity ratio")
             return entry
-        score = geometric_mean([c for c, _ in capacities.values()])
-        entry["efficiency_runs"] = [m[: -len(".rps")] for m, (_, used) in capacities.items() if used]
+        not_comparable = [m[: -len(".rps")] for m, (_, _, ok) in capacities.items() if not ok]
+        if not_comparable:
+            entry.update(status="not comparable", ratio=round(value, 4), not_comparable_runs=not_comparable,
+                         reason="client-bound in most rounds for both it and Axum, without server efficiency "
+                                f"to compare: {', '.join(not_comparable)}")
+            return entry
+        score = geometric_mean([c for c, _, _ in capacities.values()])
+        entry["efficiency_runs"] = [m[: -len(".rps")] for m, (_, used, _) in capacities.items() if used]
         entry["detail"]["capacity"] = {m.split(".")[1] if m.startswith("tier1.") else m.split(".")[0]: round(c, 4)
-                                       for m, (c, _) in capacities.items()}
+                                       for m, (c, _, _) in capacities.items()}
     else:
         score = value
     entry.update(score=round(score, 4), ratio=round(value, 4))
@@ -252,7 +279,7 @@ def _assign_positions(scored: list[dict], same_group) -> None:
 
 
 def _order(entries: list[dict]) -> list[dict]:
-    status_order = {"ranked": 0, "reference": 0, "incomplete": 1, "not measured": 2}
+    status_order = {"ranked": 0, "reference": 0, "not comparable": 1, "incomplete": 1, "not measured": 2}
     return sorted(entries, key=lambda e: (status_order[e["status"]], -(e["score"] or 0), e["framework"].lower()))
 
 
@@ -282,7 +309,9 @@ def compute(rows: list[dict], baseline: str, name=lambda row: row.get("name", ro
         if not _measured(row):
             entry.update(status="not measured", reason=f"not measured ({row.get('status')})")
         elif missing:
-            entry.update(status="incomplete", reason="no score in: " + ", ".join(missing))
+            blocked = [key for key in missing if cells[key]["status"] == "not comparable"]
+            entry.update(status="incomplete", reason="no score in: " + ", ".join(missing)
+                         + (f" (not comparable: {', '.join(blocked)})" if blocked else ""))
         else:
             entry["score"] = round(geometric_mean(list(scores.values())), 4)
         overall.append(entry)

@@ -243,6 +243,12 @@ def ratios(framework_rounds: list[dict], baseline_rounds: list[dict]) -> dict:
         stat = summary([value for value, _ in results])
         if stat:
             stat["efficiency_rounds"] = sum(1 for value, used in results if used and value is not None)
+            # Both servers client-bound and no efficiency to compare: the
+            # requests/s ratio then compares two load generators, not servers.
+            stat["not_comparable_rounds"] = sum(
+                1 for (value, used), (f, b) in zip(results, pairs)
+                if value is not None and not used
+                and get_path(f, f"{run}.client_bound") and get_path(b, f"{run}.client_bound"))
             out[f"{run}.capacity"] = stat
     return out
 

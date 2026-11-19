@@ -270,6 +270,13 @@ class EfficiencyTests(unittest.TestCase):
         self.assertEqual(capacity_ratio(bound, free), (3.0, True))
         self.assertEqual(capacity_ratio(None, free), (None, False))
 
+    def test_ratios_count_pairs_that_efficiency_cannot_compare(self):
+        bound = dict(fake_round(1.0, 1), tier2={"rps": 900, "client_bound": True, "server_cpu_cores": None})
+        result = ratios([bound, bound], [bound, fake_round(1.0, 2)])
+        self.assertEqual(result["tier2.capacity"]["not_comparable_rounds"], 1)
+        self.assertEqual(result["tier2.capacity"]["efficiency_rounds"], 0)
+        self.assertEqual(result["tier1.json.capacity"]["not_comparable_rounds"], 0)
+
     def test_ratios_include_capacity(self):
         fw = [fake_round(2.0, n) for n in (1, 2)]  # client-bound
         base = [fake_round(1.0, n) for n in (1, 2)]
@@ -528,6 +535,35 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(pressure["a"]["efficiency_runs"], ["tier2"])
         self.assertEqual(pressure["c"]["efficiency_runs"], [])
         self.assertTrue(pressure["a"]["client_bound"])
+
+    def test_runs_client_bound_on_both_sides_without_efficiency_are_not_comparable(self):
+        # No capacity ratios (no efficiency): both it and its paired Axum run were client-bound in most rounds.
+        both = {"rounds": 5, "client_bound_rounds": {"tier2": 3}}
+        rows = [rank_row("a", t2=1.05, bound=("tier2",), paired_baseline_flags=both),
+                rank_row("b", t2=1.05, bound=("tier2",),
+                         paired_baseline_flags={"rounds": 5, "client_bound_rounds": {"tier2": 2}}),
+                rank_row("c", t2=0.9, bound=("tier2",), capacity={"tier2": 0.9}, efficiency_rounds=("tier2",),
+                         paired_baseline_flags=both)]
+        _, cats, overall = self.rank(rows)
+        pressure = cats["pressure"]
+        self.assertEqual(pressure["a"]["status"], "not comparable")
+        self.assertIsNone(pressure["a"]["position"])
+        self.assertIsNone(pressure["a"]["score"])
+        self.assertEqual(pressure["a"]["not_comparable_runs"], ["tier2"])
+        self.assertIn("client-bound in most rounds for both", pressure["a"]["reason"])
+        self.assertEqual(overall["a"]["status"], "incomplete")
+        self.assertIn("not comparable: pressure", overall["a"]["reason"])
+        # Axum was not client-bound in most rounds: comparable by requests/s.
+        self.assertEqual(pressure["b"]["position"], 1)
+        # Efficiency scored the run: comparable.
+        self.assertEqual(pressure["c"]["status"], "ranked")
+        # With capacity ratios, the harness counts the round pairs that could not be compared.
+        stat = {"median": 1.0, "min": 1.0, "max": 1.0, "spread": 0.0, "n": 3, "efficiency_rounds": 0,
+                "not_comparable_rounds": 2}
+        row = rank_row("d", t4=1.0)
+        row["ratios"]["tier4.capacity"] = stat
+        _, cats, _ = self.rank([row])
+        self.assertEqual(cats["endurance"]["d"]["status"], "not comparable")
 
     def test_speed_combines_capacity_ratios(self):
         capacity = {"tier1.text": 2.0, "tier1.json": 0.5, "tier1.db-single": 1.0, "tier1.html": 1.0}

@@ -138,6 +138,13 @@ def paired_baseline(job: dict) -> dict:
     return {m: metrics[m]["median"] for m in PAIRED_METRICS if m in metrics}
 
 
+def paired_baseline_flags(job: dict) -> dict:
+    """The baseline's rounds and client-bound rounds per load run in this job."""
+    base = job.get("implementations", {}).get(job.get("baseline", "axum")) or {}
+    flags = (base.get("summary") or {}).get("flags", {})
+    return {"rounds": flags.get("rounds", 0), "client_bound_rounds": dict(flags.get("client_bound_rounds", {}))}
+
+
 def _manifest(slug: str) -> dict:
     try:
         return load_manifest(slug)
@@ -183,6 +190,7 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
             row["ratios"] = job.get("ratios", {})
             row["environment"] = _env_brief(job)
             row["paired_baseline"] = paired_baseline(job)
+            row["paired_baseline_flags"] = paired_baseline_flags(job)
         rows.append(row)
 
     # The baseline row pools the baseline rounds of every job (each job

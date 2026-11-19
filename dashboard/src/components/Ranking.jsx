@@ -29,7 +29,7 @@ const RUN_NAMES = {
 };
 
 function notes(entry, names) {
-  if (entry.status === 'not measured' || entry.status === 'incomplete') return entry.reason;
+  if (['not measured', 'incomplete', 'not comparable'].includes(entry.status)) return entry.reason;
   const out = [];
   if (entry.tie && entry.tied_with?.length) out.push(`tie with ${entry.tied_with.map(names).join(', ')}`);
   if (entry.client_bound) out.push('client-bound');
