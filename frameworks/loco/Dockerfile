@@ -14,7 +14,8 @@ COPY --from=build /out/server /app/loco_bench-cli
 COPY --from=build /out/versions.txt /bench/versions.txt
 COPY config /app/config
 COPY assets /app/assets
-# Production environment; warn level turns off the per-request info logs.
+# Production environment; the application logger at warn (the request logger
+# middleware is off in config/production.yaml).
 ENV LOCO_ENV=production
 ENV LOG_LEVEL=warn
 EXPOSE 8080

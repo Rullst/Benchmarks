@@ -10,7 +10,7 @@
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
   "database_layer": "SeaORM 2.0 (find_by_id, ActiveModel::update, Entity::find().all), pool max_connections = DB_POOL_SIZE",
   "template_engine": "Tera 2 (Loco TeraView)",
-  "logging": "Loco logger at warn level (no per-request logs)",
+  "logging": "none per request (logger middleware off in config/production.yaml); application logger at warn",
   "endpoints": [
     "text",
     "json",
