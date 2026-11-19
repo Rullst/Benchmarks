@@ -1,0 +1,819 @@
+# Benchmarks v2, phase 2: request handling, writes, forms and sessions
+
+Status: design proposal on branch `feat/v2-phase2-design` (fork
+`venelouis/Benchmarks`), written on 2026-11-19 against `upstream/main`
+(2727378) and the phase-1 branch `feat/v2-phase1` (90d8c9b). Nothing here is
+measured yet except the load generator experiment (section 7, fork runs
+44559821715 and 44561794485).
+
+Phase 1 adds the TechEmpower-style `/queries`, `/updates` and `/fortunes`, a
+requests-per-server-CPU-second efficiency metric and the CPU split
+experiment. Phase 2 answers the rest of the review: the suite has no route
+parameters, query strings, request bodies, validation, forms, CSRF, writes
+of one record, contention between requests or sessions.
+
+Phase 2 adds five endpoints:
+
+| Name (bench.json) | Requests | What it exercises |
+| --- | --- | --- |
+| `world` | `GET /world/{id}`, a random id per request | path parameter, primary-key read of varying rows, JSON |
+| `worlds` | `GET /worlds?min=&max=&limit=&page=` | query-string parsing and validation, a filtered, ordered, paginated query, a JSON array |
+| `world-update` | `PUT /world/{id}` with `{"randomNumber": n}` | JSON body parsing, validation, one write, the stored row returned |
+| `form` | `GET /form` once per session, then `POST /form` (urlencoded) | form parsing, CSRF verification, validation, escaping user input in a template |
+| `me` | `POST /login` once per session, then `GET /me` | session lookup and loading the signed-in user |
+
+## 1. Decisions at a glance
+
+| Question | Decision | Why (details in the section) |
+| --- | --- | --- |
+| Load generator | **wrk 4.2.0** (built from the pinned source tarball), for all endpoints, replacing bombardier in the same change, with a Lua status hook on the phase-2 workloads; oha 1.16.0 as the documented fallback | §7: wrk varies URL, headers and body together per request (needed for one session per connection) and does the most requests per client CPU-second (1.2-1.3x bombardier, 1.1x oha on one vCPU; +25% on Axum's `/db-single`) |
+| Random ids | The harness pre-builds the requests (all 10,000 ids, shuffled with a fixed seed) and wrk cycles through them | uniform ids, no per-request formatting in the client, the same mix for every implementation |
+| Invalid input | **400 or 422** both conform, for query strings and bodies; 422 is recommended for well-formed input that fails validation | invalid requests are only sent by the conformance check, never under load, so the code costs nothing in the results; the frameworks' defaults split between the two (§3.6) |
+| CSRF | The framework's built-in protection, else the platform's standard library, else the library the framework's docs recommend, else the most-used maintained library. The harness submits the form like a browser (hidden fields, cookies, `Origin`, `Sec-Fetch-Site: same-origin`). CSRF stays in the timing; the results show each implementation's CSRF design | §5 |
+| Sessions | The framework's default production mechanism for a signed-in user (its auth generator or documented auth package); without one, the documented or most-used session library, with its PostgreSQL store when it has one, else its signed or encrypted cookie store. `/me` must read the user's row on every request. The results show each implementation's session store | §6 |
+| Sessions in the load | 125 sessions (one per connection, like 125 signed-in users), obtained before the warm-up of every round, cycled across requests | no single hot session row; the same work for every store |
+| Tables a framework owns | `frameworks/<name>/db.sql`, declared in bench.json and applied by the harness; no schema changes at start-up | session tables differ per framework; start-up time stays comparable |
+| Tier | All five in Tier 1: 125 connections, 10 s, after a 5 s warm-up | like phase 1's endpoints; reads before writes in each round |
+| Rankings | A new **Application** category: geometric mean of the five capacity ratios | same method as phase 1's Database category |
+| Coexistence | bench.json `"endpoints"` (phase 1's capability list) gains the five names; an implementation that does not declare one is "incomplete" in the Application category, as in phase 1 | §8 |
+
+## 2. Common rules
+
+### 2.1 Declaring the endpoints
+
+An implementation serves a phase-2 endpoint only once its bench.json lists
+the name in `"endpoints"` (phase 1's mechanism in `bench/common.py`). The
+harness checks and measures only the declared endpoints, so the folders can
+be done in any order. Phase 2 adds to bench.json:
+
+```json
+"endpoints": ["text", "json", "db-single", "html", "queries", "updates", "fortunes",
+              "world", "worlds", "world-update", "form", "me"],
+"db_setup": "db.sql",
+"phase2": {
+  "validation": "Laravel validator ($request->validate)",
+  "csrf": {"design": "token", "mechanism": "PreventRequestForgery (web group)", "source": "built-in"},
+  "session": {"store": "postgresql", "mechanism": "session guard, database driver", "source": "built-in"},
+  "write_csrf": null
+}
+```
+
+- `phase2.csrf.design` is `token` (a secret the client must echo: synchronizer
+  token, double-submit cookie, masked or signed variants) or
+  `fetch-metadata` (no token: `Sec-Fetch-Site`/`Origin` checks). The
+  conformance check runs the tampered-token case only for `token`.
+- `phase2.csrf.source` and `phase2.session.source` are `built-in`,
+  `generator` (code the framework's generator writes), `stdlib` (the
+  language's standard library), `documented` (a package the framework's
+  docs recommend) or `library` (the most-used maintained package). The
+  results print them next to the numbers.
+- `phase2.session.store` is `cookie-signed`, `cookie-encrypted`,
+  `postgresql` or `memory` (process memory; only for single-process servers).
+- `phase2.write_csrf` is `null` (the default: `PUT /world/{id}` is sent
+  without cookies, as a public JSON API call) or
+  `{"cookie": "<name>", "header": "<name>"}` for a framework whose production
+  stack refuses every cookieless state-changing request and documents no
+  exemption for unauthenticated API routes (Rullst as generated, §3.3): the
+  harness then takes that cookie from `GET /form` and sends it with its value
+  in the header, as a same-site script (htmx, `fetch`) does.
+
+### 2.2 Database
+
+- `bench/db/phase2.sql` (on this branch) creates `users(id, username,
+  display_name, password_bcrypt, password_argon2id)` with 1,000 accounts
+  `user1`..`user1000`, all with the password `bench-password`. It runs after
+  `init.sql` because the harness mounts `bench/db` as the entrypoint
+  directory, so `init.sql` is not edited. The two hash columns let each
+  implementation use its framework's standard hasher; the comment in the
+  file gives the prefixes that Laravel (`$2y$`), Spring (`{bcrypt}`) and
+  Django (`bcrypt$`, `argon2`) expect. Login is not timed.
+- Tables a framework owns (Django's `django_session`, Laravel's `sessions`,
+  Rails 8's `sessions`, Phoenix's `users_tokens`, Rullst's session registry,
+  tower-sessions' `tower_sessions.session`, Loco's `loco_sessions`, …) go in
+  `frameworks/<name>/db.sql`, written from the framework's own migration
+  (for example `manage.py sqlmigrate sessions 0001`). bench.json declares it
+  with `"db_setup"`. The harness applies it once per job before conformance,
+  records the tables it created, and empties them (`TRUNCATE`) at the start
+  of every round, after phase 1's `reset_tables`. Implementations must not
+  create or migrate tables at start-up: start-up time is ranked.
+- `users` is not changed by any measured request. The conformance check
+  changes `display_name` and restores it.
+
+### 2.3 Framework mechanisms
+
+Each endpoint uses the framework's standard mechanism for each concern, in
+this order of preference: built into the framework; generated by the
+framework's own generator; the language's standard library; a package the
+framework's documentation recommends; the most-used maintained package
+(released in the last 24 months, no deprecation or open unfixed advisory).
+The folder README names what it uses and why; section 9 lists the expected
+choice for every implementation.
+
+Existing endpoints keep their current middleware stack where the framework
+documents a way to scope the new mechanisms (route groups, pipelines,
+security matchers, plugin encapsulation): `/form`, `/login` and `/me` go in
+the browser-facing group. The README says when a mechanism is global and
+also runs for the existing endpoints. (Open question 2.)
+
+### 2.4 Requests the load generator sends
+
+- HTTP/1.1 keep-alive, `Host: 127.0.0.1:8080`, no `Accept-Encoding` (no
+  compression), as today.
+- `POST /form` also sends what a browser sends for a same-origin form
+  submission: `Content-Type: application/x-www-form-urlencoded`,
+  `Origin: http://127.0.0.1:8080`, `Sec-Fetch-Site: same-origin`, the cookies
+  and the hidden fields of the session's form page.
+- `PUT /world/{id}` sends `Content-Type: application/json`.
+- `GET /me` sends the session's cookies (or `Authorization: Bearer`, see
+  §6.3) and `Accept: application/json`.
+
+### 2.5 Failures under load
+
+Every request the load generator sends is valid, so every response that is
+not 2xx is a failure (non-2xx), like a transport error or timeout. With wrk,
+see §7.4 for how statuses are counted. A run is reported with its error
+rate; a phase-2 run with an error rate above 1% gets no capacity ratio in
+the Application category (the cell shows the error rate instead), because
+fast error responses would otherwise raise the score.
+
+### 2.6 Invalid input: 400 or 422
+
+Conformance accepts **400 or 422** for every invalid query string or body,
+and checks that nothing was written. Reasons:
+
+- invalid requests are sent only by the conformance check, so the status
+  costs nothing in the measurement;
+- RFC 9110 allows both: 400 for a request the server will not process, 422
+  for well-formed content it cannot process;
+- the frameworks' default validation pipelines split: 422 in FastAPI,
+  Laravel, Rullst (`ValidatedJson`/`ValidatedForm`), Axum's `Json` data
+  errors and Phoenix's generated fallback controller; 400 in Spring,
+  ASP.NET Core, NestJS, Fastify, Loco's validators, Actix and Topcoat. A
+  single required code would make about half of the implementations replace
+  their framework's error handling.
+
+422 is recommended when the framework makes it a one-line choice. (Open
+question 1: whether to require 422 for `PUT /world/{id}`.)
+
+## 3. Read and write endpoints
+
+### 3.1 `GET /world/{id}`
+
+**Contract**
+
+- `id` is a path segment, a base-10 integer.
+- `1 <= id <= 10000`: 200, `application/json`, `{"id": id, "randomNumber": n}`
+  where `n` is the row's current `randomnumber`, read from the database on
+  every request with the framework's ORM (or its database layer where it
+  has no ORM), by primary key.
+- An integer with no row (`0`, `10001`): **404**.
+- A segment that is not an integer (`abc`, `1.5`): **400, 404 or 422**
+  (typed route constraints answer 404, typed extractors 400 or 422).
+
+**Conformance**
+
+1. For 5 random ids: change the row with `psql`, request it, compare the
+   parsed JSON with the row (the response must follow the database).
+2. `GET /world/0` and `GET /world/10001`: 404.
+3. `GET /world/abc`: 400, 404 or 422.
+4. Media type and keep-alive as for the existing endpoints.
+5. pg_stat_statements (phase 1): 20 requests run at least 20 SELECT
+   statements on `world`.
+
+**Load profile:** Tier 1. The workload is the 10,000 ids in a shuffled
+order (`bench/workload.py: world_by_id`), each wrk thread starting at a
+different offset, so every id is read about equally often.
+
+### 3.2 `GET /worlds`
+
+**Contract**
+
+| Parameter | Default | Valid values |
+| --- | --- | --- |
+| `min` | 1 | integer, 1..10000 |
+| `max` | 10000 | integer, 1..10000, and `min <= max` |
+| `limit` | 20 | integer, 1..100 |
+| `page` | 1 | integer, 1..1000 |
+
+- Response: 200, `application/json`, a JSON array of
+  `{"id": .., "randomNumber": ..}` objects: the rows with
+  `min <= id <= max`, ordered by `id` ascending, `limit` rows starting at
+  offset `(page - 1) * limit`. A page past the end is `[]`.
+- One query per request through the ORM's query builder, with the filter,
+  `ORDER BY`, `LIMIT` and `OFFSET` done by PostgreSQL (not in application
+  code).
+- Parameters are parsed and validated with the framework's validation
+  mechanism (§9). A parameter that is present but not a base-10 integer, out
+  of range, or `min > max`: **400 or 422**. Unknown parameters are ignored.
+- Filtering on the primary key keeps the database's share of the work small
+  and the same for everyone (PostgreSQL shares the client vCPUs; phase 1).
+
+**Conformance**
+
+1. No parameters: the first 20 rows (ids 1..20).
+2. `min=500&max=600&limit=7&page=3`: ids 514..520 with their current values.
+3. `min=9990&max=10000&limit=100&page=1`: 11 rows; `page=2`: `[]`.
+4. Each of `limit=0`, `limit=101`, `limit=abc`, `min=0`, `max=10001`,
+   `min=600&max=500`, `page=0`: 400 or 422.
+5. Values are compared with the table (read with `psql` before the check).
+6. pg_stat_statements: one request runs exactly one SELECT on `world`
+   (no row-by-row loading).
+
+**Load profile:** Tier 1. 2,000 pre-built queries: a random 1,000-id
+window (`min` in 1..9001, `max = min + 999`), `limit=20`, `page` 1..5
+(`worlds_pages`). Every response has 20 rows.
+
+### 3.3 `PUT /world/{id}`
+
+**Contract**
+
+- Body: a JSON object with an integer `randomNumber`, 1..10000. Other keys
+  are ignored.
+- Valid: the row's `randomnumber` is set to the value, and the response is
+  200, `application/json`, `{"id": id, "randomNumber": n}`, the row as
+  stored.
+- ORM implementations use the ORM's usual way to change one record (load
+  it, set the field, save it, in whatever transaction the ORM uses by
+  default). Implementations without an ORM run one
+  `UPDATE … RETURNING`.
+- It is a public JSON API call: no cookies, so CSRF protection does not
+  apply. Frameworks whose CSRF check is global exempt the route the
+  documented way (Laravel's `api` routes, Phoenix's `:api` pipeline, Rails'
+  `ActionController::API` or `skip_forgery_protection`, Django's
+  `csrf_exempt`, a Spring Security matcher that leaves it out). Rullst's
+  production `Server` refuses any state-changing request without its CSRF
+  cookie and exempts only authenticated machine endpoints
+  (`MachineEndpointPolicy`), so Rullst as generated declares `write_csrf`
+  (§2.1) and the load sends `rullst_csrf` plus `X-CSRF-Token` (open
+  question 7).
+- No row with that id (`0`, `10001`, with a valid body): **404**.
+- Non-integer id: 400, 404 or 422. Malformed JSON, a missing or non-integer
+  `randomNumber`, or a value outside 1..10000: **400 or 422**, and the row
+  is unchanged. When both the id and the body are invalid, any of those
+  statuses.
+
+**Conformance**
+
+1. For 5 random ids and values: the response equals the sent value, and
+   `psql` reads the same value back.
+2. `{"randomNumber": 0}`, `{"randomNumber": 10001}`, `{"randomNumber": "5"}`,
+   `{}`, `{"randomNumber": 5` (malformed): 400 or 422; the row keeps its
+   value.
+3. `PUT /world/10001` with a valid body: 404.
+4. pg_stat_statements: 20 requests run at least 20 UPDATE statements on
+   `world`.
+5. With `write_csrf`: the same PUT without the cookie and header is refused
+   (403) and writes nothing.
+6. The table is restored afterwards (phase 1's `reset_tables`).
+
+**Load profile:** Tier 1, measured last in the round (it writes). 10,000
+requests: the ids 1..10000 shuffled, each with a random value
+(`put_world`). With 125 connections over 10,000 rows two requests rarely
+hit the same row at once, so this measures one write per request, not lock
+contention (open question 5). Phase 1's `synchronous_commit=off` applies.
+
+## 4. `/form`
+
+**Contract**
+
+- `GET /form`: 200, `text/html`, rendered with the template engine, a page
+  with one `<form method="post" action="/form">` containing a text input
+  `name`, a number input `randomNumber`, a submit button and whatever
+  hidden CSRF field the framework adds. It may set cookies. Not measured.
+- `POST /form`, `application/x-www-form-urlencoded`, fields `name`
+  (1..64 characters) and `randomNumber` (integer 1..10000), plus the CSRF
+  field. Processing: CSRF verification by the framework's mechanism (§5),
+  parsing and validation by its form mechanism, then a page rendered with
+  the template engine, the name escaped:
+  `<!DOCTYPE html><html><head><title>Form</title></head><body><h1>Hello, {name}</h1><p>{randomNumber}</p></body></html>`,
+  200, `text/html` with UTF-8. No database access, no redirect.
+- Invalid fields with a valid CSRF token: anything except that page with
+  200: the framework's usual answer (re-render with errors, 200 or 422;
+  Laravel's redirect back, 302; 400). Allowed statuses: 200, 302, 303, 400,
+  422.
+- A forged request: rejected with 400, 403, 419 (Laravel) or 422 (Rails'
+  `InvalidAuthenticityToken`); never the success page.
+
+**Conformance**
+
+1. `GET /form`: 200, `text/html`; the harness parses the first `<form>`
+   whose action is `/form` (or empty), collects its `<input type="hidden">`
+   fields and the `Set-Cookie` cookies (the session pair).
+2. A valid post with the pair and the browser headers, `name` set to
+   `<b>"Tom" & 'Jérôme'</b>`: 200 and the page above. Bodies are compared
+   with phase 1's HTML token comparison, so `&#39;`, `&#x27;` and `&apos;`
+   are equal and whitespace at the end is ignored.
+3. The same post 3 more times with the same pair: 200 each time (the pair
+   is reusable, which the load relies on).
+4. Forged cross-site post: the cookies, no hidden fields,
+   `Origin: http://attacker.invalid`, `Sec-Fetch-Site: cross-site`:
+   400, 403, 419 or 422.
+5. Only for `phase2.csrf.design = token`: (a) the hidden token changed in
+   one character, and (b) the hidden fields without the cookies, both
+   without `Origin` and `Sec-Fetch-Site` (an older browser): 400, 403, 419
+   or 422. Without those headers Laravel's token path runs (§5.2).
+6. Invalid fields with a valid pair (`name` empty, `name` of 65
+   characters, `randomNumber=0`, `randomNumber=abc`): one of the allowed
+   statuses and not the success page.
+
+**Load profile:** Tier 1. Before the warm-up of each round the harness runs
+`GET /form` 125 times (8 at a time), one per future connection, and keeps
+125 pairs. The workload is 2,000 posts with random valid fields, the pairs
+used in turn (`form_posts`, joint pairing: each request's cookie matches its
+hidden token).
+
+## 5. CSRF
+
+### 5.1 Rule
+
+1. **Mechanism:** the framework's built-in CSRF protection, as its
+   documentation enables it for browser forms; else the language's standard
+   library (Go 1.25's `net/http.CrossOriginProtection`); else the package the
+   framework's docs recommend; else the most-used maintained package (§2.3).
+2. **Client:** the harness acts as a browser that loaded the form once:
+   it sends the form's hidden fields and cookies, `Origin` and
+   `Sec-Fetch-Site: same-origin`. It does not need to know each framework's
+   token, field or cookie names, and header-based designs (Topcoat, Go,
+   NestJS, Laravel's first check) see the headers a browser sends; without
+   them those checks would pass by default without doing any work.
+3. **Obtaining the pair:** once per session, before measuring (§4). Every
+   chosen mechanism accepts the same pair for the whole session (the
+   research for §9 found no per-request rotation; `asgi-csrf` is still to
+   be confirmed, and conformance step 3 of §4 catches a rotating token).
+   ASP.NET Core binds its token to the user, so the pair is fetched while
+   anonymous and used anonymously.
+4. **Reporting:** the results name the design (`token` or
+   `fetch-metadata`), the mechanism and its source next to `/form`.
+
+### 5.2 Is it fair to keep CSRF in the timing?
+
+Yes, with the design shown next to the number:
+
+- every framework that protects forms by default (Rails, Laravel, Django,
+  Phoenix's browser pipeline, Spring Security, ASP.NET Core Razor/antiforgery,
+  Topcoat, Rullst as generated) runs the check on every real form post, so a
+  form endpoint without it would measure a configuration nobody deploys;
+- the cost differs by design, and that is a real difference between the
+  frameworks, not noise: a header comparison (Topcoat, Go, NestJS), a
+  constant-time comparison with a cookie (Rullst, Django, Fastify, the
+  library choices), decrypting the encrypted session cookie (Rails) or
+  verifying the signed one (Phoenix), a Data Protection decryption of two
+  tokens (ASP.NET Core), or a session load from a store (Laravel: the
+  database; Spring: memory);
+- **Laravel** accepts `Sec-Fetch-Site: same-origin` before comparing tokens,
+  but its `web` group still loads and saves the session for the request. The
+  load sends the header like a browser, so Laravel's token comparison does not
+  run; conformance step 5 checks the token path separately.
+- Frameworks that need a library are measured with that library, which the
+  results name. A faster or slower library would change their number.
+
+An unprotected control endpoint (`/form` without CSRF) would separate the
+check's cost from the rest; it is open question 3.
+
+## 6. Sessions: `POST /login` and `GET /me`
+
+### 6.1 Contract
+
+- `GET /login`: 200, `text/html`, a page with one
+  `<form method="post" action="/login">` with inputs `username` and
+  `password` and whatever hidden CSRF field the framework adds to its login
+  form. Not measured; the harness parses it like `GET /form` and submits its
+  hidden fields and cookies with the login.
+- `POST /login`, urlencoded `username` and `password`. Correct
+  credentials: a session is established and the response is 200, 204, 302 or
+  303 (redirecting after login is the norm in the full-stack frameworks); it
+  sets the session cookie(s). The password is checked with the framework's
+  standard hasher against `users.password_bcrypt` or
+  `users.password_argon2id`. Wrong password: 200 (form re-rendered), 302,
+  303, 400, 401 or 422, and no session.
+- `GET /me` with a valid session: 200, `application/json`,
+  `{"id": id, "username": "...", "displayName": "..."}`. The handler resolves
+  the session with the framework's mechanism and **reads the user's row from
+  PostgreSQL through the ORM on every request**, by the id the session holds.
+  Frameworks that keep the principal in the session or cookie (Spring
+  Security, ASP.NET Core cookie auth, the cookie stores) still read the row,
+  as an application does to get the current user's data.
+- `GET /me` without a valid session: 401 (recommended), 403, or a 302/303
+  redirect to the login page (Rails', Django's, Phoenix's and Spring's
+  default for browser routes); never 200.
+
+### 6.2 Which store: the framework's default, not a common one
+
+The two options were "each framework's default production store" and "one
+fixed store for everyone". Phase 2 uses the default:
+
+- **Rule:** the mechanism the framework's own generator or documented auth
+  package sets up for a signed-in user, with the store it uses by default in
+  production: Rails 8's authentication generator (a `sessions` row looked up
+  through a signed cookie), Phoenix's `phx.gen.auth` (`users_tokens`), Django's
+  `contrib.auth` with database sessions, Laravel's session guard with the
+  `database` driver, Spring Security's form login with the servlet
+  container's in-memory session, ASP.NET Core's cookie authentication, Loco's
+  `auth_session` (signed cookie), Topcoat's `session` tokens, Rullst's
+  `make:auth` session registry. A framework without one uses the session
+  library its docs recommend, else the most-used maintained one, **with that
+  library's PostgreSQL store when it has one** (Axum: tower-sessions with
+  `tower-sessions-sqlx-store`), **else its signed or encrypted cookie store**
+  (Actix: `actix-session` `CookieSessionStore`; FastAPI: Starlette's
+  `SessionMiddleware`; Fastify: `@fastify/secure-session`; Gin:
+  `gin-contrib/sessions` cookie store). The PostgreSQL-first preference
+  matches what the generators of Rails 8, Phoenix, Django, Laravel and Rullst
+  produce, so most implementations compare like with like, including the Axum
+  baseline that every ratio uses. Redis and Memcached are not available in
+  the harness and are not used.
+- **Why not one fixed store:** no store is built into all 16. A fixed
+  PostgreSQL store would need hand-written stores in Phoenix (`Plug.Session`
+  has none), ASP.NET Core (an `ITicketStore`), Actix (no PostgreSQL store)
+  and FastAPI (Starlette's sessions are cookie-only); a fixed cookie store
+  would need one in Spring (servlet sessions only) and would replace the
+  generated auth of Rails 8, Phoenix, Django, Laravel, Topcoat and Rullst.
+  Either way about a third of the implementations would measure a store
+  their users do not run, against the suite's rule of using each framework's
+  production defaults.
+- **What the numbers then mean:** `/me` compares "get the signed-in user"
+  as each framework ships it. A database store costs a query (Laravel's
+  `database` driver also writes the session on every request), a cookie
+  store costs a signature check or a decryption, Spring's in-memory session
+  a map lookup; every implementation also reads the user's row. The results
+  print the store (`phase2.session.store`) in the `/me` column, and the
+  README's Limitations section says that `/me` measures defaults.
+- **Laravel's `/html`:** the Laravel folder uses the `cookie` driver today
+  because the database had no `sessions` table. With `db.sql` it can use the
+  default `database` driver; since `/html` is in the `web` group and the load
+  sends no cookies, every `/html` request then inserts a session row. That is
+  what Laravel does for anonymous visitors by default, but it changes the
+  `/html` result (open question 4).
+
+### 6.3 Obtaining the sessions
+
+Before the warm-up of every round (servers with in-memory sessions start
+empty each round): 125 logins as `user1`..`user125` (8 at a time), keeping
+the cookies each login sets. If a login response is JSON with a `token`
+string and sets no cookie (bearer-token designs), the harness sends
+`Authorization: Bearer <token>` instead; the folder must say why it uses a
+token rather than a cookie session. The workload cycles through the 125
+sessions (`me`).
+
+**Conformance**
+
+1. `GET /me` without cookies: 401, 403, 302 or 303.
+2. Login as `user7` with a wrong password: no session (`GET /me` with the
+   returned cookies is not 200).
+3. Login as `user7`: allowed status; then `GET /me` with its cookies: 200
+   and `{"id": 7, "username": "user7", "displayName": "User 7"}`.
+4. Change `display_name` of user 7 with `psql` 3 times; each `GET /me`
+   follows (the row is read on every request); restore it.
+5. Log in as `user8` too: each session returns its own user (no shared
+   state).
+6. pg_stat_statements: 20 `GET /me` run at least 20 SELECT statements on
+   `users`.
+
+**Load profile:** Tier 1, 125 sessions cycled (joint pairing when there is
+more than one).
+
+## 7. Load generator
+
+### 7.1 Why bombardier cannot stay
+
+bombardier 2.0.2 sends one fixed request per run: no per-request URL, body
+or header, so it cannot do `/world/{id}` with random ids, 125 sessions or
+random bodies. Phase 1 kept fixed URLs (`/queries?queries=20`, where the
+server picks the random rows).
+
+### 7.2 Candidates
+
+| | wrk 4.2.0 | oha 1.16.0 | wrk2 (44a94c1) | bombardier 2.0.2 |
+| --- | --- | --- | --- | --- |
+| Language, I/O | C, epoll, one thread per CPU | Rust, Tokio, Hyper | C (wrk fork) | Go, fasthttp |
+| Per-request URL | yes (Lua `request()`) | yes (`--urls-from-file`: a uniform random line; `--rand-regex-url` is not uniform over a numeric range) | yes (Lua) | no |
+| Per-request body | yes | yes (`-Z`, random line) | yes | no |
+| Per-request headers (cookies) | yes, together with URL and body | no: headers fixed per run, URL and body drawn independently | yes | no |
+| Latency percentiles | yes (Lua `done()`: `latency:percentile(p)`) | yes (p10..p99.99, also first byte) | yes, corrected for coordinated omission at a fixed rate | yes |
+| Status breakdown | errors only for status ≥ 400 (3xx counts as success) unless a Lua `response()` hook counts them (§7.4) | full status distribution | as wrk | 1xx/2xx/3xx/4xx/5xx |
+| Machine-readable output | via Lua `done()` (prototype prints one JSON line) | `--output-format json` | via Lua | `-o j` |
+| Release binaries | none: source tarball, pinned by SHA-256; `make` builds it in a few seconds on the runner (bundled LuaJIT, system OpenSSL; installing all three candidates took 17 s) | Linux x86-64 binaries (also a PGO build), SHA-256 digests in the release | none; last commit 2019, unmaintained | Linux binaries |
+| Maintenance | last release 2021 (4.2.0), stable, very widely used | active (1.17.0 on 2026-11-14) | unmaintained | last release 2.0.2 |
+| License | "Modified Apache 2.0": Apache 2.0 plus clause 4(e), a substantially changed derivative must drop the name; unmodified use is unaffected | MIT | Apache 2.0 | MIT |
+| Connections | `-c C -t T` opens `C // T` per thread (124 for 125 on 2 threads) | exact | as wrk | exact |
+| Fixed-rate mode | no | `-q` with `--latency-correction` | yes (its purpose) | `-r` |
+
+### 7.3 Experiment
+
+Setup: `.github/workflows/loadgen-experiment.yml` runs
+`bench/loadgen_experiment.py` on one GitHub-hosted runner: the Axum folder's
+image on the server's 2 vCPUs (one physical core with both SMT threads),
+PostgreSQL idle on the client side, each tool pinned with `taskset` to the
+client vCPUs: both (the current split) or one (phase 1's candidate split,
+where PostgreSQL gets the other). 125 connections, 10 s per run, a 5 s
+warm-up, 3 rounds with the tool order rotated every round; the table shows
+medians. "Dynamic" sends `/json?id=N` for the 10,000 ids in a shuffled order
+(wrk: prebuilt requests returned by the Lua `request` function; oha:
+`--urls-from-file`), which costs the client what `/world/{id}` will.
+"+status" adds wrk's Lua `response` hook that counts every status class.
+The workflow runs on a push to this branch that changes the workflow or the
+script (`workflow_dispatch` needs the file on the default branch, and
+`push` with a `paths` filter was the simplest trigger, as phase 1 did).
+
+Run 1 ([44559821715](https://github.com/venelouis/Benchmarks/actions/runs/44559821715),
+AMD EPYC 9V74), `GET /json`:
+
+| Tool | Client vCPUs | req/s | vs bombardier | Load generator CPU (cores) | req/s per client CPU-second | Server CPU (of 2) | p99 (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| bombardier 2.0.2 | 2 | 154,962 | 1.00 | 1.98 | 78,185 | 1.93 | 2.06 |
+| wrk static | 2 | 168,274 | 1.09 | 1.89 | 88,846 | 1.97 | 1.10 |
+| wrk dynamic | 2 | 167,208 | 1.08 | 1.91 | 87,814 | 1.96 | 1.18 |
+| oha static | 2 | 162,997 | 1.05 | 1.92 | 85,309 | 1.85 | 1.40 |
+| oha dynamic | 2 | 164,523 | 1.06 | 1.94 | 84,851 | 1.87 | 1.17 |
+| bombardier 2.0.2 | 1 | 98,945 | 1.00 | 1.00 | 98,945 | 1.42 | 2.48 |
+| wrk static | 1 | 122,010 | 1.23 | 1.00 | 122,010 | 1.66 | 1.02 |
+| wrk dynamic | 1 | 118,460 | 1.20 | 1.00 | 118,460 | 1.59 | 1.04 |
+| oha static | 1 | 112,012 | 1.13 | 1.00 | 112,124 | 1.46 | 1.39 |
+| oha dynamic | 1 | 108,799 | 1.10 | 1.00 | 108,799 | 1.42 | 1.43 |
+
+Run 2 ([44561794485](https://github.com/venelouis/Benchmarks/actions/runs/44561794485),
+AMD EPYC 7763, a slower runner), the same plus the status hook and
+`GET /db-single`:
+
+| Path | Tool | Client vCPUs | req/s | vs bombardier | Load generator CPU (cores) | Server CPU (of 2) | p99 (ms) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| /json | bombardier | 2 | 115,058 | 1.00 | 1.98 | 1.95 | 2.56 |
+| /json | wrk static | 2 | 115,995 | 1.01 | 1.77 | 1.98 | 1.61 |
+| /json | wrk dynamic | 2 | 117,328 | 1.02 | 1.80 | 1.97 | 1.60 |
+| /json | wrk dynamic + status | 2 | 119,854 | 1.04 | 1.90 | 1.97 | 1.58 |
+| /json | oha static | 2 | 110,123 | 0.96 | 1.82 | 1.80 | 3.84 |
+| /json | oha dynamic | 2 | 118,684 | 1.03 | 1.93 | 1.89 | 1.71 |
+| /json | bombardier | 1 | 82,373 | 1.00 | 1.00 | 1.75 | 2.98 |
+| /json | wrk static | 1 | 107,891 | 1.31 | 1.00 | 1.93 | 1.18 |
+| /json | wrk dynamic | 1 | 105,060 | 1.28 | 1.00 | 1.91 | 1.20 |
+| /json | wrk dynamic + status | 1 | 96,825 | 1.18 | 1.00 | 1.85 | 1.31 |
+| /json | oha static | 1 | 94,335 | 1.15 | 1.00 | 1.74 | 1.76 |
+| /json | oha dynamic | 1 | 91,644 | 1.11 | 1.00 | 1.71 | 1.84 |
+| /db-single | bombardier | 2 | 10,044 | 1.00 | 0.53 | 1.13 | 14.05 |
+| /db-single | wrk static | 2 | 12,574 | 1.25 | 0.35 | 1.37 | 12.20 |
+| /db-single | wrk dynamic + status | 2 | 12,154 | 1.21 | 0.39 | 1.32 | 11.72 |
+| /db-single | oha static | 2 | 11,934 | 1.19 | 0.42 | 1.31 | 12.10 |
+
+Rounds agreed within 1-8% (spread over the three rounds). No tool had an
+error in any run. wrk2 (last commit 2019) built but crashed at start-up in
+every run, with and without a script (`PANIC: unprotected error in call to
+Lua API`), so it has no numbers; it is out.
+
+What the numbers say:
+
+- **Per client CPU-second, wrk does the most work**: about 1.2-1.3x
+  bombardier and about 1.1x oha on one vCPU, where the load generator alone
+  is the limit. Varying the URL costs wrk 2-3% and oha about 3%.
+- **With two client vCPUs on `/json`, the tools are close** because Axum's
+  2 vCPUs are nearly saturated (server CPU 1.93-1.98 of 2). On the slower
+  runner all reach about the same requests/s, but wrk needs 0.1-0.2 fewer
+  client cores than bombardier for it: headroom that the database or a
+  faster server can use.
+- **The load generator's cost decides `/db-single`**: PostgreSQL shares the
+  client vCPUs, so a cheaper client leaves it more CPU. wrk raised Axum's
+  `/db-single` by 25% over bombardier (oha by 19%). Part of what phase 1
+  calls client-bound on `/db-single` is bombardier's own cost.
+- **The status hook costs wrk about 8% on one vCPU** (`/json`, the
+  cheapest endpoint; dynamic with and without the hook). On `/db-single`,
+  dynamic URLs plus the hook cost 3% against static wrk. wrk with the hook
+  still beats oha and bombardier.
+- Latency: wrk's p99 is lower than bombardier's in every case; the tools
+  measure differently (closed loop for all three), so latencies are only
+  comparable within one tool.
+- The machine-readable output, the per-request URL and the CPU measurement
+  all worked through the prototypes (`bench/loadgen_wrk.py`,
+  `bench/loadgen_oha.py`), which return `loadgen.run_load`'s metrics dict.
+
+### 7.4 Recommendation
+
+**wrk 4.2.0, for every endpoint, replacing bombardier in the same change.**
+
+- It is the most CPU-efficient client measured (the suite's main validity
+  problem is the client, more so if phase 1 gives the load generator one
+  vCPU), it is the only candidate that varies URL, headers and body
+  together per request (125 sessions, each cookie with its own CSRF token),
+  and its percentiles and counters come out as JSON through the Lua `done`
+  function.
+- Static workloads (`/text`, `/json`, `/db-single`, `/html`, phase 1's
+  fixed URLs) run without a Lua `request` function, so wrk builds the
+  request once; phase-2 workloads use prebuilt requests and **the status
+  hook**, so every non-2xx response, a 3xx included, counts as a failure
+  (an expired session that redirects to the login page would otherwise
+  count as success). The static workloads rely on wrk's own count
+  (status 400 and above); conformance already rejects a 3xx on them.
+- Pinning: the source tarball's SHA-256 in `bench/loadgens.json`, built on
+  the runner (`bench/install-loadgen.sh wrk DIR`, seconds); the results
+  record the binary's SHA-256 and the compiler, like the image digests.
+- Connections: `-t` is the number of client vCPUs and wrk opens
+  `connections // threads` per thread. Use connection counts divisible by
+  the thread count (Tier 1 128 instead of 125 with 2 threads) or record
+  `connections_open` (124); the prototype records it.
+- License: the modified Apache 2.0 licence adds only a naming condition on
+  substantially changed derivatives; running it unmodified is not affected.
+  Say so in the README's tool section.
+
+**oha 1.16.0 is the fallback** (MIT, release binaries with SHA-256 digests,
+full status distribution, JSON output) if a release binary or a single
+licence family is required. Its limits: about 10% fewer requests per client
+CPU-second than wrk, and one header set per run, so `/form` and `/me` would
+use one session for all 125 connections (a hot session row for Laravel's
+database driver, which writes the session on every request).
+
+## 8. Harness integration (after phase 1 merges)
+
+New modules on this branch, which phase 1 does not touch:
+
+| File | Role |
+| --- | --- |
+| `bench/workload.py` | tool-neutral workloads; the five phase-2 builders and the 2,000/10,000-request mixes, fixed seed |
+| `bench/loadgen_process.py` | runs a load generator process and measures both sides; same keys as `loadgen.run_load`, including phase 1's (`loadgen_cpu_busy`, `db_cpu_busy`, `loadgen_cpu_cores`, `db_cpu_cores`, `rps_per_cpu`) when given the database handle |
+| `bench/loadgen_wrk.py`, `bench/loadgen_oha.py` | `run_load(binary, url, *, connections, duration_s, config, client_cpus, server=None, database=None, db_cpus=None, workload=None, ...)`, a superset of phase 1's signature |
+| `bench/loadgens.json`, `bench/install-loadgen.sh` | pins and installer (oha: binary + SHA-256; wrk/wrk2: source tarball + SHA-256, built) |
+| `bench/db/phase2.sql` | the `users` table |
+| `bench/tests/test_phase2.py` | unit tests of the workloads and of the wrk and oha parsers (they also pass on top of the phase-1 branch) |
+| `bench/loadgen_experiment.py`, `.github/workflows/loadgen-experiment.yml` | the temporary experiment of §7.3; delete after the decision |
+
+Changes to shared files, for the integration pull request (none are on this
+branch):
+
+1. `bench/common.py`: `PHASE2_ENDPOINTS = ("world", "worlds", "world-update",
+   "form", "me")` added to `ENDPOINTS`; `validate_manifest` accepts
+   `db_setup` (a file in the folder) and the `phase2` block (§2.1).
+2. `bench/config.json`: `load_generator` becomes the chosen tool (moved from
+   `loadgens.json`); `endpoint_workloads` maps `world`, `worlds`,
+   `world-update`, `form` and `me` to the builders of `workload.py`;
+   `tier1.endpoints` becomes `text, json, db-single, html, queries,
+   fortunes, world, worlds, form, me, updates, world-update` (reads first).
+3. `bench/loadgen.py`: `run_load` dispatches to `loadgen_wrk.run_load`
+   (the parser and command move there); `install-bombardier.sh` is replaced
+   by `install-loadgen.sh`.
+4. `bench/containers.py`: apply `db_setup` after `start_database`; record
+   the tables it creates; `reset_tables` also truncates them.
+5. New `bench/sessions.py`: `form_sessions(base_url, n)` (GET /form, parse
+   the hidden fields and cookies) and `login_sessions(base_url, n)`; used by
+   conformance and by `measure_round` before the warm-up.
+6. `bench/conformance.py`: one call per declared phase-2 endpoint into a
+   new `bench/conformance_phase2.py` (checks of §3, §4, §6, reusing phase
+   1's `statements()` and `html_tokens()`).
+7. `bench/measure.py`: phase-2 endpoints get their workload; the five
+   `tier1.<name>` runs join `METRICS`, `LOAD_RUNS` and `CAPACITY_RUNS`.
+8. `bench/rankings.py`: an **Application** category (geometric mean of the
+   five capacity ratios), weighted like the others (1/7 each with phase 1's
+   six). `report.py`/`aggregate.py`: the five columns, with the CSRF design
+   and session store under the `/form` and `/me` headings.
+9. README (What is measured, Method, Fairness, Limitations) and
+   CONTRIBUTING (endpoint contracts, `db_setup`, `phase2`). A history note:
+   the load generator changed, so absolute requests/s before and after are
+   not comparable; ratios to Axum are measured with the same tool.
+
+The phase-1 mechanism needs no change of its own: an implementation that
+does not declare a phase-2 endpoint is not checked or measured on it and is
+"incomplete" in the Application category, exactly as phase 1 does for
+Database.
+
+## 9. Per-framework notes
+
+What each implementation is expected to use. Statuses are the framework's
+defaults for the cases of §3 (the implementation may keep them: 400 or 422
+both conform). Sources are official docs or the framework's source at the
+measured version; **(?)** marks what could not be confirmed and must be
+checked while implementing.
+
+| Implementation | `/world/{id}` non-integer | Validation (query, JSON, form) and default status | CSRF (design: mechanism) | Session for `/me` (store) |
+| --- | --- | --- | --- | --- |
+| Axum 0.8.9 | `Path<i32>`: 400 | none built in; `validator`/`garde` or manual; `Json` syntax 400, data 422, `Form` 422 | token: `axum_csrf` 0.12 (most-used; cookie + hashed form token) | `tower-sessions` 0.15 + `tower-sessions-sqlx-store` 0.16 `PostgresStore` (postgresql); axum-login does not support SQLx 0.9 yet |
+| Actix Web 4.19 | `web::Path<i32>`: 404 (default `PathConfig`) | manual or `validator`; `Json`/`Query`/`Form` errors 400 | token: `actix-csrf` 0.8 (double-submit cookie; last release 2024-11) | `actix-session` 0.11 `CookieSessionStore` (cookie-signed or -encrypted; no PostgreSQL store) |
+| Loco 1.3.1 | axum `Path`: 400 | built in: `QueryValidate`/`JsonValidate`/`FormValidate` (`validator` 0.20): 400 | token: `axum_csrf` (Loco has none; it is built on Axum) | built-in `auth_session` feature, default signed cookie (cookie-signed); its `database` store is the alternative. Enable the feature (the folder has only `auth`) |
+| Topcoat 0.12.1 | `path_param!(id: i32)`: the app chooses (`else not_found`) | `#[query_params(error = bad_request)]`: 400; `Json`/`Form`: 400; range checks manual | fetch-metadata: built-in `OriginPolicy` (Sec-Fetch-Site, then Origin vs Host), on by default, 403 | built-in `session` feature: tokens hashed in an app table read through Toasty (postgresql). Enable `session` and `cookie`; the cookie is `__Host-`/`Secure` (the harness replays it over HTTP) |
+| Rullst 13 (as generated) | `routes!` on axum `Path`: 400 | `Validate` + `ValidatedJson`/`ValidatedForm`: 422; query: `Validate` on `Query<T>` by hand **(?)** | token: built-in `csrf_middleware`, double-submit `rullst_csrf` cookie, masked `_token` field or `X-CSRF-Token` (already in the generated router) | `make:auth` session registry: `rullst_session` cookie sealed with `APP_KEY`, one primary-key lookup per request, at most one write per hour (postgresql) |
+| Rullst (minimal) | as above | as above | token: the same `csrf_middleware`, on the `/form` routes only | as above (no production middleware otherwise) |
+| Ruby on Rails 8.1.4.1 | `constraints: {id: /\d+/}`: 404 | no typed query validation; `ActiveModel` validations, 422 by convention; malformed JSON 400 | token: `protect_from_forgery`, token in the encrypted cookie session, masked `authenticity_token`, Origin checked when present; failure 422. Header-only mode exists only from 8.2 | `bin/rails generate authentication`: `sessions` row via signed cookie, 1 SELECT (+ `users` **(?)**) (postgresql) |
+| Laravel 13.42 | `whereNumber('id')`: 404 | `$request->validate`: 422; malformed JSON becomes empty input: 422 | token: `PreventRequestForgery` (web group): accepts `Sec-Fetch-Site: same-origin`, else session token `_token`/`X-CSRF-TOKEN`; failure 419 | session guard + default `database` driver: SELECT and UPDATE of `sessions` on every request, + `users` (postgresql). bcrypt hashes need the `$2y$` prefix |
+| Django 6.1.3 | `<int:id>`: 404 | Django forms (`Form(request.GET)`, `Form(request.POST)`); status chosen by the view; malformed JSON needs a `try` | token: `CsrfViewMiddleware`, secret in the `csrftoken` cookie, masked `csrfmiddlewaretoken`; Origin checked when present; no session needed; 403 | `contrib.auth` + default database sessions (`django_session`): 1 SELECT session + 1 SELECT user, no write **(?)** (postgresql). Hashers need `bcrypt$`/`argon2` prefixes |
+| Phoenix 1.8.16 | `:id` is a string; `Repo.get` cast error: 400 (phoenix_ecto) | Ecto changesets (schemaless for query/forms); 422 by the generator's convention; malformed JSON 400 | token: `protect_from_forgery` (`:browser` pipeline), token in the signed cookie session, `_csrf_token`; 403 | `mix phx.gen.auth`: session cookie holds a token, 1 SELECT joining `users_tokens` and users (postgresql); bcrypt `$2b$` **(?)** |
+| Spring Boot 4.1.2 | `@PathVariable int`: 400; `{id:\d+}`: 404 | `@RequestParam @Min @Max`, `@Valid @RequestBody`, `@ModelAttribute @Valid`: 400 (needs `spring-boot-starter-validation`) | token: Spring Security CSRF, token in the `HttpSession`, XOR-masked `_csrf`; 403 (needs `spring-boot-starter-security`) | Spring Security form login, `SecurityContext` in Tomcat's in-memory session **(?)** (memory; one JVM process). `{bcrypt}` prefix for `DelegatingPasswordEncoder` |
+| ASP.NET Core 10 | `{id:int}`: 404; unconstrained `int id`: 400 | DataAnnotations (`[Range]`) on minimal APIs/Razor Pages: 400 | token: built-in antiforgery (cookie token + `__RequestVerificationToken`, Data Protection, bound to the user); 400 | cookie authentication (`AddCookie`, `SignInAsync`) (cookie-encrypted). Identity's hasher reads only its PBKDF2 format: verify bcrypt with BCrypt.Net-Next **(?)** |
+| NestJS 12.5 (NodeAdapter) | `ParseIntPipe`: 400 | `ValidationPipe` + class-validator: 400 (`errorHttpStatusCode` to change) | fetch-metadata: built-in `app.enableCsrfProtection()` (since 12.1; Sec-Fetch-Site/Origin; 403) | `@nestjs/authentication` 0.1.x (server-side `__Host-sid`, PostgreSQL store hand-written) if it runs on NodeAdapter **(?)**, else `express-session` + `connect-pg-simple` (postgresql) |
+| FastAPI 0.163 | `id: int`: 422 | `Query(ge=, le=)`, Pydantic bodies, `Form()` (needs `python-multipart`): 422 | token: `asgi-csrf` 0.11 (listed in Starlette's docs; signed `csrftoken` cookie, form field; 403); token rotation **(?)** | Starlette `SessionMiddleware` (cookie-signed; no server-side store) |
+| Fastify 5.12.8 | `params` schema `integer`: 400 | JSON schema for `querystring`/`body`: 400; urlencoded needs `@fastify/formbody` | token: `@fastify/csrf-protection` 7 with `@fastify/cookie` (secret in `_csrf` cookie, token `_csrf`; 403) | `@fastify/secure-session` (cookie-encrypted). `@fastify/session` has no PostgreSQL store |
+| Gin 1.12 (Go 1.27) | `ShouldBindUri`: the handler chooses (400) | `ShouldBindQuery`/`ShouldBindJSON`/`ShouldBind` with validator tags; the handler chooses | fetch-metadata: Go standard library `http.CrossOriginProtection` wrapping the engine (403); `gorilla/csrf` has an unfixed advisory | `gin-contrib/sessions` v1.1 cookie store (cookie-signed); its PostgreSQL store is built on a stale 2022 package |
+
+Sources (one or more per row; checked on 2026-11-19):
+
+- Axum: [path rejection](https://docs.rs/crate/axum/0.8.9/source/src/extract/path/mod.rs), [rejections](https://docs.rs/crate/axum/0.8.9/source/src/extract/rejection.rs), [axum_csrf](https://crates.io/crates/axum_csrf), [tower-sessions](https://docs.rs/tower-sessions/0.15.0/tower_sessions/), [tower-sessions-sqlx-store](https://crates.io/crates/tower-sessions-sqlx-store)
+- Actix Web: [path.rs](https://docs.rs/crate/actix-web/4.19.0/source/src/types/path.rs), [errors](https://docs.rs/crate/actix-web/4.19.0/source/src/error/mod.rs), [actix-csrf](https://docs.rs/actix-csrf/0.8.0/actix_csrf/), [actix-session storage](https://docs.rs/actix-session/0.11.0/actix_session/storage/index.html)
+- Loco: [validate extractors](https://docs.rs/crate/loco-rs/1.3.1/source/src/controller/extractor/validate.rs), [middleware](https://loco.rs/docs/reference/middleware/), [auth session](https://docs.rs/crate/loco-rs/1.3.1/source/src/auth/session.rs), [changelog](https://docs.rs/crate/loco-rs/1.3.1/source/CHANGELOG.md)
+- Topcoat: [path_param](https://docs.rs/crate/topcoat-router-macro/0.12.1/source/docs/path_param.md), [query_params](https://docs.rs/crate/topcoat-router-macro/0.12.1/source/docs/query_params.md), [OriginPolicy](https://docs.rs/topcoat/0.12.1/topcoat/router/struct.OriginPolicy.html), [origin.rs](https://docs.rs/crate/topcoat-router/0.12.1/source/src/origin.rs), [sessions](https://docs.rs/crate/topcoat/0.12.1/source/docs/session.md)
+- Rullst: [csrf.rs](https://github.com/Rullst/Rullst/blob/main/rullst-core/src/security/csrf.rs), [validation.rs](https://github.com/Rullst/Rullst/blob/main/rullst-core/src/validation.rs), [session registry](https://github.com/Rullst/Rullst/blob/main/rullst-auth/src/auth/session_registry.rs), [make:auth sessions](https://github.com/Rullst/Rullst/blob/main/cargo-rullst/src/generators/auth/sessions.rs)
+- Rails: [routing](https://guides.rubyonrails.org/routing.html), [rescue_responses](https://guides.rubyonrails.org/configuring.html), [RequestForgeryProtection 8.1](https://api.rubyonrails.org/v8.1/classes/ActionController/RequestForgeryProtection/ClassMethods.html) (edge: [header_only](https://edgeapi.rubyonrails.org/classes/ActionController/RequestForgeryProtection/ClassMethods.html)), [authentication generator](https://raw.githubusercontent.com/rails/rails/v8.1.1/railties/lib/rails/generators/rails/authentication/templates/app/controllers/concerns/authentication.rb.tt), [security guide](https://guides.rubyonrails.org/security.html)
+- Laravel: [routing](https://laravel.com/docs/13.x/routing), [validation](https://laravel.com/docs/13.x/validation), [CSRF](https://laravel.com/docs/13.x/csrf), [PreventRequestForgery](https://raw.githubusercontent.com/laravel/framework/13.x/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php), [session](https://laravel.com/docs/13.x/session), [Store::save](https://raw.githubusercontent.com/laravel/framework/13.x/src/Illuminate/Session/Store.php), [hashing](https://laravel.com/docs/13.x/hashing)
+- Django: [URL converters](https://docs.djangoproject.com/en/6.1/topics/http/urls/), [CSRF](https://docs.djangoproject.com/en/6.1/ref/csrf/), [csrf.py](https://raw.githubusercontent.com/django/django/stable/6.1.x/django/middleware/csrf.py), [sessions](https://docs.djangoproject.com/en/6.1/topics/http/sessions/), [passwords](https://docs.djangoproject.com/en/6.1/topics/auth/passwords/)
+- Phoenix: [phoenix_ecto plug](https://raw.githubusercontent.com/phoenixframework/phoenix_ecto/main/lib/phoenix_ecto/plug.ex), [fallback controller template](https://raw.githubusercontent.com/phoenixframework/phoenix/v1.8.1/priv/templates/phx.gen.json/fallback_controller.ex), [Plug.CSRFProtection](https://plug.hexdocs.pm/Plug.CSRFProtection.html), [phx.gen.auth](https://phoenix.hexdocs.pm/mix_phx_gen_auth.html)
+- Spring: [MVC exception mapping](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolver.html), [method validation](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-validation.html), [CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html), [session persistence](https://docs.spring.io/spring-security/reference/servlet/authentication/persistence.html), [password storage](https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html)
+- ASP.NET Core: [route constraints](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/routing?view=aspnetcore-10.0#route-constraints), [parameter binding](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/parameter-binding?view=aspnetcore-10.0), [minimal API validation](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis?view=aspnetcore-10.0), [antiforgery](https://learn.microsoft.com/en-us/aspnet/core/security/anti-request-forgery?view=aspnetcore-10.0), [cookie authentication](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/cookie?view=aspnetcore-10.0)
+- NestJS: [NodeAdapter](https://docs.nestjs.com/http/performance), [pipes](https://docs.nestjs.com/pipes), [validation](https://docs.nestjs.com/techniques/validation), [CSRF](https://docs.nestjs.com/security/csrf), [authentication](https://docs.nestjs.com/security/authentication), [session](https://docs.nestjs.com/techniques/session)
+- FastAPI: [path params](https://fastapi.tiangolo.com/tutorial/path-params/), [errors](https://fastapi.tiangolo.com/tutorial/handling-errors/), [forms](https://fastapi.tiangolo.com/tutorial/request-forms/), [Starlette middleware](https://starlette.dev/middleware/), [asgi-csrf](https://github.com/simonw/asgi-csrf)
+- Fastify: [validation](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/), [content-type parser](https://fastify.dev/docs/latest/Reference/ContentTypeParser/), [@fastify/csrf-protection](https://github.com/fastify/csrf-protection), [@fastify/secure-session](https://github.com/fastify/fastify-secure-session), [@fastify/session](https://github.com/fastify/session)
+- Gin: [bind URI](https://gin-gonic.com/en/docs/binding/bind-uri/), [binding and validation](https://gin-gonic.com/en/docs/binding/binding-and-validation/), [CrossOriginProtection](https://pkg.go.dev/net/http#CrossOriginProtection), [GO-2025-3884](https://osv.dev/vulnerability/GO-2025-3884), [gin-contrib/sessions](https://github.com/gin-contrib/sessions)
+
+Notes that change implementation work:
+
+- Spring Boot needs `spring-boot-starter-security` and
+  `spring-boot-starter-validation`; scope the security filter chain to
+  `/form`, `/login` and `/me` with `securityMatcher` so the existing
+  endpoints keep their stack (§2.3).
+- Loco needs the `auth_session` feature, Topcoat `session` and `cookie`,
+  FastAPI `python-multipart`, `itsdangerous` and `asgi-csrf`, Fastify
+  `@fastify/formbody`, `@fastify/cookie`, `@fastify/csrf-protection` and
+  `@fastify/secure-session`.
+- Laravel's bcrypt check fails on `$2b$`: replace the prefix with `$2y$`
+  (same algorithm) or use the `argon2id` driver with the argon2 column.
+- ASP.NET Core's antiforgery token is bound to the user: `/form` stays
+  anonymous.
+- Topcoat, Gin and NestJS (fetch-metadata designs) allow requests without
+  `Sec-Fetch-Site` and `Origin`; the harness sends them (§2.4) so the check
+  runs.
+
+## 10. Implementation checklist per framework (phase 1 and 2 in one pass)
+
+For every folder, in one pull request per group of frameworks:
+
+1. **Phase 1** (as on `feat/v2-phase1`): `/queries?queries=N`,
+   `/updates?queries=N`, `/fortunes` with the TechEmpower round 23 rules; the
+   `fortune` table; declare them in `"endpoints"`.
+2. **Phase 2:** the five endpoints of §3, §4 and §6, with the mechanisms of
+   §9; `db.sql` for framework-owned tables; the `phase2` block and the five
+   names in bench.json.
+3. Run `python3 bench/harness.py conformance --framework <name>` in the
+   fork's CI (the PR check), not locally.
+4. README: the mechanisms, their source (built-in, documented, library),
+   anything global that now also runs for the existing endpoints.
+
+Per framework:
+
+| Folder | Phase 2 work |
+| --- | --- |
+| axum | `Path`, `Query`, `Json`, `Form` extractors; range checks by hand (or `validator`); `axum_csrf`; `tower-sessions` + `PostgresStore` (table in `db.sql`, no `migrate()` at start); `/me` loads the user with SQLx; Askama for `/form` pages |
+| actix | `web::Path/Query/Json/Form`; manual ranges; `actix-csrf`; `actix-session` cookie store; SQLx; Askama |
+| loco | Loco controllers with `QueryValidate`/`JsonValidate`/`FormValidate`; `axum_csrf` layer on the form routes; enable `auth_session` (default cookie store); SeaORM for `world`, `users`; Tera |
+| topcoat | `path_param!`, `#[query_params]`, `content::Json`/`Form`; `OriginPolicy` (on by default); enable `session` + `cookie`, session table in `db.sql` read with Toasty; `view!` |
+| rullst | `routes!` with typed params; `Validate` + `ValidatedJson`/`ValidatedForm`; generated `csrf_middleware` (already on); `write_csrf` for the PUT (`rullst_csrf` / `X-CSRF-Token`); `make:auth` session registry (table in `db.sql`), Argon2 column; `html!` |
+| rullst-minimal | same handlers; `csrf_middleware` only on `/form`; same session registry; no production `Server` stack |
+| rails | routes with constraints; ActiveModel form objects for `/worlds` and `/form`; `protect_from_forgery` (default); `bin/rails generate authentication` adapted to `users` (`password_bcrypt` via `has_secure_password` attribute mapping); `sessions` table in `db.sql`; ERB |
+| laravel | `whereNumber`; `$request->validate`; `/form`, `/login`, `/me` in the `web` group; `database` session driver with `sessions` in `db.sql` (open question 4); `Auth::attempt` with `$2y$` hash; Blade |
+| django | `<int:id>`; Django forms for `/worlds`, `/form`, PUT body; `CsrfViewMiddleware` (on); custom user model on `users` (`db_table`), `contrib.auth` login, `django_session` in `db.sql`; templates |
+| phoenix | router `:id` + Ecto cast; schemaless changesets; `:browser` pipeline with `protect_from_forgery` for `/form`, `/login`, `/me`; `phx.gen.auth`-style token table (`users_tokens` in `db.sql`) adapted to `users`; HEEx |
+| spring-boot | `@PathVariable`, `@RequestParam @Min @Max`, `@Valid` bodies (validation starter); Spring Security (starter) with `securityMatcher` on the three routes, form login, default CSRF, in-memory session; JPA; Thymeleaf |
+| aspnet-core | route `{id:int}`; DataAnnotations validation; antiforgery on `/form`; cookie authentication; BCrypt.Net-Next for the login check; EF Core; Razor Pages |
+| nestjs | `ParseIntPipe`, `ValidationPipe` + class-validator DTOs; `app.enableCsrfProtection()`; `@nestjs/authentication` if it works on NodeAdapter, else `express-session` + `connect-pg-simple` (`session` table in `db.sql`); TypeORM; hbs |
+| fastapi | `id: int`, `Query(ge, le)`, Pydantic model for PUT, `Form()`; `asgi-csrf`; Starlette `SessionMiddleware`; pwdlib/bcrypt for login; SQLModel; Jinja2 |
+| fastify | JSON schemas for params, querystring, body; `@fastify/formbody`, `@fastify/cookie`, `@fastify/csrf-protection`, `@fastify/secure-session`; node-postgres; EJS |
+| gin | `ShouldBindUri/Query/JSON/ShouldBind` with validator tags; `http.CrossOriginProtection` around the engine; `gin-contrib/sessions` cookie store; GORM; html/template |
+
+## 11. Open questions for the maintainer
+
+Each has the spec's current answer; a different decision changes the
+sections named.
+
+1. **422 only for `PUT /world/{id}`?** The brief proposed 422 for an
+   out-of-range body. The spec accepts 400 or 422 (§2.6), because seven of the
+   sixteen default to 400 and the status costs nothing in the timing.
+   Requiring 422 means an error-handler override in Spring, ASP.NET Core,
+   NestJS, Fastify, Actix, Loco and Topcoat.
+2. **Scope of the browser stack.** The spec scopes sessions, CSRF and auth
+   to `/form`, `/login` and `/me` where the framework documents how (§2.3),
+   so the existing endpoints keep comparable numbers. The alternative is the
+   global setup a real app has (for example Spring Security's filter chain
+   on every request), which lowers those frameworks' `/json` and `/html`.
+3. **A CSRF-free control endpoint** (`POST /form-raw`, same handler without
+   protection) would show each design's cost separately. Not in phase 2;
+   it could be a diagnostic that is reported but not ranked.
+4. **Laravel's session driver.** The rule (§6.2) says `database`, Laravel's
+   default. Because `/html` is in the `web` group and the load sends no
+   cookies, every `/html` request would then insert a session row, which
+   lowers Laravel's `/html` result. The alternative is to keep the `cookie`
+   driver it uses today and say so in its README.
+5. **Contention.** `PUT /world/{id}` spreads writes over 10,000 rows (§3.3).
+   A "hot rows" run (all writes on 10 ids) would measure lock waits and the
+   ORM's transaction handling; it is not in phase 2.
+6. **Switching the existing endpoints to wrk.** The spec moves every
+   endpoint to wrk at once, so client-boundness is the same everywhere.
+   Fast implementations will gain requests/s on `/text`, `/json` and
+   `/html` (more client headroom, §7.3); ratios to Axum stay comparable,
+   absolute numbers before and after do not, and the history needs a note.
+7. **Rullst's cookieless `PUT`.** Rullst's production stack refuses it, so
+   the spec sends the CSRF cookie and header as a same-site script would
+   (`write_csrf`, §3.3). The alternative is a `MachineEndpointPolicy` bearer
+   endpoint, which would make the harness send a token that only Rullst
+   checks. Either way this is a finding to state in the results: an
+   unauthenticated JSON write needs one of the two in Rullst.
+8. **Error-rate cut-off.** The spec gives no capacity ratio to a phase-2 run
+   with more than 1% errors (§2.5). The existing tiers only report errors.
+9. **Session store rule.** Defaults (§6.2) rather than one fixed store;
+   confirm, or ask for a later, separately labelled fixed-store run.
+10. **Weights.** The Application category weighs 1/7 like the others. `/me`
+    and `/form` could also be their own category.
+11. **wrk build.** wrk publishes no binaries. The spec builds the pinned
+    source tarball on the runner (seconds) and records the binary's
+    SHA-256 with the results; building it in a pinned container image
+    instead would also pin the compiler and OpenSSL. oha (MIT, release
+    binaries with digests) is the fallback if a release binary is required.
