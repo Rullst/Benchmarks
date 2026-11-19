@@ -36,6 +36,22 @@ convention.
   instead of measuring a server with fewer workers. The primary handles
   `SIGTERM` because it is PID 1 in the container.
 
+## Production settings
+
+| Setting | Value | Source |
+| --- | --- | --- |
+| `NODE_ENV` | `production` (Dockerfile `ENV`); `@fastify/view` reads it | CONTRIBUTING.md (Node.js convention) |
+| Logging | none: `Fastify()` without `logger`, whose default is `false` ("The logger is disabled"), so no request or start-up lines | [Server, `logger`](https://fastify.dev/docs/latest/Reference/Server/#logger) |
+| Template cache | on: `@fastify/view`'s `production` option defaults to `NODE_ENV === "production"`, in which it "will heavily cache the templates file and functions" (compiled templates, not responses) | [@fastify/view options](https://github.com/fastify/point-of-view#options) |
+| Database layer | `@fastify/postgres` (the plugin the Database guide uses), `fastify.pg.query(text, values)` | [Database guide](https://fastify.dev/docs/latest/Guides/Database/), [@fastify/postgres](https://github.com/fastify/fastify-postgres) |
+| Pool | node-postgres `Pool` `max` = `DB_POOL_SIZE / BENCH_WORKERS` = 8 per process, 16 in total (the plugin passes its options to the pool) | [@fastify/postgres](https://github.com/fastify/fastify-postgres), [pg Pool](https://node-postgres.com/apis/pool) (`max`) |
+| Prepared statements | not used: the queries carry no `name`, so each is an unnamed statement that PostgreSQL parses and plans every time. node-postgres documents named (prepared) statements but advises against them for simple queries: "Be careful not to fall into the trap of premature optimization. Most of your queries will likely not benefit much, if at all, from using prepared statements"; neither the Database guide nor `@fastify/postgres` mentions them | [node-postgres, Prepared statements](https://node-postgres.com/features/queries) |
+| Driver | `pg`, the pure JavaScript client. `@fastify/postgres` offers `native: true` with `pg-native` "if you want maximum performance", but node-postgres does not recommend the native bindings ("the pure JavaScript driver is plenty fast") and they would add a compiled `libpq` dependency, so it is not used | [@fastify/postgres, Native option](https://github.com/fastify/fastify-postgres), [node-postgres, Native bindings](https://node-postgres.com/features/native) |
+| Serialization | response schemas on the JSON routes (fast-json-stringify) | [Recommendations](https://fastify.dev/docs/latest/Guides/Recommendations/): "Define response schemas to speed up JSON serialization" |
+| Listen address | `0.0.0.0` | [Recommendations](https://fastify.dev/docs/latest/Guides/Recommendations/) (Kubernetes) |
+| Workers | `node:cluster`, `BENCH_WORKERS` (2) processes | CONTRIBUTING.md (Node.js convention), [cluster](https://nodejs.org/api/cluster.html) |
+| Caches | none (no response or query-result cache) | |
+
 Database and application endpoints:
 
 - `/queries`: one query per random id, run concurrently (`Promise.all`) on

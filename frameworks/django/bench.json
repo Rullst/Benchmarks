@@ -41,5 +41,6 @@
     "write_csrf": null
   },
   "startup_timeout_s": 120,
+  "structure_note": "Python 3.15.2, the newest Django 6.1 supports (FastAPI runs 3.14.10)",
   "notes": "startproject settings with the deployment checklist applied; HTTPS settings stay off (no TLS)."
 }

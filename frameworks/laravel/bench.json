@@ -8,7 +8,7 @@
   "runtime": "PHP 8.5.12 with OPcache",
   "server": "Nginx with PHP-FPM, as in Laravel's deployment documentation",
   "workers": "Nginx: BENCH_WORKERS (2) workers; PHP-FPM: pm = static with pm.max_children = DB_POOL_SIZE (16) processes",
-  "database_layer": "Eloquent (pdo_pgsql); one connection per PHP-FPM process, opened for each request (at most 16)",
+  "database_layer": "Eloquent (pdo_pgsql); a new connection for every request, no persistent PDO connections (Laravel's default; at most 16 open, one per PHP-FPM process)",
   "template_engine": "Blade",
   "logging": "none (Nginx and PHP-FPM access logs off; Laravel logs warnings and errors to stderr)",
   "endpoints": [
@@ -40,5 +40,6 @@
     "write_csrf": null
   },
   "startup_timeout_s": 120,
+  "structure_note": "Nginx (2 workers) and PHP-FPM (16 processes) share the 2 vCPUs",
   "notes": "php artisan optimize runs at start-up. The web group (/html, /form, /login, /me) uses the cookie session driver, not Laravel's default database driver: the load sends /html no cookies, so the database driver would insert a sessions row on every /html request (decision 4 of docs/v3-spec.md, pending the maintainer's confirmation)."
 }

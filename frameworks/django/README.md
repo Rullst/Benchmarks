@@ -63,3 +63,20 @@ recommends for production. `requirements.txt` was compiled from
 `requirements.in` for Python 3.15 on x86_64 Linux with
 `uv pip compile --generate-hashes` (command at the top of the file); the
 Dockerfile's `lockfile` stage runs that command for the pull request check.
+
+## Production settings
+
+| Setting | Value | Source |
+| --- | --- | --- |
+| Django | `DEBUG = False`, `SECRET_KEY` from the environment, `ALLOWED_HOSTS` | [Deployment checklist](https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/) |
+| Logging | Gunicorn `accesslog = None` (its default: no access log); Django's `LOGGING` sends warnings and errors to stderr and logs nothing for a successful request | [Gunicorn `accesslog`](https://gunicorn.org/reference/settings/), [checklist: LOGGING](https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/) |
+| Server | Gunicorn, `gthread` worker (the `sync` default closes every connection; gthread "supports keep-alive connections") | [How to use Django with Gunicorn](https://docs.djangoproject.com/en/6.1/howto/deployment/wsgi/gunicorn/), [Gunicorn design](https://gunicorn.org/design/) |
+| Workers | `BENCH_WORKERS` (2) processes, the suite's convention for Python (Gunicorn suggests "2-4 x $(NUM_CORES)" and leaves the choice to the workload) | [Gunicorn `workers`](https://gunicorn.org/reference/settings/), CONTRIBUTING.md |
+| Threads | 8 per worker: 4 x 2 cores, inside Gunicorn's "2-4 x $(NUM_CORES)" range, and `DB_POOL_SIZE / workers` | [Gunicorn `threads`](https://gunicorn.org/reference/settings/) |
+| Connections | persistent (`CONN_MAX_AGE = 600`), one per thread: 2 x 8 = 16, all usable; `CONN_HEALTH_CHECKS` off (default). Django's optional psycopg pool (`OPTIONS["pool"]`) is not used: the checklist recommends `CONN_MAX_AGE`, and the pool needs `psycopg[pool]` | [checklist: CONN_MAX_AGE](https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/), [Databases: Connection pool](https://docs.djangoproject.com/en/6.1/ref/databases/) |
+| Prepared statements | none: with psycopg 3 Django defaults to client-side binding cursors (`server_side_binding` off) | [Databases: Server-side parameters binding](https://docs.djangoproject.com/en/6.1/ref/databases/) |
+| Driver | `psycopg[c]`, the local installation, "the preferred way to install Psycopg for a production site" | [psycopg installation](https://www.psycopg.org/psycopg3/docs/basic/install.html) |
+| Templates | cached template loader (on when `DEBUG = False`) | [checklist: TEMPLATES](https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/) |
+| Python | **3.15.2** (FastAPI's folder uses 3.14.10): Django 6.1.3 supports 3.12-3.15, and Django recommends "the latest version of Python 3" | [FAQ: Installation](https://docs.djangoproject.com/en/6.1/faq/install/) |
+| JIT | none: the official `python` image is built without CPython's experimental JIT (PGO and LTO only) | [python image Dockerfile](https://github.com/docker-library/python/blob/master/3.15/slim-trixie/Dockerfile) |
+| Structure | Gunicorn alone (arbiter and 2 workers) in the 2 vCPUs. Gunicorn's deployment guide "strongly recommend[s] running Gunicorn behind a proxy server" (Nginx), mainly to buffer slow clients for the `sync` worker; no proxy runs in the container, as in Django's Gunicorn how-to | [Gunicorn: Deploying](https://gunicorn.org/deploy/) |

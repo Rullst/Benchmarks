@@ -8,7 +8,7 @@
   "runtime": "Ruby 4.0.9 with YJIT and jemalloc",
   "server": "Puma 8.1 behind Thruster 0.1, as in the Dockerfile rails new generates",
   "workers": "Puma cluster mode: WEB_CONCURRENCY = BENCH_WORKERS (2) workers x 3 threads (the generated RAILS_MAX_THREADS default)",
-  "database_layer": "Active Record (pg 1.7), up to 8 connections per worker (16 in total)",
+  "database_layer": "Active Record (pg 1.7), pools of up to 8 connections per worker (16 in total); 6 in use, one per Puma thread (2 workers x 3 threads)",
   "template_engine": "ERB (Action View)",
   "logging": "Rails at warn (no request lines); Thruster's request log off",
   "endpoints": [
@@ -41,5 +41,7 @@
     "write_csrf": null
   },
   "startup_timeout_s": 120,
+  "jit": true,
+  "structure_note": "Thruster (HTTP proxy) and Puma (2 workers x 3 threads) share the 2 vCPUs",
   "notes": "The rails new production setup; force_ssl stays commented out (no TLS) and db:prepare does not run at start-up."
 }

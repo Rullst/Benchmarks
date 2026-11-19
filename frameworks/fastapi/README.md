@@ -51,3 +51,17 @@ logins. `requirements.txt` comes from the Dockerfile's `lockfile` stage
 
 Python 3.14 is used rather than 3.15 because it is the newest release that
 Uvicorn lists as supported, and every dependency publishes 3.14 wheels.
+
+## Production settings
+
+| Setting | Value | Source |
+| --- | --- | --- |
+| Server | Uvicorn with `--workers $BENCH_WORKERS` (2 processes), uvloop and httptools chosen by `--loop auto` / `--http auto` (`uvicorn[standard]`) | [Server Workers](https://fastapi.tiangolo.com/deployment/server-workers/), [Uvicorn settings](https://uvicorn.dev/settings/) |
+| Logging | `--no-access-log`; Uvicorn's `--log-level` stays `info`, which prints only start-up messages once the access log is off | [Uvicorn settings](https://uvicorn.dev/settings/) |
+| Threads | FastAPI runs the `def` path operations "in an external threadpool" (AnyIO's default size); the `async def` ones (`/text`, `/json`, `/html`, the form pages) on the event loop | [Concurrency and async / await](https://fastapi.tiangolo.com/async/) |
+| Pool | SQLAlchemy's `QueuePool` per process, `pool_size` = `DB_POOL_SIZE / BENCH_WORKERS` (8), `max_overflow=0`: 16 in total, all usable; no `pool_pre_ping` (SQLAlchemy's default; the full-stack template sets it, the SQL tutorial does not) | [SQL (Relational) Databases](https://fastapi.tiangolo.com/tutorial/sql-databases/), [SQLAlchemy pooling](https://docs.sqlalchemy.org/en/21/core/pooling.html) |
+| Prepared statements | psycopg 3's default: a statement is prepared on a connection after it has run `prepare_threshold` (5) times there | [psycopg: Prepared statements](https://www.psycopg.org/psycopg3/docs/advanced/prepare.html) |
+| Driver | `psycopg[binary]`, as FastAPI's [full-stack template](https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/pyproject.toml) installs it; psycopg calls the binary package "recommended for most users" and the local `psycopg[c]` build (Django's folder) "the preferred way ... for a production site". Not changed: it would need a new lockfile and a compiler in the image | [psycopg installation](https://www.psycopg.org/psycopg3/docs/basic/install.html) |
+| Python | **3.14.10** (Django's folder uses 3.15.2): FastAPI's container guide and full-stack template use `python:3.14`, and Uvicorn 0.54 lists Python up to 3.14 | [FastAPI in Containers](https://fastapi.tiangolo.com/deployment/docker/), [uvicorn on PyPI](https://pypi.org/project/uvicorn/0.54.0/) |
+| JIT | none: the official `python` image is built without CPython's experimental JIT (PGO and LTO only) | [python image Dockerfile](https://github.com/docker-library/python/blob/master/3.14/slim-trixie/Dockerfile) |
+| Structure | Uvicorn alone (a supervisor process and 2 workers) in the 2 vCPUs; FastAPI's container guide puts the TLS termination proxy outside the container | [FastAPI in Containers](https://fastapi.tiangolo.com/deployment/docker/) |

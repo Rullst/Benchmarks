@@ -39,5 +39,6 @@
     },
     "write_csrf": null
   },
-  "startup_timeout_s": 120
+  "startup_timeout_s": 120,
+  "structure_note": "Python 3.14.10, as in FastAPI's container guide (Django runs 3.15.2)"
 }

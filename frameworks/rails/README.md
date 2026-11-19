@@ -79,3 +79,30 @@ jemalloc (preconfigured in the generated Dockerfile). Thruster is part of the
 generated Dockerfile; Rails responses are `Cache-Control: private`, so its
 cache does not store them, and it compresses only for clients that send
 `Accept-Encoding`, which the harness does not.
+
+## Production settings
+
+| Setting | Value | Source |
+| --- | --- | --- |
+| Environment | `RAILS_ENV=production`: eager loading, no reloading, `consider_all_requests_local = false` (the generated `production.rb`) | [Configuring Rails Applications](https://guides.rubyonrails.org/configuring.html) |
+| Logging | `RAILS_LOG_LEVEL=warn`, the variable the generated `production.rb` reads (generated default `info`, a line per request); Thruster `LOG_REQUESTS=false` (default: every request logged) | [Configuring: `config.log_level`](https://guides.rubyonrails.org/configuring.html), [Thruster](https://github.com/basecamp/thruster/blob/v0.1.27/README.md) |
+| Workers | Puma cluster mode, `WEB_CONCURRENCY` = `BENCH_WORKERS` (2), one per CPU core | [Tuning Performance for Deployment](https://guides.rubyonrails.org/tuning_performance_for_deployment.html) |
+| Threads | 3 per worker, the generated `RAILS_MAX_THREADS` default, kept as the guide advises (with Ruby's GVL an application "is unlikely to benefit from more than 3 threads") | [Tuning Performance for Deployment](https://guides.rubyonrails.org/tuning_performance_for_deployment.html) |
+| Pool | `max_connections` = `DB_POOL_SIZE / WEB_CONCURRENCY` = 8 per worker; **6 of the 16 connections are used** (see below) | [Configuring: Database Pooling](https://guides.rubyonrails.org/configuring.html#database-pooling) |
+| Prepared statements | the PostgreSQL adapter's default: on, up to 1000 per connection | [Configuring a PostgreSQL Database](https://guides.rubyonrails.org/configuring.html#configuring-a-postgresql-database) |
+| Query cache | Rails' per-request query cache stays on; `/queries` and `/updates` bypass it with `World.uncached`, since the TechEmpower rules forbid answering a repeated id from a cache | |
+| JIT | **YJIT on**: `config.yjit` defaults to `!Rails.env.local?` in the 8.1 defaults (Rails enables YJIT since 7.2 on Ruby 3.3+), and the official `ruby` image is built with `--enable-yjit` on x86-64. Not checked at run time here | [Tuning: YJIT](https://guides.rubyonrails.org/tuning_performance_for_deployment.html), [Rails 7.2 release notes](https://guides.rubyonrails.org/7_2_release_notes.html), [ruby image Dockerfile](https://github.com/docker-library/ruby/blob/master/4.0/slim-trixie/Dockerfile) |
+| Memory allocator | jemalloc through `LD_PRELOAD`, as the generated Dockerfile sets it | [Tuning: Memory Allocators](https://guides.rubyonrails.org/tuning_performance_for_deployment.html) |
+| Proxy | Thruster in front of Puma, as the generated Dockerfile starts it; its cache does not store Rails' `private` responses and it compresses only for clients that send `Accept-Encoding` | [Thruster](https://github.com/basecamp/thruster/blob/v0.1.27/README.md) |
+| Structure | Thruster (one Go process) and Puma (2 workers x 3 threads) run in the same container and share its 2 vCPUs | |
+
+**Connections in use: 6 of 16.** Each Puma thread handles one request at a
+time and uses at most one Active Record connection, which the pool opens only
+when a thread needs one. With the Rails and Puma production defaults, 2
+workers x 3 threads, at most 6 connections are ever open, although each
+worker's pool may hold 8 (the suite's 16 divided between the two workers).
+Using all 16 would mean 8 threads per worker. The tuning guide keeps the
+generated 3: an application that spends less than half its time on I/O "is
+unlikely to benefit from more than 3 threads", and more threads "may severely
+hurt latency". So the threads stay at the generated default and 10 of the
+suite's connections stay unused.

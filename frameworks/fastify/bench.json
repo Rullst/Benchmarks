@@ -42,5 +42,6 @@
   "env": {
     "SESSION_KEY": "901836cd1ab6b87d640fa6d918907f29f9735cf2a7d6a53fef6b5bf4ec92efa7"
   },
-  "startup_timeout_s": 120
+  "startup_timeout_s": 120,
+  "jit": true
 }

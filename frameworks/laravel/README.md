@@ -97,3 +97,51 @@ the pool follows the PHP-FPM manual's memory-based sizing, capped at the
 suite's connection count. FrankenPHP and Octane are
 documented alternatives that keep the application in memory between
 requests; this implementation measures the classic PHP-FPM setup.
+
+## Production settings
+
+| Setting | Value | Source |
+| --- | --- | --- |
+| Environment | `APP_ENV=production`, `APP_DEBUG=false` | [Deployment: Debug Mode](https://laravel.com/docs/13.x/deployment#debug-mode) |
+| Caches | `php artisan optimize` at start-up: configuration, events, routes and views cached | [Deployment: Optimization](https://laravel.com/docs/13.x/deployment#optimization) |
+| Autoloader | `composer install --no-dev`, `composer dump-autoload --optimize` | [Composer: autoloader optimization](https://getcomposer.org/doc/articles/autoloader-optimization.md) |
+| Logging | Nginx `access_log off`, PHP-FPM's access log removed; Laravel `LOG_CHANNEL=stderr`, `LOG_LEVEL=warning` (Laravel writes no line per request) | [Logging](https://laravel.com/docs/13.x/logging) |
+| Database connection | **a new PostgreSQL connection for every request**: each PHP-FPM child connects when a request first queries and disconnects when the request ends; no persistent PDO connections (`PDO::ATTR_PERSISTENT` is not set). At most 16 open at once, one per child | see "Database connections" below |
+| Prepared statements | Laravel's default PDO options (`PDO::ATTR_EMULATE_PREPARES => false`): pdo_pgsql prepares each statement on the server, on that request's new connection | [Connector.php](https://github.com/laravel/framework/blob/13.x/src/Illuminate/Database/Connectors/Connector.php) |
+| Server | Nginx with the documented server block in front of PHP-FPM, over a Unix socket | [Deployment: Nginx](https://laravel.com/docs/13.x/deployment#nginx) |
+| Workers | Nginx `worker_processes` = `BENCH_WORKERS` (2); PHP-FPM `pm = static`, `pm.max_children` = `DB_POOL_SIZE` (16) | [PHP-FPM configuration](https://www.php.net/manual/en/install.fpm.configuration.php) |
+| php.ini | the image's `php.ini-production` | [php image: Configuration](https://hub.docker.com/_/php) |
+| OPcache | on (`opcache.enable=1`, PHP's default for PHP-FPM; built in since PHP 8.5); `memory_consumption=128` and `interned_strings_buffer=8` (the manual's recommended values), `max_accelerated_files=20000` (above the application's PHP file count), `validate_timestamps=0` (the image's code never changes; Forge's production OPcache optimisation likewise needs a PHP-FPM reload on every deployment) | [OPcache installation](https://www.php.net/manual/en/opcache.installation.php), [OPcache configuration](https://www.php.net/manual/en/opcache.configuration.php), [Forge: PHP, OPcache](https://laravel.com/forge/docs/servers/php) |
+| OPcache JIT | **off**: `opcache.jit` is not set, and its default has been `disable` since PHP 8.4. Neither Laravel's documentation nor Forge's recommends turning it on | [OPcache configuration: `opcache.jit`](https://www.php.net/manual/en/opcache.configuration.php) |
+| Structure | Nginx (2 workers) and PHP-FPM (16 children) run in the same container and share its 2 vCPUs | |
+
+### Database connections
+
+Laravel opens its PDO connection lazily and PHP closes it at the end of the
+request; under PHP-FPM every request therefore starts a new PostgreSQL
+connection (authentication and backend start-up included), which shows up as
+PostgreSQL CPU per request on the database endpoints. Persistent connections
+were considered and **not** used, because Laravel's own guidance does not
+recommend them:
+
+- Laravel's [database](https://laravel.com/docs/13.x/database) and
+  [deployment](https://laravel.com/docs/13.x/deployment) pages do not mention
+  `PDO::ATTR_PERSISTENT` or persistent connections; the per-connection
+  `options` array is only shown for MySQL's SSL CA.
+- [Forge's PHP page](https://laravel.com/forge/docs/servers/php) covers
+  OPcache and PHP-FPM settings, not persistent connections. Laravel Cloud's
+  [Serverless Postgres](https://laravel.com/cloud/docs/resources/databases/postgres)
+  page answers too many connections with its pgbouncer pooler or fewer
+  workers, not with persistent PDO connections.
+- PHP's manual describes the trade-off without recommending it as a default:
+  "Persistent connections are beneficial when the overhead of creating a link
+  to an SQL server is high", but "PDO does not perform any cleanup of
+  persistent connections. Temporary tables, locks, transactions and other
+  stateful changes may remain from previous usage of the connection"
+  ([persistent connections](https://www.php.net/manual/en/features.persistent-connections.php),
+  [PDO connections](https://www.php.net/manual/en/pdo.connections.php)).
+
+Laravel documents [Octane](https://laravel.com/docs/13.x/octane) for keeping
+the application in memory between requests; this implementation measures the
+classic PHP-FPM setup, so its database results include a new connection per
+request.
