@@ -13,7 +13,7 @@ COPY --from=resolve /src/packages.lock.json /
 FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble AS build
 WORKDIR /src
 COPY AspNetCoreBench.csproj packages.lock.json ./
-RUN dotnet restore --locked-mode
+RUN dotnet restore
 COPY Program.cs appsettings.json ./
 COPY Pages ./Pages
 RUN dotnet publish --no-restore --configuration Release --output /app
@@ -21,7 +21,7 @@ RUN dotnet publish --no-restore --configuration Release --output /app
 RUN awk '/^      "[^"]+": \{$/ { name = $1; gsub(/[":]/, "", name) } \
          /^        "resolved": / { version = $2; gsub(/[",]/, "", version); print name, version }' \
         packages.lock.json \
-    | grep -E '^(Microsoft\.EntityFrameworkCore|Microsoft\.EntityFrameworkCore\.Relational|Npgsql|Npgsql\.EntityFrameworkCore\.PostgreSQL) ' \
+    | grep -E '^(Microsoft\.EntityFrameworkCore|Microsoft\.EntityFrameworkCore\.Relational|Npgsql|Npgsql\.EntityFrameworkCore\.PostgreSQL|BCrypt\.Net-Next) ' \
     | sort > /versions.txt \
     && cat /versions.txt
 

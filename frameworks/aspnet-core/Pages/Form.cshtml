@@ -1,0 +1,4 @@
+@page "/form"
+@model AspNetCoreBench.Pages.FormModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+<!DOCTYPE html><html><head><title>Form</title></head><body><form method="post" action="/form" asp-antiforgery="true"><input type="text" name="name"><input type="number" name="randomNumber"><button type="submit">Send</button></form></body></html>
