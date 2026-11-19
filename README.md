@@ -120,7 +120,7 @@ implemented yet" for them.
 | `GET /worlds?min=&max=&limit=&page=` | the rows with `min <= id <= max`, ordered by id, `limit` rows of page `page`, as a JSON array, in one query (defaults 1, 10,000, 20, 1; `limit` 1-100, `page` 1-1000). Parameters are validated with the framework's mechanism: a value that is not an integer, out of range, or `min > max` is answered 400 or 422. Measured with 2,000 random 1,000-id windows, 20 rows per page, pages 1-5 |
 | `PUT /world/{id}` | body `{"randomNumber": n}` (an integer 1-10,000), validated (400 or 422 otherwise, with nothing written); the row is changed the ORM's usual way and returned as stored. A public JSON API call, sent without cookies (Rullst as generated, which refuses cookieless writes, gets its CSRF cookie and header). Measured with the 10,000 ids shuffled, random values |
 | `POST /form` | an urlencoded form (`name`, 1-64 characters, and `randomNumber`, 1-10,000) checked by the framework's CSRF protection and validated, answered with a page that greets the name (escaped) rendered by the template engine. Sent like a browser that loaded `GET /form` once: its cookies and hidden fields, `Origin` and `Sec-Fetch-Site: same-origin`. Measured with 125 such sessions |
-| `GET /me` | `{"id":…,"username":…,"displayName":…}` for the signed-in user: the framework's default session mechanism, then the user's row read through the ORM on every request; 401, 403 or a redirect without a session. Measured with 125 sessions, one login each (`user1`..`user125`, made before the warm-up and not timed) |
+| `GET /me` | `{"id":…,"username":…,"displayName":…}` for the signed-in user: the framework's default session mechanism, then the user's row read through the ORM on every request; 401, 403 or a redirect without a session. Measured with 125 sessions, one login each (`user1`..`user125`, made after Tier 4 and not timed) |
 
 Each `/form` and `/me` result is shown with the implementation's CSRF design
 (`token`, a secret the form echoes, or `fetch-metadata`, `Sec-Fetch-Site` and
@@ -129,7 +129,7 @@ Each `/form` and `/me` result is shown with the implementation's CSRF design
 (built-in, the framework's generator, the language's standard library, a
 package the framework's documentation recommends, or the most-used library).
 
-**Write contention ("hot rows").** After the Tier 1 runs, `PUT /world/{id}`
+**Write contention ("hot rows").** After the other runs, `PUT /world/{id}`
 runs again with 125 connections for 10 s, but on ids 1-10 only, so requests
 wait for each other's row locks. Its errors, timeouts and p99 latency are
 reported next to Axum's; it is not part of any ranking.
@@ -138,7 +138,7 @@ The tiers:
 
 | Tier | Load | Reported |
 | --- | --- | --- |
-| 1 | 125 connections for 10 s on each endpoint (reads first, then the two writing endpoints), and the hot-rows run | requests/s, p50 and p99 latency, errors, server CPU, server efficiency, PostgreSQL CPU |
+| 1 | 125 connections for 10 s on each endpoint (reads before writes; the application endpoints and the hot-rows run after Tier 4) | requests/s, p50 and p99 latency, errors, server CPU, server efficiency, PostgreSQL CPU |
 | 2 | 300 connections for 30 s on `/json` | requests/s, p50 and p99 latency, errors and timeouts, server efficiency |
 | 3 | idle for 10 s, then 200 connections for 15 s on `/json` | idle and peak RAM, idle and loaded CPU |
 | 4 | 500 connections for 2 minutes on `/json` | requests/s, p99, errors and timeouts, server efficiency, RAM growth, whether the server stopped |
@@ -216,9 +216,14 @@ memory, the Docker version, image digests and tool versions with the results.
    initial values and rewrites it (`VACUUM FULL`, so earlier `/updates` runs
    leave no dead rows behind), empties the framework's own tables (its
    sessions), starts a fresh container, waits for it to answer, measures it
-   idle, obtains the sessions the phase-2 endpoints need (125 `GET /form`
-   pages and 125 logins, 8 at a time, not timed), warms up each endpoint for
-   5 s and runs the four tiers. Results are the median over rounds, with the lowest and
+   idle, warms up each endpoint up to `/fortunes` for 5 s and runs the four
+   tiers. The application endpoints come last: the harness obtains the
+   sessions they need (125 `GET /form` pages and 125 logins, 8 at a time, not
+   timed), warms each of them up for 5 s, measures them at Tier 1 and runs
+   the hot-rows test. They run after Tier 4 because logging in hashes
+   passwords, and a memory-hard hash leaves memory in the allocator (Axum went
+   from 1 MiB to about 1 GiB after 125 Argon2id logins in the first trial),
+   which would distort the RAM measured in Tiers 3 and 4. Results are the median over rounds, with the lowest and
    highest round shown as the spread.
 5. **Ratios.** For every round, each metric of the framework is divided by
    Axum's value from the adjacent round on the same runner; the reported ratio

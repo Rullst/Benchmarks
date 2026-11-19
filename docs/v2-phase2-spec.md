@@ -33,9 +33,9 @@ Phase 2 adds five endpoints:
 | Invalid input | **400 or 422** both conform, for query strings and bodies, and nothing may be written; 422 is recommended for well-formed input that fails validation | invalid requests are only sent by the conformance check, never under load, so the code costs nothing in the results; the frameworks' defaults split between the two (§2.6) |
 | CSRF | The framework's built-in protection, else the platform's standard library, else the library the framework's docs recommend, else the most-used maintained library. The harness submits the form like a browser (hidden fields, cookies, `Origin`, `Sec-Fetch-Site: same-origin`). CSRF stays in the timing; the results show each implementation's CSRF design | §5 |
 | Sessions | The framework's default production mechanism for a signed-in user (its auth generator or documented auth package); without one, the documented or most-used session library, with its PostgreSQL store when it has one, else its signed or encrypted cookie store. `/me` must read the user's row on every request. The results show each implementation's session store | §6 |
-| Sessions in the load | 125 sessions (one per connection, like 125 signed-in users), obtained before the warm-up of every round, cycled across requests | no single hot session row; the same work for every store |
+| Sessions in the load | 125 sessions (one per connection, like 125 signed-in users), obtained in every round before the phase-2 warm-up, cycled across requests | no single hot session row; the same work for every store |
 | Tables a framework owns | `frameworks/<name>/db.sql`, declared in bench.json and applied by the harness; no schema changes at start-up | session tables differ per framework; start-up time stays comparable |
-| Tier | All five in Tier 1: 125 connections, 10 s, after a 5 s warm-up | like phase 1's endpoints; reads before writes in each round |
+| Tier | All five in Tier 1: 125 connections, 10 s, after a 5 s warm-up, measured at the end of the round, after Tier 4 | like phase 1's endpoints; reads before writes; after Tier 4 because 125 logins with a memory-hard hash leave allocator memory that would distort the RAM of Tiers 3-4 (§8) |
 | Rankings | A new **Application** category: geometric mean of the five capacity ratios, weighted like the others (1/7); no score for a run with more than 1% errors | same method as phase 1's Database category |
 | Contention | A **hot-rows** run: `PUT /world/{id}` on ids 1-10, Tier 1 connections and duration, after the Tier 1 runs; errors, timeouts and p99 reported, not ranked | a reviewer asked for contention; needs no new endpoint (§3.4) |
 | Coexistence | bench.json `"endpoints"` (phase 1's capability list) gains the five names; an implementation that does not declare one is "incomplete" in the Application category, as in phase 1 | §8 |
@@ -345,7 +345,7 @@ record); it is not ranked. It needs no implementation work beyond
    characters, `randomNumber=0`, `randomNumber=abc`): one of the allowed
    statuses and not the success page.
 
-**Load profile:** Tier 1. Before the warm-up of each round the harness runs
+**Load profile:** Tier 1. In every round, before the phase-2 warm-up (§8), the harness runs
 `GET /form` 125 times (8 at a time), one per future connection, and keeps
 125 pairs. The workload is 2,000 posts with random valid fields, the pairs
 used in turn (`form_posts`, joint pairing: each request's cookie matches its
@@ -477,7 +477,7 @@ fixed store for everyone". Phase 2 uses the default:
 
 ### 6.3 Obtaining the sessions
 
-Before the warm-up of every round (servers with in-memory sessions start
+In every round, before the phase-2 warm-up (§8; servers with in-memory sessions start
 empty each round): 125 logins as `user1`..`user125` (8 at a time), keeping
 the cookies each login sets. If a login response is JSON with a `token`
 string and sets no cookie (bearer-token designs), the harness sends
@@ -665,7 +665,18 @@ it):
   builds wrk (and `DIR oha` installs the fallback pinned in
   `bench/loadgens.json`).
 - `bench/sessions.py`: the browser (cookie jar, form parsing, logins), used by
-  conformance and by `measure.phase2_context` before every warm-up.
+  conformance and by `measure.phase2_context`.
+- **Round order** (`measure.measure_round`): start, idle window, warm-up and
+  Tier 1 of the endpoints up to `/fortunes` (`/updates` last), Tiers 2-4,
+  the `after` RAM snapshot, then the application phase: sessions (125
+  `GET /form`, 125 logins), warm-up and Tier 1 of the declared phase-2
+  endpoints (reads first, `world-update` last), and the hot-rows run. The
+  first trial (fork run 44571055268) logged in before the warm-up, as the
+  plan said: Axum's RAM went from 1.3 MiB idle to 1,041 MiB after the 125
+  Argon2id verifications (19 MiB each; glibc keeps the freed memory in its
+  per-thread arenas) and its Tier 3 peak became 1,045 MiB instead of about
+  11, which would have distorted every Memory ratio. Every RAM metric is now
+  taken before the first login.
 - `bench/conformance_phase2.py`: the checks of sections 3, 4 and 6, called
   from `conformance.run_checks` for the declared endpoints.
 - `bench/containers.py`: `apply_db_setup`, `run_sql_file`, and
@@ -707,7 +718,7 @@ branch):
    the tables it creates; `reset_tables` also truncates them.
 5. New `bench/sessions.py`: `form_sessions(base_url, n)` (GET /form, parse
    the hidden fields and cookies) and `login_sessions(base_url, n)`; used by
-   conformance and by `measure_round` before the warm-up.
+   conformance and by `measure_round` before the phase-2 warm-up.
 6. `bench/conformance.py`: one call per declared phase-2 endpoint into a
    new `bench/conformance_phase2.py` (checks of §3, §4, §6, reusing phase
    1's `statements()` and `html_tokens()`).
@@ -841,7 +852,7 @@ contract.
   limited within a round, and nothing may throttle 125 logins from 127.0.0.1
   within a few seconds (login rate limits, jails, captchas must not trigger;
   say in the README if one had to be configured).
-- **Logins.** Before every round's warm-up: `GET /login` then `POST /login`
+- **Logins.** In every round, after Tier 4 (§8): `GET /login` then `POST /login`
   for `user1`..`user125`, 8 at a time; a status other than 200, 204, 302 or
   303, or no cookie and no bearer token, fails the round. Hashing cost is
   not timed but slows the start of every round: use the framework's

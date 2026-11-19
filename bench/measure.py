@@ -107,7 +107,8 @@ BUILDERS = {
 
 
 def phase2_context(manifest: dict, config: dict, port: int) -> dict:
-    """What the phase-2 workloads need, obtained before each round's warm-up (servers start empty).
+    """What the phase-2 workloads need, obtained in every round (servers start empty) before the
+    application endpoints' warm-up.
 
     One GET /form per future connection (its cookies and hidden fields), one
     login per connection (user1..userN), and for phase2.write_csrf the CSRF
@@ -159,43 +160,63 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
                         db_cpus=split.get("database", client), workload=workload,
                         count_statuses=count_statuses)
 
+    def warm_up(names: list[str], workloads: dict, count_statuses: bool) -> int:
+        warm = config["warmup"]
+        errors = 0
+        for endpoint in names:
+            result = load(workloads[endpoint], warm["connections"], warm["duration_s"], count_statuses)
+            errors += result["non_2xx"] + result["transport_errors"]
+            _check_alive(server, f"warm-up /{endpoint}")
+        return errors
+
+    def application_phase(names: list[str]) -> None:
+        """The phase-2 endpoints, at the end of the round: sessions, warm-up, Tier 1 runs, hot rows.
+
+        Logging in hashes 125 passwords; a memory-hard hash (Argon2id, 19 MiB
+        per verification) can leave hundreds of MiB in the allocator (Axum:
+        from 1 MiB to about 1 GiB in the first trial), which would distort
+        the RAM of Tiers 3 and 4 if it ran before them.
+        """
+        t1 = tiers["tier1"]
+        context = phase2_context(manifest, config, server.port)
+        record["sessions"] = {key: len(value) for key, value in context.items() if key.endswith("_sessions")}
+        if context.get("login_sessions"):
+            record["sessions"]["bearer"] = any(s.bearer for s in context["login_sessions"])
+        workloads = {endpoint: endpoint_workload(endpoint, config, context) for endpoint in names}
+        # Every phase-2 response that is not 2xx counts as a failure (wrk's Lua status hook).
+        record["application_warmup_errors"] = warm_up(names, workloads, True)
+        for endpoint in names:
+            record["tier1"][endpoint] = _strip_samples(
+                load(workloads[endpoint], t1["connections"], t1["duration_s"], True))
+            _check_alive(server, f"tier 1 /{endpoint}")
+            time.sleep(srv["cooldown_s"])
+        hot = config.get("hot_rows")
+        if hot and hot.get("endpoint") in names:
+            hot_workload = W.hot_rows(hot.get("ids", 10), hot.get("requests", 2000),
+                                      write_csrf=context.get("write_csrf"))
+            record["hot_rows"] = _strip_samples(load(hot_workload, t1["connections"], t1["duration_s"], True))
+            record["hot_rows"]["ids"] = hot.get("ids", 10)
+            _check_alive(server, "hot rows")
+
     try:
         record["startup_s"] = server.wait_ready(manifest.get("startup_timeout_s", 120))
         time.sleep(srv["settle_s"])
         idle = _idle_window(server, tiers["tier3"]["idle_s"], config["sampling_interval_s"])
         record["idle"] = idle
 
-        context = phase2_context(manifest, config, server.port)
-        record["sessions"] = {key: len(value) for key, value in context.items() if key.endswith("_sessions")}
-        if context.get("login_sessions"):
-            record["sessions"]["bearer"] = any(s.bearer for s in context["login_sessions"])
-        workloads = {endpoint: endpoint_workload(endpoint, config, context) for endpoint in endpoints}
-        # Every phase-2 response that is not 2xx counts as a failure (wrk's Lua status hook).
-        exact = {endpoint: endpoint in PHASE2_ENDPOINTS for endpoint in endpoints}
-
-        warm = config["warmup"]
-        warmup_errors = 0
-        for endpoint in endpoints:
-            result = load(workloads[endpoint], warm["connections"], warm["duration_s"], exact[endpoint])
-            warmup_errors += result["non_2xx"] + result["transport_errors"]
-            _check_alive(server, f"warm-up /{endpoint}")
-        record["warmup_errors"] = warmup_errors
+        # The endpoints up to /fortunes first; the application endpoints (phase 2)
+        # after Tier 4, so that no login has run before the RAM of Tiers 3 and 4
+        # is measured (see application_phase).
+        basic = [ep for ep in endpoints if ep not in PHASE2_ENDPOINTS]
+        application = [ep for ep in endpoints if ep in PHASE2_ENDPOINTS]
+        workloads = {endpoint: endpoint_workload(endpoint, config, {}) for endpoint in basic}
+        record["warmup_errors"] = warm_up(basic, workloads, False)
 
         t1 = tiers["tier1"]
         record["tier1"] = {}
-        for endpoint in endpoints:
-            record["tier1"][endpoint] = _strip_samples(
-                load(workloads[endpoint], t1["connections"], t1["duration_s"], exact[endpoint]))
+        for endpoint in basic:
+            record["tier1"][endpoint] = _strip_samples(load(workloads[endpoint], t1["connections"], t1["duration_s"]))
             _check_alive(server, f"tier 1 /{endpoint}")
-            time.sleep(srv["cooldown_s"])
-
-        hot = config.get("hot_rows")
-        if hot and hot.get("endpoint") in endpoints:
-            hot_workload = W.hot_rows(hot.get("ids", 10), hot.get("requests", 2000),
-                                      write_csrf=context.get("write_csrf"))
-            record["hot_rows"] = _strip_samples(load(hot_workload, t1["connections"], t1["duration_s"], True))
-            record["hot_rows"]["ids"] = hot.get("ids", 10)
-            _check_alive(server, "hot rows")
             time.sleep(srv["cooldown_s"])
 
         t2 = tiers["tier2"]
@@ -232,6 +253,9 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
             "memory_peak_mib": round(peak / MIB, 1) if peak else None,
         }
         server.wait_ready(10)
+
+        if application:
+            application_phase(application)
     except Crashed as crash:
         log(f"{manifest['slug']} round {number}: server stopped during {crash.phase}: {crash.state}")
         record["crashed"] = {"phase": crash.phase, "state": crash.state}

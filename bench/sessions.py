@@ -5,7 +5,7 @@ sections 4-6): it keeps the cookies the responses set (their attributes,
 `Secure` included, are ignored: the harness talks plain HTTP to 127.0.0.1),
 submits the hidden fields of the page's form, and sends `Origin` and
 `Sec-Fetch-Site: same-origin` with every form post. Conformance and the load
-bootstrap (measure.py, before each round's warm-up) use the same code.
+bootstrap (measure.py, before the application endpoints' warm-up) use the same code.
 """
 
 from __future__ import annotations

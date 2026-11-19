@@ -122,6 +122,60 @@ class ConformanceHelperTests(unittest.TestCase):
             self.assertEqual(rows, ids, query)
 
 
+class RoundOrderTests(unittest.TestCase):
+    def test_logins_come_after_every_ram_measurement(self):
+        import measure
+        from common import ENDPOINTS, load_config
+        events = []
+
+        class FakeServer:
+            port, base_url = 8080, "http://127.0.0.1:8080"
+            def state(self): return {"Running": True}
+            def wait_ready(self, _): return 0.1
+            def cpu_usec(self): return 0
+            def ram_bytes(self): return 1
+            def memory_peak_bytes(self): return 1
+            def tasks(self): return 1
+            def processes(self): return 1
+            def stop(self): events.append("stop")
+
+        def fake_load(binary, url, *, workload, connections, duration_s, **kwargs):
+            events.append(f"load {workload.label} {duration_s}")
+            return {"rps": 1.0, "non_2xx": 0, "transport_errors": 0, "error_rate": 0.0, "client_bound": False,
+                    "client_cpu_busy": 0.1, "server_ram_peak_mib": 1.0, "server_cpu_cores": 1.0,
+                    "_ram_samples": [(0.0, 1), (1.0, 1)]}
+
+        def fake_context(manifest, config, port):
+            events.append("sessions")
+            return {"form_sessions": [W.Session(cookie="c=1")], "login_sessions": [W.Session(cookie="id=1")]}
+
+        saved = {name: getattr(measure, name) for name in
+                 ("start_server", "reset_tables", "database_handle", "run_load", "phase2_context", "time",
+                  "_idle_window")}
+        fake_time = type("T", (), {"sleep": staticmethod(lambda s: None), "monotonic": staticmethod(lambda: 0.0)})
+        try:
+            measure.start_server = lambda *a, **k: FakeServer()
+            measure.reset_tables = lambda *a, **k: None
+            measure.database_handle = lambda config: None
+            measure.run_load = fake_load
+            measure.phase2_context = fake_context
+            measure.time = fake_time
+            measure._idle_window = lambda server, seconds, interval: {"ram_mib": 1.0, "cpu_cores": 0.0, "tasks": 1,
+                                                                        "processes": 1}
+            config = load_config()
+            record = measure.measure_round({"slug": "axum", "endpoints": list(ENDPOINTS)}, config,
+                                           {"server": [0], "client": [1]}, Path("wrk"), 1)
+        finally:
+            for name, value in saved.items():
+                setattr(measure, name, value)
+        self.assertIsNone(record["crashed"])
+        tier4 = events.index(f"load /json {config['tiers']['tier4']['duration_s']}")
+        self.assertGreater(events.index("sessions"), tier4)
+        self.assertTrue(all("/world" not in e and "/form" not in e and "/me" not in e for e in events[:tier4]))
+        self.assertIn("hot_rows", record)
+        self.assertEqual(list(record["tier1"])[-5:], ["world", "worlds", "form", "me", "world-update"])
+
+
 class WrkTests(unittest.TestCase):
     def test_parse_without_status_hook(self):
         out = ('Running 10s test\nWRK_JSON {"duration_us":10000000,"requests":1000,"bytes":5,"connect":0,'
