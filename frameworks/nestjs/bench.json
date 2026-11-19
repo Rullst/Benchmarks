@@ -44,5 +44,6 @@
     "SESSION_SECRET": "22f8ac011589e0f89464699dd11177a7384d321dbfe689d27099f48abf4bcb97"
   },
   "startup_timeout_s": 120,
-  "notes": "Nest's documentation recommends the NodeAdapter since v12.3; Nest still uses Express when no adapter is passed."
+  "notes": "Nest's documentation recommends the NodeAdapter since v12.3; Nest still uses Express when no adapter is passed.",
+  "jit": true
 }

@@ -8,7 +8,7 @@
 | Server | Nest's `NodeAdapter` (`@nestjs/platform-node`, on `node:http`) |
 | Workers | `node:cluster` with `BENCH_WORKERS` (2) worker processes, each running the Nest application; the primary only hands out connections (Node's default round-robin) and exits if a worker dies, so a crash is visible |
 | Database | TypeORM through `@nestjs/typeorm`, entities `World`, `Fortune` and `User` (`users`); a `pg` pool of `DB_POOL_SIZE / BENCH_WORKERS` (8) connections per process; `synchronize: false`; TypeORM reads `DATABASE_URL` as its `url` option |
-| Templates | `hbs` (Handlebars), `views/*.hbs` rendered with `@Render()`; compiled once per process because `NODE_ENV=production` |
+| Templates | `hbs` (Handlebars), `views/*.hbs` rendered with `@Render()` without a layout (`app.setLocal('layout', false)`); compiled once per process because `NODE_ENV=production` |
 | Validation | `ParseIntPipe` for `:id`; `ValidationPipe` with `class-validator` DTOs (`src/dto.ts`) for the `/worlds` query, the `PUT` body and the form, passed per parameter; failures answer 400 |
 | CSRF | `app.enableCsrfProtection()`, built into Nest since 12.1: Go's `CrossOriginProtection` rule (`Sec-Fetch-Site`, else `Origin` against `Host`), 403 |
 | Sessions | `express-session` with its PostgreSQL store `connect-pg-simple` (table in `db.sql`), as Nest middleware of `/form`, `/login` and `/me` only (`AppModule.configure`) |
@@ -24,9 +24,14 @@ Why:
   `@Render()` and `setViewEngine('hbs')` as the Express adapter does.
 - [Model-View-Controller](https://docs.nestjs.com/http/mvc): the `hbs` engine,
   `setBaseViewsDir()`, `setViewEngine('hbs')` and `@Render()`, as in that
-  chapter. As in its first example, no layout is configured; `hbs` then looks
-  for `views/layout.hbs` on every render (a failed file read) before
-  rendering the view on its own. That is the documented default and is kept.
+  chapter. The views are whole pages and there is no layout file. Without a
+  `layout` setting, `hbs` tries to read `views/layout.hbs` on every render (a
+  failed read, never cached) before rendering the view on its own; the
+  [hbs README](https://github.com/pillarjs/hbs#layouts) turns that off with
+  `layout: false` ("render this view without any layout", per render or for
+  every view), and the chapter sets hbs's `layout` for every view with
+  `app.setLocal('layout', …)`, so `main.ts` calls
+  `app.setLocal('layout', false)`.
 - [Databases](https://docs.nestjs.com/data/overview) and
   [TypeORM](https://docs.nestjs.com/data/typeorm): TypeORM through
   `@nestjs/typeorm` with the `pg` driver, an entity, `forFeature()` and an
@@ -39,6 +44,25 @@ Why:
   `node:cluster` setup is the suite's Node.js convention (one process per
   vCPU, the database pool divided between them; see CONTRIBUTING.md). As PID
   1 in the container, the primary handles `SIGTERM` itself.
+
+## Production settings
+
+| Setting | Value | Source |
+| --- | --- | --- |
+| `NODE_ENV` | `production` (Dockerfile `ENV`) | [Deployment](https://docs.nestjs.com/deployment): "good practice to set the `NODE_ENV` environment variable to `production`" |
+| Build and start | `nest build`, production dependencies only, `node dist/main.js` | [Deployment](https://docs.nestjs.com/deployment) |
+| HTTP adapter | `NodeAdapter` | [HTTP adapters](https://docs.nestjs.com/http/performance): "Starting with NestJS v12.3, we recommend the `NodeAdapter`" |
+| Logging | Nest's default logger: start-up messages and unhandled exceptions, nothing per request (Nest has no request logger). `logger: false` would also silence start-up and database connection errors, so it is not set; as in the Spring Boot and ASP.NET Core folders, only the per-request log is off | [Logger](https://docs.nestjs.com/techniques/logger) |
+| Query log | none: TypeORM's `logging` is unset, so no query is logged | [TypeORM data source options](https://typeorm.io/docs/data-source/data-source-options) (`logging`) |
+| Template layout | `app.setLocal('layout', false)`: each view rendered on its own, no `views/layout.hbs` read per render | [hbs, Layouts](https://github.com/pillarjs/hbs#layouts) (`layout: false`), [MVC](https://docs.nestjs.com/http/mvc) (`setLocal('layout', …)`) |
+| Template cache | on: the `NodeAdapter` caches the resolved and compiled templates (and passes `cache: true` to hbs) because `NODE_ENV=production`, the default of its `production` view option | [`NodeViewOptions.production`](https://github.com/nestjs/nest/blob/v12.5.0/packages/platform-node/views/view-renderer.ts) |
+| Pool | TypeORM `poolSize` (the `pg` pool's `max`) = `DB_POOL_SIZE / BENCH_WORKERS` = 8 per process, 16 in total | [TypeORM data source options](https://typeorm.io/docs/data-source/data-source-options) (`poolSize`), [pg Pool](https://node-postgres.com/apis/pool) (`max`) |
+| Schema | `synchronize: false` | [TypeORM integration](https://docs.nestjs.com/data/typeorm): "Don't use `synchronize: true` in production" |
+| Prepared statements | not used: TypeORM sends each query with `pg`'s `query(text, values)` (an unnamed statement, parsed and planned by PostgreSQL every time) and documents no option to name them; node-postgres advises against naming them for simple queries ("Most of your queries will likely not benefit much, if at all, from using prepared statements") | [TypeORM Postgres options](https://typeorm.io/docs/drivers/postgres), [node-postgres, Prepared statements](https://node-postgres.com/features/queries) |
+| Driver | `pg`, the pure JavaScript client (no `pg-native`) | [node-postgres, Native bindings](https://node-postgres.com/features/native): "the pure JavaScript driver is plenty fast" |
+| Workers | `node:cluster`, `BENCH_WORKERS` (2) processes | CONTRIBUTING.md (Node.js convention), [cluster](https://nodejs.org/api/cluster.html) |
+| Sessions | `resave: false`, `saveUninitialized: false` | [express-session](https://github.com/expressjs/session#options) |
+| Caches | none (no response or query-result cache) | |
 
 Database and application endpoints:
 
@@ -60,7 +84,7 @@ Database and application endpoints:
   and `take`.
 - `/fortunes`: `find()` (no `ORDER BY`), sorted with `<` on the messages
   (UTF-16 code units, which is code-point order for these messages), rendered
-  by `hbs` (`{{message}}` is escaped). No `layout.hbs` exists.
+  by `hbs` (`{{message}}` is escaped) without a layout.
 
 Browser routes:
 
