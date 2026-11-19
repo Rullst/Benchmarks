@@ -29,7 +29,7 @@
     "validation": "@PathVariable int, @RequestParam with @Min/@Max (Spring MVC method validation), @Valid @RequestBody and @Valid @ModelAttribute records (spring-boot-starter-validation): 400",
     "csrf": {
       "design": "token",
-      "mechanism": "Spring Security CSRF protection (token in the HttpSession, XOR-masked _csrf field added by Thymeleaf's th:action)",
+      "mechanism": "Spring Security CSRF protection (token in the HttpSession, XOR-masked _csrf field added by Thymeleaf's th:action; a garbled token answers 403 instead of 7.1.2's 500)",
       "source": "built-in"
     },
     "session": {

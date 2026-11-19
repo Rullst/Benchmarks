@@ -81,6 +81,14 @@ documents them ([CSRF](https://docs.spring.io/spring-security/reference/servlet/
   value of the session's token is accepted, so a form page's cookie
   (`JSESSIONID`) and field stay valid for the whole round. A missing or wrong
   token is a 403.
+- One deviation from the default: Spring Security 7.1.2's
+  `XorCsrfTokenRequestAttributeHandler` throws an `IllegalArgumentException`
+  (a 500) when a submitted token is valid Base64 of the right length but its
+  unmasked bytes are not UTF-8, which a token changed in one character often
+  is (`Utf8.decode` in `getTokenValue`). `MaskedCsrfTokenHandler` delegates
+  every call to that handler and only turns the exception into "no token", so
+  `CsrfFilter` answers the 403 it gives any wrong token. Valid tokens take
+  exactly the default path.
 - Login: `formLogin` processes `POST /login` (`username`, `password`,
   `_csrf`) with a `UserDetailsService` that reads `users` through
   `AccountRepository`. The password is checked by Spring Security's default
