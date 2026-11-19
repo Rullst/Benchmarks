@@ -96,14 +96,56 @@ def measure(cmd: list[str], parse: Callable[[str], dict], *, tool: str, connecti
     })
     if database is not None:
         metrics["db_cpu_cores"] = round((db_cpu_after - db_cpu_before) / 1e6 / wall, 3)
+    metrics["limited_by"] = limiter(metrics, saturation_threshold, shared=set(db_cpus) == set(client_cpus))
     if server is not None:
         cores = (server_cpu_after - server_cpu_before) / 1e6 / wall
         metrics["server_cpu_cores"] = round(cores, 3)
+        metrics["server_cpus"] = getattr(server, "cpus", None)
         metrics["rps_per_cpu"] = round(metrics["rps"] / cores, 1) if cores else None
         values = [ram for _, ram in samples]
         metrics["server_ram_peak_mib"] = round(max(values) / MIB, 1) if values else None
         metrics["_ram_samples"] = samples
+    metrics.update(per_request_cpu(metrics))
     return metrics
+
+
+def limiter(metrics: dict, threshold: float, shared: bool = True) -> str | None:
+    """What limited a client-bound run: "postgresql" or "load-generator" (None: not client-bound).
+
+    With the default CPU split, PostgreSQL and the load generator share the
+    client vCPUs, so their busy fraction is the same number: the one that
+    used more of those vCPUs (PostgreSQL's cgroup CPU against the load
+    generator's own CPU time) was the limit. With PostgreSQL on its own
+    vCPUs, each side's busy fraction decides.
+    """
+    if not metrics.get("client_bound"):
+        return None
+    db, loadgen = metrics.get("db_cpu_cores") or 0.0, metrics.get("loadgen_cpu_cores") or 0.0
+    if shared:
+        return "postgresql" if db >= loadgen else "load-generator"
+    if metrics.get("db_cpu_busy", 0.0) >= threshold and metrics.get("db_cpu_busy", 0.0) >= metrics.get(
+            "loadgen_cpu_busy", 0.0):
+        return "postgresql"
+    return "load-generator"
+
+
+def per_request_cpu(metrics: dict) -> dict:
+    """CPU microseconds per successful request: PostgreSQL's, and the server's plus PostgreSQL's.
+
+    `total_rps_per_cpu` is requests per CPU-second of the server and
+    PostgreSQL together, the efficiency the rankings use for client-bound
+    runs (docs: README "How the scores are computed").
+    """
+    rps = metrics.get("rps") or 0.0
+    server, db = metrics.get("server_cpu_cores"), metrics.get("db_cpu_cores")
+    out: dict = {}
+    if rps > 0 and db is not None:
+        out["db_us_per_request"] = round(db / rps * 1e6, 2)
+    if rps > 0 and server is not None:
+        total = server + (db or 0.0)
+        out["cpu_us_per_request"] = round(total / rps * 1e6, 2)
+        out["total_rps_per_cpu"] = round(rps / total, 1) if total else None
+    return out
 
 
 def error_metrics(ok: int, non_2xx: int, transport_errors: int, timeouts: int, duration: float,

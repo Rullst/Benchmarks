@@ -17,7 +17,8 @@ import conformance  # noqa: E402
 from common import BASE_ENDPOINTS, ENDPOINTS, declared_endpoints, endpoint_path, load_config, validate_manifest  # noqa: E402,E501
 from conformance import check_body, check_content_type  # noqa: E402
 from loadgen import MIB, describe_binary, efficiency  # noqa: E402
-from measure import capacity_ratio, ram_trend, ratios, summarize  # noqa: E402
+from loadgen_process import limiter, per_request_cpu  # noqa: E402
+from measure import capacity_ratio, ram_trend, ratios, run_limiter, summarize, warmup_seconds  # noqa: E402
 from release_check import newest, semver_key  # noqa: E402
 from system import busy_fraction, parse_cpu_list, read_cpu_times, split_cpus, split_database  # noqa: E402
 
@@ -294,35 +295,73 @@ class EfficiencyTests(unittest.TestCase):
         self.assertIsNone(efficiency({"rps": 1000, "server_cpu_cores": 0}))
         self.assertIsNone(efficiency(None))
 
-    def test_capacity_uses_efficiency_when_either_side_is_client_bound(self):
-        free = {"rps": 1000, "server_cpu_cores": 2.0, "client_bound": False}
-        bound = {"rps": 1500, "server_cpu_cores": 1.0, "client_bound": True}
-        self.assertEqual(capacity_ratio(free, dict(free, rps=2000)), (0.5, False))
-        # The baseline was client-bound at 1500 req/s with half its CPU idle: 500 vs 1500 req per CPU-s.
-        self.assertEqual(capacity_ratio(free, bound), (500 / 1500, True))
-        self.assertEqual(capacity_ratio(bound, free), (3.0, True))
-        self.assertEqual(capacity_ratio(None, free), (None, False))
+    def test_per_request_cpu(self):
+        out = per_request_cpu({"rps": 1000, "server_cpu_cores": 1.0, "db_cpu_cores": 0.5})
+        self.assertEqual(out, {"db_us_per_request": 500.0, "cpu_us_per_request": 1500.0,
+                               "total_rps_per_cpu": round(1000 / 1.5, 1)})
+        self.assertEqual(per_request_cpu({"rps": 0, "server_cpu_cores": 1.0, "db_cpu_cores": 0.5}), {})
 
-    def test_ratios_count_pairs_that_efficiency_cannot_compare(self):
-        bound = dict(fake_round(1.0, 1), tier2={"rps": 900, "client_bound": True, "server_cpu_cores": None})
-        result = ratios([bound, bound], [bound, fake_round(1.0, 2)])
-        self.assertEqual(result["tier2.capacity"]["not_comparable_rounds"], 1)
-        self.assertEqual(result["tier2.capacity"]["efficiency_rounds"], 0)
-        self.assertEqual(result["tier1.json.capacity"]["not_comparable_rounds"], 0)
+    def test_limiter_names_postgresql_or_the_load_generator(self):
+        pg = {"client_bound": True, "db_cpu_cores": 1.6, "loadgen_cpu_cores": 0.35}
+        lg = {"client_bound": True, "db_cpu_cores": 0.0, "loadgen_cpu_cores": 1.9}
+        self.assertEqual(limiter(pg, 0.9), "postgresql")
+        self.assertEqual(limiter(lg, 0.9), "load-generator")
+        self.assertIsNone(limiter(dict(pg, client_bound=False), 0.9))
+        # PostgreSQL on its own vCPUs: each side's busy fraction decides.
+        own = {"client_bound": True, "db_cpu_busy": 0.95, "loadgen_cpu_busy": 0.4}
+        self.assertEqual(limiter(own, 0.9, shared=False), "postgresql")
+        self.assertEqual(limiter(dict(own, db_cpu_busy=0.5, loadgen_cpu_busy=0.97), 0.9, shared=False),
+                         "load-generator")
+        # Older results without the field: derived from the CPU use.
+        self.assertEqual(run_limiter(pg), "postgresql")
+        self.assertEqual(run_limiter(dict(lg, limited_by="load-generator")), "load-generator")
+
+    def test_capacity_bases(self):
+        free = {"rps": 1000, "server_cpu_cores": 2.0, "client_bound": False}
+        self.assertEqual(capacity_ratio(free, dict(free, rps=2000)), (0.5, "rps"))
+        # Limited by PostgreSQL: requests per CPU-second of the server and PostgreSQL together.
+        pg = {"rps": 1000, "server_cpu_cores": 0.6, "db_cpu_cores": 1.9, "loadgen_cpu_cores": 0.05,
+              "client_bound": True}
+        base = {"rps": 1500, "server_cpu_cores": 1.1, "db_cpu_cores": 1.9, "loadgen_cpu_cores": 0.05,
+                "client_bound": True}
+        value, basis = capacity_ratio(pg, base)
+        self.assertEqual(basis, "cpu")
+        self.assertAlmostEqual(value, (1000 / 2.5) / (1500 / 3.0))
+        # Limited by the load generator with the server near saturation: efficiency is used.
+        lg = {"rps": 1500, "server_cpu_cores": 1.9, "db_cpu_cores": 0.0, "loadgen_cpu_cores": 1.9,
+              "client_bound": True}
+        self.assertEqual(capacity_ratio(free, lg), (500 / (1500 / 1.9), "cpu"))
+        # ... far below saturation (under 75% of its vCPUs): not comparable.
+        idle = dict(lg, server_cpu_cores=1.0)
+        self.assertEqual(capacity_ratio(free, idle), (None, "not comparable"))
+        self.assertEqual(capacity_ratio(idle, free), (None, "not comparable"))
+        self.assertEqual(capacity_ratio(None, free), (None, "missing"))
+
+    def test_ratios_count_bases_and_pairs(self):
+        bound = fake_round(1.0, 1)
+        idle = copy.deepcopy(bound)
+        idle["tier1"]["json"].update(client_bound=True, limited_by="load-generator", server_cpu_cores=0.5)
+        result = ratios([idle, idle], [bound, fake_round(1.0, 2)])
+        stat = result["tier1.json.capacity"]
+        self.assertEqual((stat["pairs"], stat["n"], stat["not_comparable_rounds"]), (2, 0, 2))
+        self.assertIsNone(stat["median"])
+        self.assertEqual(stat["load_generator_rounds"], 2)
+        self.assertEqual(result["tier1.text.capacity"]["not_comparable_rounds"], 0)
 
     def test_ratios_include_capacity(self):
         fw = [fake_round(2.0, n) for n in (1, 2)]  # client-bound
         base = [fake_round(1.0, n) for n in (1, 2)]
         result = ratios(fw, base)
-        self.assertAlmostEqual(result["tier1.updates.capacity"]["median"], 2.0, places=3)
-        self.assertEqual(result["tier1.updates.capacity"]["efficiency_rounds"], 2)
-        self.assertEqual(result["tier2.capacity"]["efficiency_rounds"], 2)
+        self.assertAlmostEqual(result["tier1.updates.capacity"]["median"], (2000 / 2.4) / (1000 / 2.4), places=3)
+        self.assertEqual(result["tier1.updates.capacity"]["cpu_rounds"], 2)
+        self.assertNotIn("tier2.capacity", result)  # Tiers 2 and 4 are stability checks
         self.assertNotIn("tier1.json.db_cpu_cores", result)
         self.assertIn("tier1.fortunes.rps_per_cpu", result)
+        self.assertIn("tier1.fortunes.db_us_per_request", result)
         partial = [fake_round(1.0, n, BASE_ENDPOINTS) for n in (1, 2)]
         result = ratios(partial, base)
         self.assertNotIn("tier1.queries.capacity", result)
-        self.assertEqual(result["tier1.json.capacity"]["efficiency_rounds"], 0)
+        self.assertEqual(result["tier1.json.capacity"]["cpu_rounds"], 0)
         flags = summarize(partial)["flags"]["client_bound_rounds"]
         self.assertIn("tier1.json", flags)
         self.assertNotIn("tier1.queries", flags)
@@ -461,200 +500,287 @@ class AggregateTests(unittest.TestCase):
             index = aggregate.json.loads((root / "results" / "versions.json").read_text())
             self.assertEqual([e["version"] for e in index["versions"]], ["13.0.0-alpha.5", "13.0.0-alpha.6"])
             self.assertTrue((root / "results" / "rullst" / "13.0.0-alpha.6.json").is_file())
-            self.assertTrue((root / "results" / "raw" / "13.0.0-alpha.5" / "rullst.json").is_file())
+            self.assertTrue((root / "results" / "raw" / "13.0.0-alpha.5" / "rullst-job1.json").is_file())
+
+    def test_jobs_of_one_framework_are_pooled(self):
+        first, second = fake_job("actix", 1.1, rounds=2), fake_job("actix", 0.9, rounds=3)
+        second["job"] = 2
+        second["environment"] = dict(second["environment"], cpu_model="Other CPU")
+        combined = aggregate.combine([first, second], ["actix"])
+        actix = next(r for r in combined["implementations"] if r["slug"] == "actix")
+        self.assertEqual(actix["ratios"]["tier1.json.rps"]["n"], 5)
+        self.assertEqual(actix["metrics"]["tier1.json.rps"]["n"], 5)
+        self.assertAlmostEqual(actix["ratios"]["tier1.json.rps"]["median"], 0.9)
+        self.assertEqual(actix["runners"], ["Test CPU", "Other CPU"])
+        self.assertEqual([j["job"] for j in actix["jobs"]], [1, 2])
+        self.assertEqual(combined["run"]["jobs_per_framework"], 2)
+        self.assertEqual(combined["runners"], [{"cpu_model": "Other CPU", "jobs": 1},
+                                               {"cpu_model": "Test CPU", "jobs": 1}])
+        self.assertIn("Other CPU ×1", report.notice(combined))
+        self.assertIn("| Test CPU, Other CPU |", report.render_readme_table(combined))
+
+    def test_the_control_gives_the_tie_margins(self):
+        jobs = [fake_job("axum-control", 1.02), fake_job("axum-control", 0.99), fake_job("actix", 1.2)]
+        jobs[1]["job"] = 2
+        for job in jobs[:2]:
+            job["implementations"]["axum-control"]["manifest"].update(role="control", role_note="A/A copy")
+        combined = aggregate.combine(jobs, ["axum-control", "actix"])
+        margin = combined["rankings"]["tie_margins"]["hello"]
+        self.assertAlmostEqual(margin["percent"], 2.0, places=1)
+        self.assertEqual(len(margin["scores"]), 3)  # two jobs and the pooled row
+        control = next(r for r in combined["implementations"] if r["slug"] == "axum-control")
+        self.assertEqual(control["role"], "control")
+        self.assertIn("A/A control, unranked", report.render_readme_table(combined))
+
+    def test_dependency_source(self):
+        self.assertEqual(aggregate.dependency_source(
+            "registry+https://github.com/rust-lang/crates.io-index")["kind"], "crates.io")
+        git = aggregate.dependency_source("git+https://github.com/Rullst/Rullst?rev=58438b64ca#58438b64caa847ef")
+        self.assertEqual(git["label"], "git Rullst/Rullst@58438b6")
+        self.assertIsNone(aggregate.dependency_source(""))
+        job = fake_job("rullst", 1.0)
+        job["implementations"]["rullst"]["build"]["versions"] += (
+            "rullst-source git+https://github.com/Rullst/Rullst?rev=58438b6#58438b64caa847ef\n")
+        combined = aggregate.combine([job], ["rullst"])
+        self.assertEqual(combined["rullst_source"]["kind"], "git")
+        self.assertIn("built from git Rullst/Rullst@58438b6", report.notice(combined))
+
+    def test_publication_gate(self):
+        def gate(jobs, names):
+            return aggregate.combine(jobs, names)["publication_gate"]
+        jobs = [fake_job("actix", 1.1, rounds=5), fake_job("actix", 1.1, rounds=5),
+                fake_job("axum-control", 1.01, rounds=5), fake_job("axum-control", 0.99, rounds=5)]
+        for job, number in zip(jobs, (1, 2, 1, 2)):
+            job["job"] = number
+        for job in jobs:
+            job["implementations"][job["framework"]]["build"]["versions"] += (
+                "actix-source registry+https://github.com/rust-lang/crates.io-index\n")
+        for job in jobs[2:]:
+            job["implementations"]["axum-control"]["manifest"].update(role="control", role_note="A/A copy")
+        result = gate(jobs, ["actix", "axum-control"])
+        self.assertEqual([p for p in result["problems"] if "Rullst" not in p], [])
+        self.assertTrue(any("Rullst was built from" in p for p in result["problems"]))
+        self.assertFalse(result["passed"])
+        one = gate(jobs[:1] + jobs[2:], ["actix", "axum-control"])["problems"]
+        self.assertTrue(any("actix: measured on 1 job(s), at least 2 required" in p for p in one))
+        noisy = copy.deepcopy(jobs)
+        noisy[3] = fake_job("axum-control", 0.8, rounds=5)
+        noisy[3].update(job=2)
+        noisy[3]["implementations"]["axum-control"]["manifest"].update(role="control", role_note="A/A copy")
+        self.assertTrue(any("A/A noise too large in hello" in p for p in gate(noisy, ["actix", "axum-control"])[
+            "problems"]))
+        mixed = copy.deepcopy(jobs)
+        mixed[1]["environment"]["cpu_count"] = 8
+        self.assertTrue(any("vCPUs differs" in p for p in gate(mixed, ["actix", "axum-control"])["problems"]))
+        errors = copy.deepcopy(jobs)
+        for r in errors[0]["implementations"]["actix"]["rounds"] + errors[1]["implementations"]["actix"]["rounds"]:
+            r["tier1"]["json"]["error_rate"] = 0.05
+        self.assertTrue(any("actix: Hello world: error rate above the limit" in p
+                            for p in gate(errors, ["actix", "axum-control"])["problems"]))
+        self.assertFalse(gate(jobs[:2], ["actix"])["passed"])  # no A/A control
 
 
-def rank_row(slug: str, speed=(1.0, 1.0, 1.0, 1.0), t2=1.0, ram=1.0, t4=1.0, startup_s=0.01, bound=(),
-             status="measured", rounds=5, database=(1.0, 1.0, 1.0), capacity=None, efficiency_rounds=(),
-             application=(1.0, 1.0, 1.0, 1.0, 1.0), error_rates=None, **extra) -> dict:
-    """A combined row with the ratios the rankings read; `bound` lists the client-bound runs.
+def rank_row(slug: str, hello=(1.0, 1.0, 1.0), database=(1.0, 1.0, 1.0, 1.0), application=(1.0,) * 5,
+             ram=10.0, startup_s=0.01, status="measured", rounds=5, capacity=None, cpu_runs=(), error_rates=None,
+             tier_errors=(0.0, 0.0), crashed=0, ram_growing=0, base_ram=10.0, base_startup=0.01, **extra) -> dict:
+    """A combined row with the ratios the rankings read.
 
     `capacity` maps runs to capacity ratios (otherwise the requests/s ratios
-    are used); `efficiency_rounds` lists runs whose capacity came from
-    efficiency in every round.
+    are used); `cpu_runs` lists runs scored by CPU efficiency in every round;
+    `tier_errors` are the worst-round error rates of Tiers 2 and 4.
     """
-    tier1 = (dict(zip(rankings.ENDPOINTS, speed)) | dict(zip(rankings.DATABASE_ENDPOINTS, database))
+    tier1 = (dict(zip(rankings.HELLO_ENDPOINTS, hello)) | dict(zip(rankings.DATABASE_ENDPOINTS, database))
              | dict(zip(rankings.APPLICATION_ENDPOINTS, application)))
-    ratios = {f"tier1.{ep}.rps": value for ep, value in tier1.items() if value is not None}
-    ratios.update({"tier2.rps": t2, "tier3.load_ram_peak_mib": ram, "tier4.rps": t4})
-    stat = lambda v: {"median": v, "min": v, "max": v, "spread": 0.0, "n": rounds}  # noqa: E731
-    metrics = {"startup_s": stat(startup_s), "tier2.rps": stat(1000 * t2), "tier2.latency_ms.p99": stat(5.0),
-               "tier3.load_ram_peak_mib": stat(10 * ram), "tier4.rps": stat(1000 * t4),
-               "tier4.error_rate": stat(0.0), "tier4.timeouts": stat(0)}
+    stat = lambda v, top=None: {"median": v, "min": v, "max": v if top is None else top, "spread": 0.0,  # noqa: E731
+                                "n": rounds}
+    ratio_stats = {f"tier1.{ep}.rps": stat(value) for ep, value in tier1.items() if value is not None}
+    for run, value in (capacity or {}).items():
+        ratio_stats[f"{run}.capacity"] = dict(stat(value), pairs=rounds, not_comparable_rounds=0,
+                                              cpu_rounds=rounds if run in cpu_runs else 0)
+    metrics = {"startup_s": stat(startup_s), "tier3.load_ram_peak_mib": stat(ram),
+               "tier2.rps": stat(1000.0), "tier2.error_rate": stat(0.0, tier_errors[0]),
+               "tier4.rps": stat(1000.0), "tier4.error_rate": stat(0.0, tier_errors[1]), "tier4.timeouts": stat(0)}
     metrics.update({f"tier1.{ep}.rps": stat(1000 * value) for ep, value in tier1.items() if value is not None})
     metrics.update({f"tier1.{ep}.error_rate": stat(rate) for ep, rate in (error_rates or {}).items()})
-    runs = [f"tier1.{ep}" for ep in ENDPOINTS] + ["tier2", "tier3_load", "tier4"]
-    ratio_stats = {k: stat(v) for k, v in ratios.items()}
-    for run, value in (capacity or {}).items():
-        ratio_stats[f"{run}.capacity"] = dict(stat(value), efficiency_rounds=rounds if run in efficiency_rounds else 0)
     row = {"slug": slug, "name": slug.title(), "status": status, "endpoints": list(ENDPOINTS),
-           "ratios": ratio_stats, "metrics": metrics,
-           "flags": {"rounds": rounds, "crashed_rounds": 0, "ram_growing_rounds": 0,
-                     "client_bound_rounds": {r: (rounds if r in bound else 0) for r in runs}}}
+           "ratios": ratio_stats, "metrics": metrics, "role": "ranked",
+           "paired_baseline": {"tier3.load_ram_peak_mib": base_ram, "startup_s": base_startup},
+           "flags": {"rounds": rounds, "crashed_rounds": crashed, "ram_growing_rounds": ram_growing,
+                     "client_bound_rounds": {}, "limited_rounds": {}}}
     row.update(extra)
     return row
 
 
-ALL_RUNS = (*(f"tier1.{ep}" for ep in ENDPOINTS), "tier2", "tier3_load", "tier4")
-
-
 class RankingTests(unittest.TestCase):
-    def rank(self, rows):
-        base = rank_row("axum", bound=ALL_RUNS, is_baseline=True, ratios={})
-        result = rankings.compute([base, *rows], "axum")
+    def rank(self, rows, controls=None, settings=None):
+        base = rank_row("axum", is_baseline=True, ratios={})
+        result = rankings.compute([base, *rows], "axum", settings=settings, control_rows=controls)
         cats = {c["key"]: {e["slug"]: e for e in c["entries"]} for c in result["categories"]}
         overall = {e["slug"]: e for e in result["overall"]["entries"]}
         return result, cats, overall
 
+    def test_categories(self):
+        self.assertEqual(rankings.CATEGORY_KEYS, ["hello", "database", "application", "memory", "startup"])
+        runs = {c["key"]: c["runs"] for c in rankings.CATEGORIES}
+        self.assertEqual(runs["hello"], ["tier1.text", "tier1.json", "tier1.html"])
+        self.assertEqual(runs["database"][0], "tier1.db-single")
+
     def test_scores_are_oriented_so_higher_is_better(self):
-        _, cats, overall = self.rank([rank_row("a", speed=(2.0, 0.5, 1.0, 1.0), t2=0.8, ram=2.0, t4=0.9,
-                                               startup_s=1.0, database=(0.5, 0.5, 0.5))])
+        _, cats, overall = self.rank([rank_row("a", hello=(2.0, 0.5, 1.0), database=(0.5,) * 4, ram=200.0,
+                                               startup_s=2.0)])
         a = {key: cats[key]["a"] for key in rankings.CATEGORY_KEYS}
-        self.assertAlmostEqual(a["speed"]["score"], 1.0)
-        self.assertEqual(a["speed"]["detail"]["text"], 2.0)
+        self.assertAlmostEqual(a["hello"]["score"], 1.0)
+        self.assertEqual(a["hello"]["detail"]["rps_ratio"]["text"], 2.0)
         self.assertAlmostEqual(a["database"]["score"], 0.5)
-        self.assertEqual(a["database"]["detail"]["updates"], 0.5)
-        self.assertAlmostEqual(a["memory"]["score"], 0.5)
-        self.assertAlmostEqual(a["memory"]["ratio"], 2.0)
-        # 1 s against Axum's 0.01 s, which counts as the 0.25 s poll interval.
-        self.assertAlmostEqual(a["startup"]["score"], 0.25)
-        expected = (1.0 * 0.5 * 1.0 * 0.8 * 0.5 * 0.9 * 0.25) ** (1 / 7)
-        self.assertAlmostEqual(overall["a"]["score"], round(expected, 4))
+        # 200 MiB against Axum's 10 MiB, which counts as the 64 MiB floor.
+        self.assertAlmostEqual(a["memory"]["score"], round(64 / 200, 4))
+        self.assertAlmostEqual(a["memory"]["ratio"], 20.0)
+        # 2 s against Axum's 0.01 s, which counts as the 1 s floor.
+        self.assertAlmostEqual(a["startup"]["score"], 0.5)
+        expected = (1.0 * 0.5 * 1.0 * (64 / 200) * 0.5) ** (1 / 5)
+        self.assertAlmostEqual(overall["a"]["score"], round(expected, 4), places=3)
         self.assertEqual(overall["a"]["position"], 1)
 
-    def test_reference_is_listed_without_a_position(self):
-        result, cats, overall = self.rank([rank_row("fast", t2=1.5), rank_row("slow", t2=0.5)])
-        self.assertEqual(overall["axum"]["status"], "reference")
-        self.assertIsNone(overall["axum"]["position"])
-        self.assertEqual(overall["axum"]["score"], 1.0)
-        self.assertEqual((cats["pressure"]["fast"]["position"], cats["pressure"]["slow"]["position"]), (1, 2))
-        pressure = next(c for c in result["categories"] if c["key"] == "pressure")
-        self.assertEqual([e["slug"] for e in pressure["entries"]], ["fast", "axum", "slow"])
-        self.assertEqual(result["overall"]["weights"], {key: round(1 / 7, 4) for key in rankings.CATEGORY_KEYS})
+    def test_memory_and_startup_floors(self):
+        _, cats, _ = self.rank([rank_row("a", ram=50.0, startup_s=0.9), rank_row("b", ram=12.0, startup_s=0.02),
+                                rank_row("c", ram=128.0, startup_s=3.0)])
+        self.assertEqual([cats["memory"][s]["score"] for s in "abc"], [1.0, 1.0, 0.5])
+        self.assertEqual([cats["memory"][s]["position"] for s in "abc"], [1, 1, 3])
+        self.assertEqual([cats["startup"][s]["score"] for s in "abc"], [1.0, 1.0, round(1 / 3, 4)])
+
+    def test_reference_diagnostics_and_the_control_have_no_position(self):
+        rows = [rank_row("fast", hello=(1.5,) * 3), rank_row("slow", hello=(0.5,) * 3),
+                rank_row("minimal", hello=(1.2,) * 3, role="diagnostic", role_note="d"),
+                rank_row("copy", hello=(1.01,) * 3, role="control", role_note="c")]
+        result, cats, overall = self.rank(rows)
+        hello = cats["hello"]
+        self.assertEqual(hello["axum"]["status"], "reference")
+        self.assertEqual(hello["minimal"]["status"], "diagnostic")
+        self.assertEqual(hello["copy"]["status"], "A/A control")
+        self.assertEqual([hello[s]["position"] for s in ("fast", "slow", "minimal", "copy", "axum")],
+                         [1, 2, None, None, None])
+        self.assertAlmostEqual(hello["minimal"]["score"], 1.2)
+        order = next(c for c in result["categories"] if c["key"] == "hello")["entries"]
+        self.assertEqual([e["slug"] for e in order], ["fast", "minimal", "copy", "axum", "slow"])
+        self.assertIsNone(overall["minimal"]["position"])
+        self.assertEqual(overall["fast"]["position"], 1)
 
     def test_a_missing_metric_makes_the_row_incomplete(self):
-        row = rank_row("fastapi", speed=(0.5, 0.5, None, 0.5), excluded=["tier1.db-single"])
+        row = rank_row("fastapi", database=(None, 0.5, 0.5, 0.5), excluded=["tier1.db-single"])
         failed = rank_row("broken", status="failed-conformance", ratios={}, metrics={}, flags={})
-        _, cats, overall = self.rank([row, failed, rank_row("other", t2=0.1)])
-        self.assertEqual(cats["speed"]["fastapi"]["status"], "incomplete")
-        self.assertIsNone(cats["speed"]["fastapi"]["position"])
-        self.assertIn("left out by a correction", cats["speed"]["fastapi"]["reason"])
-        self.assertEqual(cats["pressure"]["fastapi"]["position"], 1)
+        _, cats, overall = self.rank([row, failed, rank_row("other")])
+        self.assertEqual(cats["database"]["fastapi"]["status"], "incomplete")
+        self.assertIsNone(cats["database"]["fastapi"]["position"])
+        self.assertIn("left out by a correction", cats["database"]["fastapi"]["reason"])
+        self.assertEqual(cats["hello"]["fastapi"]["position"], 1)
         self.assertEqual(overall["fastapi"]["status"], "incomplete")
-        self.assertIsNone(overall["fastapi"]["position"])
-        self.assertIsNone(overall["fastapi"]["score"])
-        self.assertEqual(overall["fastapi"]["missing"], ["speed"])
+        self.assertEqual(overall["fastapi"]["missing"], ["database"])
         self.assertEqual(overall["broken"]["status"], "not measured")
-        self.assertEqual(overall["other"]["position"], 1)
 
-    def test_an_endpoint_not_served_yet_makes_the_database_category_incomplete(self):
-        row = rank_row("gin", database=(None, None, None), endpoints=list(BASE_ENDPOINTS))
+    def test_endpoints_not_served_yet_make_a_category_incomplete(self):
+        row = rank_row("gin", database=(1.0, None, None, None), application=(None,) * 5,
+                       endpoints=list(BASE_ENDPOINTS))
         _, cats, overall = self.rank([row, rank_row("full")])
-        self.assertEqual(cats["database"]["gin"]["status"], "incomplete")
         self.assertIn("does not serve /queries, /updates, /fortunes yet", cats["database"]["gin"]["reason"])
-        self.assertEqual(cats["speed"]["gin"]["status"], "ranked")
-        self.assertEqual(overall["gin"]["missing"], ["database"])
-        self.assertEqual(overall["full"]["position"], 1)
-
-    def test_phase2_endpoints_not_served_yet_make_the_application_category_incomplete(self):
-        from common import BASE_ENDPOINTS as BASE, EXTRA_ENDPOINTS
-        row = rank_row("gin", application=(None,) * 5, endpoints=[*BASE, *EXTRA_ENDPOINTS])
-        _, cats, overall = self.rank([row, rank_row("full", application=(0.5,) * 5)])
-        self.assertEqual(cats["application"]["gin"]["status"], "incomplete")
         self.assertIn("does not serve /world, /worlds, /world-update, /form, /me yet",
                       cats["application"]["gin"]["reason"])
-        self.assertEqual(overall["gin"]["missing"], ["application"])
-        self.assertAlmostEqual(cats["application"]["full"]["score"], 0.5)
-        self.assertEqual(overall["full"]["position"], 1)
+        self.assertEqual(cats["hello"]["gin"]["status"], "ranked")
+        self.assertEqual(overall["gin"]["missing"], ["database", "application"])
 
-    def test_application_runs_with_too_many_errors_have_no_score(self):
-        rows = [rank_row("fast", application=(3.0,) * 5, error_rates={"me": 0.05, "form": 0.001}),
-                rank_row("ok", application=(0.9,) * 5, error_rates={"me": 0.01})]
+    def test_the_error_gate_applies_to_every_throughput_category(self):
+        rows = [rank_row("a", hello=(3.0,) * 3, error_rates={"json": 0.05}),
+                rank_row("b", database=(2.0,) * 4, error_rates={"updates": 0.176}),
+                rank_row("c", application=(3.0,) * 5, error_rates={"me": 0.05, "form": 0.001}),
+                rank_row("ok", error_rates={"json": 0.01, "me": 0.01})]
         _, cats, overall = self.rank(rows)
-        fast = cats["application"]["fast"]
-        self.assertEqual(fast["status"], "errors")
-        self.assertIsNone(fast["score"])
-        self.assertEqual(fast["error_runs"], {"me": 0.05})
-        self.assertIn("GET /me 5.0%", fast["reason"])
-        self.assertEqual(cats["application"]["ok"]["position"], 1)  # 1% is still allowed
-        self.assertEqual(overall["fast"]["status"], "incomplete")
-        self.assertIn("error rate above 1%: application", overall["fast"]["reason"])
-        self.assertIn("errors (GET /me 5.0%)", report._category_cell("application", fast))
+        self.assertEqual(cats["hello"]["a"]["status"], "errors")
+        self.assertEqual(cats["database"]["b"]["error_runs"], {"updates": 0.176})
+        self.assertIn("/updates 17.6%", cats["database"]["b"]["reason"])
+        self.assertEqual(cats["application"]["c"]["error_runs"], {"me": 0.05})
+        self.assertIn("errors (GET /me 5.0%)", report._category_cell("application", cats["application"]["c"]))
+        self.assertEqual(cats["hello"]["ok"]["position"], 1)  # 1% is still allowed
+        self.assertIn("errors: hello", overall["a"]["reason"])
 
-    def test_client_bound_runs_are_ranked_by_efficiency(self):
-        # Both client-bound at the same requests/s, but b needs a third more CPU per request.
-        rows = [rank_row("a", t2=1.0, bound=ALL_RUNS, capacity={"tier2": 1.2}, efficiency_rounds=("tier2",)),
-                rank_row("b", t2=1.0, bound=ALL_RUNS, capacity={"tier2": 0.9}, efficiency_rounds=("tier2",)),
-                rank_row("c", t2=0.95, capacity={"tier2": 0.95})]
-        _, cats, _ = self.rank(rows)
-        pressure = cats["pressure"]
-        self.assertEqual([pressure[s]["position"] for s in "acb"], [1, 2, 3])
-        self.assertFalse(pressure["a"]["tie"])
-        self.assertEqual(pressure["a"]["score"], 1.2)
-        self.assertEqual(pressure["a"]["ratio"], 1.0)  # the requests/s ratio is still reported
-        self.assertEqual(pressure["a"]["efficiency_runs"], ["tier2"])
-        self.assertEqual(pressure["c"]["efficiency_runs"], [])
-        self.assertTrue(pressure["a"]["client_bound"])
+    def test_cpu_efficiency_scores_client_bound_runs(self):
+        capacity = {"tier1.text": 2.0, "tier1.json": 0.5, "tier1.html": 1.0}
+        _, cats, _ = self.rank([rank_row("a", capacity=capacity, cpu_runs=("tier1.text",))])
+        hello = cats["hello"]["a"]
+        self.assertAlmostEqual(hello["score"], 1.0)
+        self.assertEqual(hello["efficiency_runs"], ["tier1.text"])
+        self.assertEqual(hello["detail"]["basis"], {"text": "cpu", "json": "rps", "html": "rps"})
+        self.assertTrue(report._category_cell("hello", hello).endswith("1.00×*"))
 
-    def test_runs_client_bound_on_both_sides_without_efficiency_are_not_comparable(self):
-        # No capacity ratios (no efficiency): both it and its paired Axum run were client-bound in most rounds.
-        both = {"rounds": 5, "client_bound_rounds": {"tier2": 3}}
-        rows = [rank_row("a", t2=1.05, bound=("tier2",), paired_baseline_flags=both),
-                rank_row("b", t2=1.05, bound=("tier2",),
-                         paired_baseline_flags={"rounds": 5, "client_bound_rounds": {"tier2": 2}}),
-                rank_row("c", t2=0.9, bound=("tier2",), capacity={"tier2": 0.9}, efficiency_rounds=("tier2",),
-                         paired_baseline_flags=both)]
-        _, cats, overall = self.rank(rows)
-        pressure = cats["pressure"]
-        self.assertEqual(pressure["a"]["status"], "not comparable")
-        self.assertIsNone(pressure["a"]["position"])
-        self.assertIsNone(pressure["a"]["score"])
-        self.assertEqual(pressure["a"]["not_comparable_runs"], ["tier2"])
-        self.assertIn("client-bound in most rounds for both", pressure["a"]["reason"])
-        self.assertEqual(overall["a"]["status"], "incomplete")
-        self.assertIn("not comparable: pressure", overall["a"]["reason"])
-        # Axum was not client-bound in most rounds: comparable by requests/s.
-        self.assertEqual(pressure["b"]["position"], 1)
-        # Efficiency scored the run: comparable.
-        self.assertEqual(pressure["c"]["status"], "ranked")
-        # With capacity ratios, the harness counts the round pairs that could not be compared.
-        stat = {"median": 1.0, "min": 1.0, "max": 1.0, "spread": 0.0, "n": 3, "efficiency_rounds": 0,
-                "not_comparable_rounds": 2}
-        row = rank_row("d", t4=1.0)
-        row["ratios"]["tier4.capacity"] = stat
-        _, cats, _ = self.rank([row])
-        self.assertEqual(cats["endurance"]["d"]["status"], "not comparable")
+    def test_runs_mostly_not_comparable_have_no_score(self):
+        row = rank_row("a")
+        row["ratios"]["tier1.json.capacity"] = {"median": 1.0, "n": 2, "pairs": 5, "cpu_rounds": 2,
+                                                "not_comparable_rounds": 3}
+        ok = rank_row("b")
+        ok["ratios"]["tier1.json.capacity"] = {"median": 0.9, "n": 3, "pairs": 5, "cpu_rounds": 3,
+                                               "not_comparable_rounds": 2}
+        _, cats, overall = self.rank([row, ok])
+        self.assertEqual(cats["hello"]["a"]["status"], "not comparable")
+        self.assertEqual(cats["hello"]["a"]["not_comparable_runs"], ["tier1.json"])
+        self.assertIn("75%", cats["hello"]["a"]["reason"])
+        self.assertEqual(cats["hello"]["b"]["position"], 1)
+        self.assertIn("not comparable: hello", overall["a"]["reason"])
 
-    def test_speed_combines_capacity_ratios(self):
-        capacity = {"tier1.text": 2.0, "tier1.json": 0.5, "tier1.db-single": 1.0, "tier1.html": 1.0}
-        rows = [rank_row("a", capacity=capacity, efficiency_rounds=("tier1.text",), bound=("tier1.text",))]
-        _, cats, _ = self.rank(rows)
-        self.assertAlmostEqual(cats["speed"]["a"]["score"], 1.0)
-        self.assertEqual(cats["speed"]["a"]["efficiency_runs"], ["tier1.text"])
-        self.assertEqual(cats["speed"]["a"]["detail"]["capacity"]["text"], 2.0)
-        self.assertEqual(cats["speed"]["a"]["client_bound_runs"], ["tier1.text"])
+    def test_tie_margins_come_from_the_aa_control(self):
+        controls = [rank_row("axum-control", hello=(1.03,) * 3, role="control", role_note="c"),
+                    rank_row("axum-control", hello=(0.99,) * 3, role="control", role_note="c")]
+        rows = [rank_row("a", hello=(1.20,) * 3), rank_row("b", hello=(1.18,) * 3), rank_row("c", hello=(1.10,) * 3),
+                rank_row("d", hello=(1.02,) * 3)]
+        result, cats, _ = self.rank(rows, controls=controls)
+        margin = result["tie_margins"]["hello"]
+        self.assertAlmostEqual(margin["margin"], round(abs(__import__("math").log(1.03)), 6))
+        self.assertAlmostEqual(margin["percent"], 3.0, places=1)
+        hello = cats["hello"]
+        self.assertEqual([hello[s]["position"] for s in "abcd"], [1, 1, 3, 4])
+        self.assertEqual(hello["a"]["tied_with"], ["b"])
+        self.assertTrue(hello["d"]["within_reference_margin"])
+        self.assertFalse(hello["c"]["within_reference_margin"])
+        self.assertTrue(report._category_cell("hello", hello["d"]).endswith("≈"))
+        # Without A/A data only equal scores tie.
+        result, cats, _ = self.rank(rows)
+        self.assertIsNone(result["tie_margins"]["hello"]["margin"])
+        self.assertEqual([cats["hello"][s]["position"] for s in "abcd"], [1, 2, 3, 4])
 
     def test_startup_ties_within_the_poll_interval(self):
-        rows = [rank_row("a", startup_s=0.02), rank_row("b", startup_s=0.28), rank_row("c", startup_s=0.41),
-                rank_row("d", startup_s=0.61), rank_row("e", startup_s=4.1)]
-        _, cats, overall = self.rank(rows)
-        startup = cats["startup"]
-        self.assertEqual([startup[s]["position"] for s in "abcde"], [1, 2, 2, 4, 5])
-        self.assertEqual(startup["a"]["score"], 1.0)
-        self.assertEqual(startup["a"]["tied_with"], ["axum"])
-        self.assertEqual(startup["d"]["detail"]["startup_s"], 0.61)
-        self.assertAlmostEqual(startup["e"]["score"], round(0.25 / 4.1, 4))
-        # b and c differ only in start-up, where they tie, so they tie overall too.
-        self.assertEqual((overall["b"]["position"], overall["c"]["position"]), (2, 2))
+        rows = [rank_row("a", startup_s=1.1), rank_row("b", startup_s=1.3), rank_row("c", startup_s=1.5),
+                rank_row("d", startup_s=4.0)]
+        _, cats, _ = self.rank(rows)
+        self.assertEqual([cats["startup"][s]["position"] for s in "abcd"], [1, 1, 3, 4])
 
-    def test_overall_ties_only_when_tied_in_every_category(self):
-        same = dict(speed=(0.99,) * 4, t2=0.99, t4=0.99, database=(0.99,) * 3)
-        rows = [rank_row("a", ram=1.0, **same), rank_row("b", ram=1.0, **same), rank_row("c", ram=0.5, **same)]
-        _, _, overall = self.rank(rows)
-        self.assertEqual(overall["c"]["position"], 1)
-        self.assertFalse(overall["c"]["tie"])  # better memory is a real difference
-        self.assertEqual((overall["a"]["position"], overall["b"]["position"]), (2, 2))
-        self.assertEqual(overall["a"]["tied_with"], ["b"])
+    def test_stability_is_a_check(self):
+        rows = [rank_row("ok"), rank_row("leaky", ram_growing=2), rank_row("errors", tier_errors=(0.0, 0.02)),
+                rank_row("stops", crashed=1)]
+        result, _, overall = self.rank(rows)
+        check = {e["slug"]: e for e in result["stability"]["entries"]}
+        self.assertEqual([check[s]["result"] for s in ("ok", "leaky", "errors", "stops")],
+                         ["pass", "warn", "fail", "fail"])
+        self.assertIn("Tier 4 errors 2.0% in its worst round", check["errors"]["reasons"])
+        self.assertNotIn("stability", rankings.CATEGORY_KEYS)
+        self.assertEqual(overall["errors"]["status"], "unstable")
+        self.assertIsNone(overall["errors"]["position"])
+        self.assertEqual(overall["leaky"]["position"], 1)
+
+    def test_the_overall_ranking_is_optional(self):
+        result, _, _ = self.rank([rank_row("a")])
+        self.assertFalse(result["publish_overall"])
+        public = rankings.published(result)
+        self.assertNotIn("overall", public)
+        self.assertNotIn("sensitivity", public)
+        self.assertIn("categories", public)
+        result, _, _ = self.rank([rank_row("a")], settings={"publish_overall": True})
+        self.assertIn("overall", rankings.published(result))
+
+    def test_sensitivity_table_ranks_under_other_weightings(self):
+        rows = [rank_row("fast", hello=(3.0,) * 3, database=(0.5,) * 4),
+                rank_row("db", hello=(0.5,) * 3, database=(2.0,) * 4)]
+        result, _, _ = self.rank(rows)
+        tables = {w["key"]: {e["slug"]: e for e in w["entries"]} for w in result["sensitivity"]}
+        self.assertEqual(tables["equal"]["fast"]["position"], 1)
+        self.assertEqual(tables["db-app"]["db"]["position"], 1)
+        self.assertEqual(tables["db-app"]["fast"]["position"], 2)
 
     def test_published_and_rendered(self):
         jobs = [fake_job("rullst", 0.5), fake_job("actix", 1.1), fake_job("gin", 0.8, endpoints=BASE_ENDPOINTS)]
@@ -662,19 +788,61 @@ class RankingTests(unittest.TestCase):
         doc = aggregate.site_document(combined)
         self.assertEqual(doc["schema"], "rullst.benchmarks.latest.v1")
         self.assertEqual([c["key"] for c in doc["rankings"]["categories"]], rankings.CATEGORY_KEYS)
-        overall = doc["rankings"]["overall"]["entries"]
-        self.assertEqual([e["slug"] for e in overall if e["position"]], ["actix", "rullst"])
-        self.assertEqual(next(e for e in overall if e["slug"] == "rullst")["framework"], "Rullst")
-        self.assertEqual(next(e for e in overall if e["slug"] == "gin")["status"], "incomplete")
+        self.assertNotIn("overall", doc["rankings"])
+        hello = {e["slug"]: e for e in doc["rankings"]["categories"][0]["entries"]}
+        self.assertEqual(hello["actix"]["position"], 1)
         readme = report.render_readme_table(combined)
         self.assertIn("### Rankings", readme)
-        self.assertIn("| Actix | 1: ", readme)
-        self.assertIn("1.10×*", readme)  # client-bound (scale > 1): scored by efficiency
+        self.assertNotIn("| Overall |", readme)
+        self.assertIn("| Actix | 1: 1.10×* |", readme)  # client-bound (scale > 1): scored by CPU efficiency
         self.assertIn("| Gin | 1.2.3 | Rust | 0.80 | 0.80 | 0.80 | n/i | n/i | n/i | 800 (1,000) |", readme)
+        self.assertIn("Test CPU", readme)
         results = report.render_results(combined)
         self.assertIn("## Rankings", results)
         self.assertIn("### /queries?queries=20", results)
+        self.assertIn("PostgreSQL-bound 3/3", results)
+        self.assertIn("PG µs/req", results)
         self.assertIn("not implemented yet", results)
+        review = report.render_results(combined, review=True)
+        self.assertIn("computed for review, not published", review)
+        self.assertIn("## Publication gate", review)
+
+
+class HarnessTests(unittest.TestCase):
+    def test_rounds_alternate_abba(self):
+        from harness import round_order
+        self.assertEqual([round_order("x", "axum", n, 1)[0] for n in (1, 2, 3, 4)], ["x", "axum", "x", "axum"])
+        self.assertEqual([round_order("x", "axum", n, 2)[0] for n in (1, 2)], ["axum", "x"])
+        self.assertEqual(round_order("axum", "axum", 1, 1), ["axum"])
+
+    def test_plan_has_jobs_per_framework(self):
+        from harness import plan
+        self.assertEqual(plan("actix,gin", 2), [{"framework": "actix", "job": 1}, {"framework": "actix", "job": 2},
+                                                {"framework": "gin", "job": 1}, {"framework": "gin", "job": 2}])
+        with self.assertRaises(Exception):
+            plan("actix", 0)
+
+    def test_the_control_must_be_an_identical_copy(self):
+        import harness
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for slug in ("orig", "copy"):
+                (root / slug / "src").mkdir(parents=True)
+                (root / slug / "src" / "main.rs").write_text("fn main() {}")
+                (root / slug / "bench.json").write_text(slug)
+            saved, harness.FRAMEWORKS = harness.FRAMEWORKS, root
+            try:
+                self.assertEqual(harness.control_differences("copy", "orig"), [])
+                (root / "copy" / "src" / "main.rs").write_text("fn main() { tuned() }")
+                self.assertEqual(harness.control_differences("copy", "orig"), ["src/main.rs"])
+            finally:
+                harness.FRAMEWORKS = saved
+
+    def test_jit_runtimes_warm_up_longer(self):
+        config = load_config()
+        self.assertEqual(warmup_seconds({"jit": True}, config), config["warmup"]["jit_duration_s"])
+        self.assertEqual(warmup_seconds({}, config), config["warmup"]["duration_s"])
+        self.assertGreater(config["warmup"]["jit_duration_s"], config["warmup"]["duration_s"])
 
 
 class ReleaseCheckTests(unittest.TestCase):

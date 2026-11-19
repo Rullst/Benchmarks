@@ -44,6 +44,11 @@ GROUPS = {
     "reference": "Popular references",
 }
 
+# bench.json "role": ranked (the default), an unranked diagnostic shown next
+# to the reference (for example Rullst's minimal configuration), or the A/A
+# control (an identical copy of the reference, from which the tie margins come).
+ROLES = ("ranked", "diagnostic", "control")
+
 REQUIRED_MANIFEST_FIELDS = (
     "name",
     "language",
@@ -104,6 +109,16 @@ def validate_manifest(slug: str, manifest: dict) -> list[str]:
         if missing:
             problems.append(f"{slug}: 'endpoints' must include {', '.join(missing)}")
         problems += _phase2_problems(slug, manifest, endpoints)
+    role = manifest.get("role", "ranked")
+    if role not in ROLES:
+        problems.append(f"{slug}: role must be one of {', '.join(ROLES)}")
+    if role != "ranked" and not str(manifest.get("role_note", "")).strip():
+        problems.append(f"{slug}: a {role} implementation needs a 'role_note' saying what it is for")
+    if "jit" in manifest and not isinstance(manifest["jit"], bool):
+        problems.append(f"{slug}: 'jit' must be true or false")
+    for field in ("structure_note", "role_note", "control_of"):
+        if field in manifest and not isinstance(manifest[field], str):
+            problems.append(f"{slug}: '{field}' must be a string")
     setup = manifest.get("db_setup")
     if setup is not None:
         path = folder / str(setup)

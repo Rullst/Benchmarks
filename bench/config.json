@@ -31,7 +31,10 @@
   "phase2": {"sessions": 125, "session_fetch_parallel": 8},
   "hot_rows": {"endpoint": "world-update", "ids": 10, "requests": 2000},
   "sampling_interval_s": 0.1,
-  "warmup": {"connections": 125, "duration_s": 5},
+  "warmup": {"connections": 125, "duration_s": 5, "jit_duration_s": 15, "settle_s": 2},
+  "concurrent_check": {"connections": 125, "duration_s": 3},
+  "scoring": {"publish_overall": false, "max_error_rate": 0.01, "memory_floor_mib": 64, "startup_floor_s": 1.0},
+  "publication": {"min_rounds": 5, "min_jobs": 2, "max_aa_margin": 0.05, "control": "axum-control"},
   "tiers": {
     "tier1": {
       "connections": 125,

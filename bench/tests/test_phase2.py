@@ -206,7 +206,8 @@ class RoundOrderTests(unittest.TestCase):
 
         def fake_load(binary, url, *, workload, connections, duration_s, **kwargs):
             events.append(f"load {workload.label} {duration_s}")
-            return {"rps": 1.0, "non_2xx": 0, "transport_errors": 0, "error_rate": 0.0, "client_bound": False,
+            return {"rps": 1.0, "requests_ok": 10, "non_2xx": 0, "transport_errors": 0, "error_rate": 0.0,
+                    "client_bound": False,
                     "client_cpu_busy": 0.1, "server_ram_peak_mib": 1.0, "server_cpu_cores": 1.0,
                     "_ram_samples": [(0.0, 1), (1.0, 1)]}
 
@@ -239,6 +240,14 @@ class RoundOrderTests(unittest.TestCase):
         self.assertTrue(all("/world" not in e and "/form" not in e and "/me" not in e for e in events[:tier4]))
         self.assertIn("hot_rows", record)
         self.assertEqual(list(record["tier1"])[-5:], ["world", "worlds", "form", "me", "world-update"])
+        # Each endpoint is warmed up immediately before its own run, and Tier 3 (Memory) comes after Tier 4.
+        warm, t1 = config["warmup"]["duration_s"], config["tiers"]["tier1"]["duration_s"]
+        text = events.index(f"load /text {t1}")
+        self.assertEqual(events[text - 1], f"load /text {warm}")
+        self.assertEqual(events[events.index(f"load GET /me {t1}") - 1], f"load GET /me {warm}")
+        self.assertGreater(events.index(f"load /json {config['tiers']['tier3']['duration_s']}"), tier4)
+        self.assertEqual(set(record["warmup"]), set(ENDPOINTS))
+        self.assertEqual(record["warmup_s"], warm)
 
 
 class WrkTests(unittest.TestCase):

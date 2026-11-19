@@ -10,23 +10,27 @@ import sessions
 import workload as W
 from common import ENDPOINTS, PHASE2_ENDPOINTS, BenchError, declared_endpoints, endpoint_path, log, phase2
 from containers import Server, database_handle, reset_tables, start_server
-from loadgen import MIB, efficiency, run_load
+from loadgen import MIB, run_load
+from loadgen_process import per_request_cpu
 from stats import get_path, ratio, summary, window_median
 
 # Metrics summarized over rounds. Ratios to the baseline are computed for
 # every metric except error counts and rates and the database's CPU use.
-# rps_per_cpu is the server efficiency: requests per server CPU-second.
+# rps_per_cpu is the server efficiency (requests per server CPU-second);
+# total_rps_per_cpu counts PostgreSQL's CPU too; db_us_per_request is
+# PostgreSQL's CPU time per request in microseconds.
+RUN_METRICS = ("rps", "latency_ms.mean", "latency_ms.p50", "latency_ms.p99", "error_rate", "server_cpu_cores",
+               "rps_per_cpu", "db_cpu_cores", "db_us_per_request", "cpu_us_per_request", "total_rps_per_cpu")
 METRICS = [
-    *(f"tier1.{ep}.{m}" for ep in ENDPOINTS
-      for m in ("rps", "latency_ms.mean", "latency_ms.p50", "latency_ms.p99", "error_rate",
-                "server_cpu_cores", "rps_per_cpu", "db_cpu_cores")),
+    *(f"tier1.{ep}.{m}" for ep in ENDPOINTS for m in RUN_METRICS),
     # Write contention (config "hot_rows"): PUT /world/{id} on a few rows; reported, not ranked.
     *(f"hot_rows.{m}" for m in ("rps", "latency_ms.p50", "latency_ms.p99", "error_rate", "timeouts",
-                                "transport_errors", "server_cpu_cores", "rps_per_cpu", "db_cpu_cores")),
+                                "transport_errors", "server_cpu_cores", "rps_per_cpu", "db_cpu_cores",
+                                "db_us_per_request")),
     "tier2.rps", "tier2.latency_ms.p50", "tier2.latency_ms.p99", "tier2.error_rate", "tier2.timeouts",
     "tier2.server_cpu_cores", "tier2.rps_per_cpu",
     "tier3.idle_ram_mib", "tier3.idle_cpu_cores", "tier3.load_ram_peak_mib", "tier3.load_cpu_cores",
-    "tier3.rps",
+    "tier3.rps", "tier3.error_rate",
     "tier4.rps", "tier4.latency_ms.p99", "tier4.error_rate", "tier4.transport_errors", "tier4.timeouts",
     "tier4.server_cpu_cores", "tier4.rps_per_cpu",
     "tier4.ram_mid_mib", "tier4.ram_end_mib", "tier4.ram_growth_mib",
@@ -34,8 +38,15 @@ METRICS = [
 ]
 NO_RATIO = ("error_rate", "transport_errors", "timeouts", "ram_growth_mib", "tasks", "db_cpu_cores")
 LOAD_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "hot_rows", "tier2", "tier3_load", "tier4"]
-# Throughput runs whose capacity ratio the rankings use (see capacity_ratio).
-CAPACITY_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "tier2", "tier4"]
+# Runs whose capacity ratio the rankings use (see capacity_ratio). Tiers 2
+# and 4 are stability checks (pass or fail), not scores.
+CAPACITY_RUNS = [f"tier1.{ep}" for ep in ENDPOINTS]
+# A run limited by the load generator is scored by efficiency only when the
+# server used at least this share of its vCPUs: below it, its requests per
+# CPU-second were measured far from the load it could take, and the run is
+# not comparable (README "How the scores are computed").
+MIN_SERVER_SHARE = 0.75
+LIMITERS = ("postgresql", "load-generator")
 
 
 class Crashed(Exception):
@@ -140,10 +151,32 @@ def endpoint_workload(endpoint: str, config: dict, context: dict) -> W.Workload:
     return BUILDERS[name](context)
 
 
+def warmup_seconds(manifest: dict, config: dict) -> int:
+    """How long each endpoint is warmed up: longer for runtimes that compile hot code while running.
+
+    bench.json `"jit": true` marks a runtime whose JIT compiles code after
+    profiling it at run time (HotSpot JVM, .NET tiered compilation, V8 for
+    Node.js, Ruby with YJIT, PHP with the OPcache JIT on): it gets
+    config.json warmup.jit_duration_s instead of warmup.duration_s.
+    """
+    warm = config["warmup"]
+    return int(warm.get("jit_duration_s", warm["duration_s"]) if manifest.get("jit") else warm["duration_s"])
+
+
 def measure_round(manifest: dict, config: dict, split: dict, binary: Path, number: int,
                   framework_tables: list[str] | tuple = ()) -> dict:
+    """One round of one implementation: a fresh server, every tier, then the application endpoints.
+
+    Order: start-up; idle (Tier 3 idle RAM); each phase-1 endpoint warmed up
+    immediately before its Tier 1 run (warm-up, idle settle, measurement);
+    Tier 2; Tier 4; an idle recovery; Tier 3 under load (the Memory score:
+    the RAM high-water mark after the load tiers); the application
+    endpoints (sessions, then warm-up and measurement per endpoint, then hot
+    rows).
+    """
     tiers = config["tiers"]
     srv = config["server"]
+    warm = config["warmup"]
     record: dict = {"round": number, "implementation": manifest["slug"], "crashed": None}
     # Every round starts from the same `world` table (/updates rewrites rows)
     # and empty session tables.
@@ -153,6 +186,9 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
     database = database_handle(config)
     served = declared_endpoints(manifest)
     endpoints = [ep for ep in tiers["tier1"]["endpoints"] if ep in served]
+    warm_s = warmup_seconds(manifest, config)
+    record["warmup_s"] = warm_s
+    record["warmup"] = {}
 
     def load(workload: W.Workload, connections: int, duration_s: int, count_statuses: bool = False) -> dict:
         return run_load(binary, server.base_url, connections=connections, duration_s=duration_s, config=config,
@@ -160,17 +196,28 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
                         db_cpus=split.get("database", client), workload=workload,
                         count_statuses=count_statuses)
 
-    def warm_up(names: list[str], workloads: dict, count_statuses: bool) -> int:
-        warm = config["warmup"]
-        errors = 0
-        for endpoint in names:
-            result = load(workloads[endpoint], warm["connections"], warm["duration_s"], count_statuses)
-            errors += result["non_2xx"] + result["transport_errors"]
-            _check_alive(server, f"warm-up /{endpoint}")
-        return errors
+    def tier1(endpoint: str, workload: W.Workload, count_statuses: bool) -> None:
+        """Warm one endpoint up, let it settle, then measure it.
+
+        The warm-up counts every status class (a 3xx is a failure), so a
+        server that redirects or fails is visible even on the static runs,
+        which are measured without wrk's Lua response hook.
+        """
+        t1 = tiers["tier1"]
+        warmed = load(workload, warm["connections"], warm_s, True)
+        record["warmup"][endpoint] = {
+            "errors": warmed["non_2xx"] + warmed["transport_errors"],
+            "requests": warmed["requests_ok"] + warmed["non_2xx"] + warmed["transport_errors"],
+            "error_rate": warmed["error_rate"]}
+        _check_alive(server, f"warm-up /{endpoint}")
+        time.sleep(warm.get("settle_s", 0))
+        record["tier1"][endpoint] = _strip_samples(load(workload, t1["connections"], t1["duration_s"],
+                                                        count_statuses))
+        _check_alive(server, f"tier 1 /{endpoint}")
+        time.sleep(srv["cooldown_s"])
 
     def application_phase(names: list[str]) -> None:
-        """The phase-2 endpoints, at the end of the round: sessions, warm-up, Tier 1 runs, hot rows.
+        """The phase-2 endpoints, at the end of the round: sessions, then each endpoint, then hot rows.
 
         Logging in hashes 125 passwords; a memory-hard hash (Argon2id, 19 MiB
         per verification) can leave hundreds of MiB in the allocator (Axum:
@@ -182,14 +229,10 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
         record["sessions"] = {key: len(value) for key, value in context.items() if key.endswith("_sessions")}
         if context.get("login_sessions"):
             record["sessions"]["bearer"] = any(s.bearer for s in context["login_sessions"])
-        workloads = {endpoint: endpoint_workload(endpoint, config, context) for endpoint in names}
-        # Every phase-2 response that is not 2xx counts as a failure (wrk's Lua status hook).
-        record["application_warmup_errors"] = warm_up(names, workloads, True)
         for endpoint in names:
-            record["tier1"][endpoint] = _strip_samples(
-                load(workloads[endpoint], t1["connections"], t1["duration_s"], True))
-            _check_alive(server, f"tier 1 /{endpoint}")
-            time.sleep(srv["cooldown_s"])
+            # Every phase-2 response that is not 2xx counts as a failure (wrk's Lua status hook).
+            tier1(endpoint, endpoint_workload(endpoint, config, context), True)
+        record["application_warmup_errors"] = sum(record["warmup"][ep]["errors"] for ep in names)
         hot = config.get("hot_rows")
         if hot and hot.get("endpoint") in names:
             hot_workload = W.hot_rows(hot.get("ids", 10), hot.get("requests", 2000),
@@ -205,25 +248,30 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
         record["idle"] = idle
 
         # The endpoints up to /fortunes first; the application endpoints (phase 2)
-        # after Tier 4, so that no login has run before the RAM of Tiers 3 and 4
+        # at the end, so that no login has run before the RAM of Tiers 3 and 4
         # is measured (see application_phase).
         basic = [ep for ep in endpoints if ep not in PHASE2_ENDPOINTS]
         application = [ep for ep in endpoints if ep in PHASE2_ENDPOINTS]
-        workloads = {endpoint: endpoint_workload(endpoint, config, {}) for endpoint in basic}
-        record["warmup_errors"] = warm_up(basic, workloads, False)
-
-        t1 = tiers["tier1"]
         record["tier1"] = {}
         for endpoint in basic:
-            record["tier1"][endpoint] = _strip_samples(load(workloads[endpoint], t1["connections"], t1["duration_s"]))
-            _check_alive(server, f"tier 1 /{endpoint}")
-            time.sleep(srv["cooldown_s"])
+            tier1(endpoint, endpoint_workload(endpoint, config, {}), False)
+        record["warmup_errors"] = sum(record["warmup"][ep]["errors"] for ep in basic)
 
         t2 = tiers["tier2"]
         record["tier2"] = _strip_samples(load(W.static(f"/{t2['endpoint']}"), t2["connections"], t2["duration_s"]))
         _check_alive(server, "tier 2")
         time.sleep(srv["cooldown_s"])
 
+        t4 = tiers["tier4"]
+        stress = load(W.static(f"/{t4['endpoint']}"), t4["connections"], t4["duration_s"])
+        samples = stress.pop("_ram_samples", [])
+        stress.update(ram_trend(samples, config["leak"]))
+        record["tier4"] = stress
+        _check_alive(server, "tier 4")
+        time.sleep(srv["recovery_s"])
+
+        # Memory: the high-water mark while serving /json after the load tiers
+        # above and an idle period, so it includes what the server kept.
         t3 = tiers["tier3"]
         loaded = _strip_samples(load(W.static(f"/{t3['endpoint']}"), t3["connections"], t3["duration_s"]))
         record["tier3"] = {
@@ -234,19 +282,12 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
             "rps": loaded["rps"],
             "error_rate": loaded["error_rate"],
             "client_bound": loaded["client_bound"],
+            "limited_by": loaded.get("limited_by"),
             "client_cpu_busy": loaded["client_cpu_busy"],
+            "after": "tier 1 (phase 1), tier 2, tier 4 and an idle period",
         }
         _check_alive(server, "tier 3")
         time.sleep(srv["cooldown_s"])
-
-        t4 = tiers["tier4"]
-        stress = load(W.static(f"/{t4['endpoint']}"), t4["connections"], t4["duration_s"])
-        samples = stress.pop("_ram_samples", [])
-        stress.update(ram_trend(samples, config["leak"]))
-        record["tier4"] = stress
-        _check_alive(server, "tier 4")
-
-        time.sleep(srv["recovery_s"])
         peak = server.memory_peak_bytes()
         record["after"] = {
             "ram_mib": round(server.ram_bytes() / MIB, 1),
@@ -273,7 +314,27 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
     return record
 
 
+def run_limiter(run: dict | None) -> str | None:
+    """"postgresql", "load-generator" or None for one load run (older results: derived from CPU use)."""
+    if not run or not run.get("client_bound"):
+        return None
+    if run.get("limited_by") in LIMITERS:
+        return run["limited_by"]
+    return "postgresql" if (run.get("db_cpu_cores") or 0) >= (run.get("loadgen_cpu_cores") or 0) else "load-generator"
+
+
+def enrich(rounds: list[dict]) -> list[dict]:
+    """Add the per-request CPU fields to load runs recorded before they existed (in place)."""
+    for r in rounds:
+        runs = [*(r.get("tier1") or {}).values(), *(r[k] for k in ("hot_rows", "tier2", "tier4") if r.get(k))]
+        for run in runs:
+            if isinstance(run, dict) and "rps" in run and "cpu_us_per_request" not in run:
+                run.update(per_request_cpu(run))
+    return rounds
+
+
 def summarize(rounds: list[dict]) -> dict:
+    enrich(rounds)
     metrics = {}
     for path in METRICS:
         values = [get_path(r, path) for r in rounds]
@@ -285,45 +346,79 @@ def summarize(rounds: list[dict]) -> dict:
         "crashed_rounds": sum(1 for r in rounds if r.get("crashed")),
         "ram_growing_rounds": sum(1 for r in rounds if get_path(r, "tier4.ram_growing")),
         "client_bound_rounds": {},
+        "limited_rounds": {},
+        "warmup_errors": {},
     }
     for run in LOAD_RUNS:
-        path = "tier3.client_bound" if run == "tier3_load" else f"{run}.client_bound"
-        run_path = "tier3" if run == "tier3_load" else run
-        if run in BASE_RUNS or any(get_path(r, run_path) is not None for r in rounds):
-            flags["client_bound_rounds"][run] = sum(1 for r in rounds if get_path(r, path))
+        path = "tier3" if run == "tier3_load" else run
+        if run in BASE_RUNS or any(get_path(r, path) is not None for r in rounds):
+            flags["client_bound_rounds"][run] = sum(1 for r in rounds if get_path(r, f"{path}.client_bound"))
+            counts = {name: sum(1 for r in rounds if run_limiter(get_path(r, path)) == name) for name in LIMITERS}
+            flags["limited_rounds"][run] = {name: n for name, n in counts.items() if n}
+    for r in rounds:
+        for endpoint, warmed in (r.get("warmup") or {}).items():
+            flags["warmup_errors"][endpoint] = flags["warmup_errors"].get(endpoint, 0) + warmed.get("errors", 0)
     return {"metrics": metrics, "flags": flags}
 
 
 BASE_RUNS = ("tier1.text", "tier1.json", "tier1.db-single", "tier1.html", "tier2", "tier3_load", "tier4")
 
 
-def capacity_ratio(run: dict | None, base: dict | None) -> tuple[float | None, bool]:
-    """One round pair's capacity ratio for a load run, and whether efficiency decided it.
+def total_efficiency(run: dict | None) -> float | None:
+    """Requests per CPU-second of the server and PostgreSQL together."""
+    if not run or run.get("rps") is None:
+        return None
+    if run.get("total_rps_per_cpu") is not None:
+        return run["total_rps_per_cpu"]
+    server = run.get("server_cpu_cores")
+    if not server:
+        return None
+    return run["rps"] / (server + (run.get("db_cpu_cores") or 0.0))
 
-    When neither side was client-bound, both servers were the limit and the
-    requests/s ratio measures their capacity. When either side was
-    client-bound, that server had idle CPU, so its requests/s says less than
-    its cost per request: the ratio of requests per server CPU-second
-    (efficiency) is used instead.
+
+def server_share(run: dict) -> float | None:
+    cores, cpus = run.get("server_cpu_cores"), run.get("server_cpus") or 2
+    return cores / cpus if cores is not None else None
+
+
+def capacity_ratio(run: dict | None, base: dict | None) -> tuple[float | None, str]:
+    """One round pair's capacity ratio for a load run, and its basis.
+
+    Bases: "rps" when neither server's run was client-bound: both servers
+    were the limit, so the requests/s ratio measures their capacity. "cpu"
+    when either was client-bound: the ratio of requests per CPU-second of
+    the server and PostgreSQL together, so a framework is charged for the
+    PostgreSQL work its queries cause (a run limited by PostgreSQL is mostly
+    PostgreSQL's CPU). "not comparable" when a side was limited by the load
+    generator while its server used less than MIN_SERVER_SHARE of its vCPUs:
+    its efficiency was measured far from the load it could take, so it is
+    not used as its capacity. "missing" when a side has no run.
     """
     if not run or not base:
-        return None, False
-    if run.get("client_bound") or base.get("client_bound"):
-        value = ratio(efficiency(run), efficiency(base))
-        if value is not None:
-            return value, True
-    return ratio(run.get("rps"), base.get("rps")), False
+        return None, "missing"
+    limits = (run_limiter(run), run_limiter(base))
+    if limits == (None, None):
+        return ratio(run.get("rps"), base.get("rps")), "rps"
+    for side, limit in ((run, limits[0]), (base, limits[1])):
+        share = server_share(side)
+        if limit == "load-generator" and (share is None or share < MIN_SERVER_SHARE):
+            return None, "not comparable"
+    value = ratio(total_efficiency(run), total_efficiency(base))
+    return (value, "cpu") if value is not None else (None, "not comparable")
 
 
 def ratios(framework_rounds: list[dict], baseline_rounds: list[dict]) -> dict:
-    """Per-round ratio framework / baseline, summarized over the rounds.
+    """Per-round ratio framework / baseline, summarized over the round pairs.
 
-    `<run>.capacity` (for example tier1.json.capacity) is the capacity ratio
-    of capacity_ratio(); its `efficiency_rounds` counts the round pairs in
-    which efficiency was used.
+    `<run>.capacity` (for example tier1.json.capacity) summarizes the
+    comparable pairs' capacity ratios (capacity_ratio); `pairs` counts every
+    pair with both runs, `cpu_rounds` the pairs scored by CPU efficiency,
+    `not_comparable_rounds` the pairs left out, and `postgresql_rounds` /
+    `load_generator_rounds` the pairs in which either side was limited by
+    PostgreSQL or by the load generator.
     """
     out = {}
-    pairs = list(zip(framework_rounds, baseline_rounds))
+    pairs = list(zip(enrich(framework_rounds), enrich(baseline_rounds)))
     for path in METRICS:
         if path.rsplit(".", 1)[-1] in NO_RATIO or any(part in path for part in NO_RATIO):
             continue
@@ -332,17 +427,19 @@ def ratios(framework_rounds: list[dict], baseline_rounds: list[dict]) -> dict:
         if stat:
             out[path] = stat
     for run in CAPACITY_RUNS:
-        results = [capacity_ratio(get_path(f, run), get_path(b, run)) for f, b in pairs]
-        stat = summary([value for value, _ in results])
-        if stat:
-            stat["efficiency_rounds"] = sum(1 for value, used in results if used and value is not None)
-            # Both servers client-bound and no efficiency to compare: the
-            # requests/s ratio then compares two load generators, not servers.
-            stat["not_comparable_rounds"] = sum(
-                1 for (value, used), (f, b) in zip(results, pairs)
-                if value is not None and not used
-                and get_path(f, f"{run}.client_bound") and get_path(b, f"{run}.client_bound"))
-            out[f"{run}.capacity"] = stat
+        sides = [(get_path(f, run), get_path(b, run)) for f, b in pairs]
+        results = [capacity_ratio(f, b) for f, b in sides]
+        present = [(value, basis, f, b) for (value, basis), (f, b) in zip(results, sides) if basis != "missing"]
+        if not present:
+            continue
+        stat = summary([value for value, basis, _, _ in present if basis in ("rps", "cpu")]) or {
+            "median": None, "min": None, "max": None, "spread": None, "n": 0}
+        stat["pairs"] = len(present)
+        stat["cpu_rounds"] = sum(1 for _, basis, _, _ in present if basis == "cpu")
+        stat["not_comparable_rounds"] = sum(1 for _, basis, _, _ in present if basis == "not comparable")
+        for name, key in (("postgresql", "postgresql_rounds"), ("load-generator", "load_generator_rounds")):
+            stat[key] = sum(1 for _, _, f, b in present if name in (run_limiter(f), run_limiter(b)))
+        out[f"{run}.capacity"] = stat
     return out
 
 

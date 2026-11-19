@@ -245,15 +245,16 @@ def start_server(manifest: dict, config: dict, cpus: list[int], *, keep_logs: bo
         cmd += ["-e", f"{key}={value}"]
     cmd.append(image_tag(slug))
     run(cmd, timeout=120)
-    return Server(name, server["port"])
+    return Server(name, server["port"], cpus=len(cpus))
 
 
 class Server:
     """A running server container and its cgroup v2 counters."""
 
-    def __init__(self, name: str, port: int):
+    def __init__(self, name: str, port: int, cpus: int | None = None):
         self.name = name
         self.port = port
+        self.cpus = cpus
         self._cgroup: Path | None = None
 
     @property
