@@ -85,12 +85,20 @@ def worlds_pages(count: int = 2000) -> Workload:
     return Workload(requests, label="/worlds")
 
 
-def put_world(count: int = MAX_ID) -> Workload:
-    """PUT /world/{id} with {"randomNumber": n}: random id and value, drawn independently."""
+def put_world(count: int = MAX_ID, write_csrf: tuple[str, str, str] | None = None) -> Workload:
+    """PUT /world/{id} with {"randomNumber": n}: random id and value, drawn independently.
+
+    write_csrf is (cookie name, header name, token) for implementations whose
+    bench.json declares phase2.write_csrf: the cookie and the header carry
+    the same token, as a same-site script sends them.
+    """
     rng = _rng("put")
     ids = list(range(1, count + 1))
     rng.shuffle(ids)
-    headers = (("Content-Type", "application/json"),)
+    headers: tuple[tuple[str, str], ...] = (("Content-Type", "application/json"),)
+    if write_csrf:
+        cookie, header, token = write_csrf
+        headers += (("Cookie", f"{cookie}={token}"), (header, token))
     requests = [Request("PUT", f"/world/{i}", headers,
                         json.dumps({"randomNumber": rng.randint(1, MAX_ID)}, separators=(",", ":")).encode())
                 for i in ids]
