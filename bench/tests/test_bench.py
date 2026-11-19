@@ -264,6 +264,13 @@ class ManifestTests(unittest.TestCase):
             manifest = json.loads((FRAMEWORKS / slug / "bench.json").read_text())
             self.assertLessEqual(set(EXTRA_ENDPOINTS), set(declared_endpoints(manifest)), slug)
 
+    def test_the_baseline_serves_every_endpoint(self):
+        import json
+        from common import FRAMEWORKS
+        manifest = json.loads((FRAMEWORKS / "axum" / "bench.json").read_text())
+        self.assertEqual(declared_endpoints(manifest), list(ENDPOINTS))
+        self.assertEqual(validate_manifest("axum", manifest), [])
+
 
 class EfficiencyTests(unittest.TestCase):
     def test_efficiency(self):
