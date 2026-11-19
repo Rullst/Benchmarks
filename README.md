@@ -184,7 +184,7 @@ Fixed settings, the same for every implementation:
   load generator, PostgreSQL and the harness use the other 2 vCPUs. The job
   stops if the runner has fewer than 4 vCPUs. PostgreSQL's CPU use is
   measured in every run (its container's cgroup). Giving PostgreSQL a vCPU of
-  its own was measured: see [CPU split](#cpu-split).
+  its own was measured and not adopted: see [CPU split](#cpu-split).
 - **Memory.** The server container is limited to 2 GiB (`--memory`), like a
   small cloud instance; runtimes that size their heap from the container
   limit see the same limit.
@@ -240,9 +240,9 @@ the rankings compare those runs by server efficiency:
 
 When the server is the limit, both measures agree: it uses both of its vCPUs,
 so requests/s is efficiency times two. When it is not, efficiency is the
-better estimate of what it could serve, with one caveat: a server that is not
-saturated can spend somewhat more CPU per request (fewer requests per
-wake-up), so efficiency slightly understates the fastest servers.
+better estimate of what it could serve, with one caveat: efficiency changes
+somewhat with the load (see [CPU split](#cpu-split)), so it compares servers
+best when both carry a similar load.
 
 ### CPU split
 
@@ -250,11 +250,43 @@ PostgreSQL shares the 2 client vCPUs with the load generator. On the
 database endpoints both compete for them, so most `/db-single` runs were
 client-bound. Giving PostgreSQL a vCPU of its own (server 2, load generator 1,
 PostgreSQL 1) was measured for Axum, alternating both splits on one runner
-(the `cpu-split-experiment` workflow, November 2026):
+(a temporary `cpu-split-experiment` workflow, November 2026):
 
-<!-- cpu-split:start -->
-_Pending: the experiment's numbers and the decision are added here._
-<!-- cpu-split:end -->
+| Run | Split | req/s | Server CPU (cores) | Efficiency (req/CPU-s) | Load generator CPU (cores) | PostgreSQL CPU (cores) | Client-bound |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| /json | shared | 155,420 | 1.93 | 80,424 | 1.99 | 0.00 | 2/2 |
+| /json | own vCPU | 98,205 | 1.39 | 70,526 | 1.00 | 0.00 | 2/2 |
+| /db-single | shared | 14,763 | 1.08 | 13,631 | 0.50 | 1.49 | 2/2 |
+| /db-single | own vCPU | 10,897 | 0.78 | 14,054 | 0.45 | 1.00 | 2/2 |
+| /queries?queries=20 | shared | 1,062 | 1.13 | 940 | 0.06 | 1.93 | 2/2 |
+| /queries?queries=20 | own vCPU | 754 | 0.64 | 1,185 | 0.05 | 1.00 | 2/2 |
+| /updates?queries=20 | shared | 485 | 1.03 | 473 | 0.04 | 1.96 | 2/2 |
+| /updates?queries=20 | own vCPU | 338 | 0.56 | 605 | 0.03 | 1.00 | 2/2 |
+| /fortunes | shared | 22,792 | 1.73 | 13,174 | 0.58 | 1.41 | 2/2 |
+| /fortunes | own vCPU | 16,660 | 1.34 | 12,451 | 0.50 | 1.00 | 2/2 |
+| Tier 2 /json | shared | 153,294 | 1.92 | 79,884 | 1.98 | 0.00 | 2/2 |
+| Tier 2 /json | own vCPU | 96,661 | 1.38 | 70,274 | 0.99 | 0.00 | 2/2 |
+
+Medians of two rounds per split, alternating on one runner
+([run 44555335441](https://github.com/venelouis/Benchmarks/actions/runs/44555335441),
+in the maintainer's fork). Its own vCPU did not make any run server-bound.
+The load generator alone on one vCPU caps `/json` at about 98,000 req/s
+instead of 155,000, and PostgreSQL alone on one vCPU is the limit of every
+database endpoint, at 25-30% fewer requests/s. Sharing two vCPUs lets
+whichever side needs the CPU use it (the load generator on `/json`,
+PostgreSQL on `/queries` and `/updates`). **Decision: the split stays shared**
+(server 2 vCPUs, load generator and PostgreSQL 2 vCPUs). The database
+endpoints are limited by PostgreSQL, which the results show as client-bound
+with PostgreSQL's CPU use next to them, and the rankings compare those runs
+by server efficiency. `BENCH_DATABASE_CPUS=1` (or `database.cpus` in
+`bench/config.json`) reproduces the other split.
+
+The same runs show how much efficiency depends on the load: with less load
+(own-vCPU split), Axum's efficiency was 9-14% lower on `/text`, `/json` and
+`/html` and 26-28% higher on `/queries` and `/updates`. Efficiency ratios
+compare servers well when both run at similar loads, which the alternating
+rounds on one runner give; small efficiency differences between
+implementations whose loads differ a lot are not significant.
 
 ## Fairness
 
@@ -506,9 +538,10 @@ except as ratios to Axum measured on the same machine.
 the client vCPUs with the load generator, and its README table mixed
 absolute numbers from different runners. v2 (November 2026) adds `/queries`,
 `/updates` and `/fortunes`, measures server efficiency and PostgreSQL's CPU
-use in every run, scores client-bound runs by efficiency, and leads the table
-with ratios, showing each absolute number with Axum's from the same runner,
-as described in [Method](#method) and [CPU split](#cpu-split).
+use in every run, scores client-bound runs by efficiency (giving PostgreSQL
+its own vCPU was measured and did not remove the client-bound runs), and
+leads the table with ratios, showing each absolute number with Axum's from
+the same runner, as described in [Method](#method) and [CPU split](#cpu-split).
 
 The suite was rebuilt in November 2026. The results published before that
 (measured by hand on a laptop on 22 June 2026) are kept in
