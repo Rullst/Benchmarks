@@ -1,3 +1,16 @@
+# Resolves requirements.txt for the pull request check, which exports the
+# `lockfile` stage (see CONTRIBUTING.md), with the command at the top of
+# requirements.in. The image below does not use it.
+FROM python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS resolve
+RUN pip install --no-cache-dir --root-user-action=ignore uv==0.13.9
+WORKDIR /app
+COPY requirements.in ./
+RUN uv pip compile requirements.in --python-version 3.14 \
+      --python-platform x86_64-manylinux_2_28 --generate-hashes -o requirements.txt
+
+FROM scratch AS lockfile
+COPY --from=resolve /app/requirements.txt /
+
 # As in the FastAPI "FastAPI in Containers - Docker" guide: the official Python
 # image, the requirements installed first, then the code.
 FROM python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f

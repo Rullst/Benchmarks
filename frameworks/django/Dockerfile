@@ -1,6 +1,20 @@
 # Django has no generated Dockerfile; this one follows the deployment
 # checklist and "How to use Django with Gunicorn" (see README.md).
 
+# Resolves requirements.txt for the pull request check, which exports the
+# `lockfile` stage (see CONTRIBUTING.md), with the command at the top of
+# requirements.txt. The image below does not use it.
+FROM python:3.15.2-slim-trixie AS resolve
+RUN pip install --no-cache-dir --root-user-action=ignore uv==0.13.9
+WORKDIR /app
+COPY requirements.in ./
+RUN uv pip compile requirements.in --python-version 3.15 \
+      --python-platform x86_64-manylinux_2_28 --generate-hashes --emit-index-url \
+      -o requirements.txt
+
+FROM scratch AS lockfile
+COPY --from=resolve /app/requirements.txt /
+
 FROM python:3.15.2-slim-trixie AS build
 # psycopg's C extension is compiled against the system libpq.
 RUN apt-get update \
@@ -32,8 +46,8 @@ RUN python -m compileall -q /app
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     DJANGO_SETTINGS_MODULE=benchsite.settings
-# A fixed dummy key: there are no sessions, cookies or signed values to
-# protect in this benchmark.
+# A fixed dummy key, the same in every Gunicorn worker: it signs the session
+# and CSRF values of the benchmark's accounts, which protect nothing.
 ENV SECRET_KEY="benchmark-dummy-secret-key-it-protects-nothing-0123456789abcdef"
 USER django
 EXPOSE 8080

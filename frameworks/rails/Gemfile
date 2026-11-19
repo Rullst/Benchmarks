@@ -8,6 +8,10 @@ source "https://rubygems.org"
 gem "rails", "8.1.4.1"
 # Use postgresql as the database for Active Record
 gem "pg", "1.7.0"
+# Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
+# Benchmark: uncommented, as `bin/rails generate authentication` does; the
+# login checks users.password_bcrypt with it.
+gem "bcrypt", "3.1.22"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", "8.1.0"
 
