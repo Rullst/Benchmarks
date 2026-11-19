@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from common import GROUPS
+from common import ENDPOINT_LABELS, GROUPS, PHASE2_ENDPOINTS, endpoint_label
 
 START = "<!-- results:start -->"
 END = "<!-- results:end -->"
@@ -73,8 +73,8 @@ def _measured(rows: list[dict]) -> list[dict]:
 
 
 TEXT_COLUMNS = {"Implementation", "Version", "Language", "Notes", "Status", "Reason", "Group", "Runtime",
-                "Server", "Workers", "Database layer", "Templates", "Overall", "Speed", "Database",
-                "Under pressure", "Memory (RAM)", "Endurance", "Startup"}
+                "Server", "Workers", "Database layer", "Templates", "Overall", "Speed", "Database", "Application",
+                "Under pressure", "Memory (RAM)", "Endurance", "Startup", "CSRF", "Session store", "Validation"}
 # Tier 1 endpoints in the summary table, as ratios to Axum.
 SUMMARY_ENDPOINTS = ("json", "html", "db-single", "queries", "updates", "fortunes")
 
@@ -124,6 +124,17 @@ def _served(row: dict, endpoint: str) -> bool:
     return endpoint in row.get("endpoints", (endpoint,))
 
 
+def _endpoint_notes(row: dict, endpoint: str, run: str) -> str:
+    if not _served(row, endpoint):
+        return "not implemented yet"
+    notes = [n for n in (_bound(row, run),) if n]
+    if endpoint == "form":
+        notes.append(f"CSRF: {_phase2_label(row, 'csrf')}")
+    if endpoint == "me":
+        notes.append(f"session: {_phase2_label(row, 'session')}")
+    return "; ".join(notes)
+
+
 def summary_table(rows: list[dict]) -> str:
     header = ["Implementation", "Version", "Language", *(f"/{ep} vs Axum" for ep in SUMMARY_ENDPOINTS),
               "/json req/s (Axum)", "Idle RAM (MiB)", "Peak RAM (MiB)", "Tier 4 errors"]
@@ -171,13 +182,17 @@ def _times(value: float) -> str:
     return f"{value:.2f}" if value >= 0.1 else f"{value:.3f}"
 
 
-THROUGHPUT = ("speed", "database", "pressure", "endurance")
-CATEGORY_COLUMNS = (("speed", "Speed"), ("database", "Database"), ("pressure", "Under pressure"),
-                    ("memory", "Memory (RAM)"), ("endurance", "Endurance"), ("startup", "Startup"))
+THROUGHPUT = ("speed", "database", "application", "pressure", "endurance")
+CATEGORY_COLUMNS = (("speed", "Speed"), ("database", "Database"), ("application", "Application"),
+                    ("pressure", "Under pressure"), ("memory", "Memory (RAM)"), ("endurance", "Endurance"),
+                    ("startup", "Startup"))
 
 
 def _category_cell(key: str, entry: dict) -> str:
     """Position and the measured value: a score or ratio to Axum, or seconds for start-up."""
+    if entry["score"] is None and entry["status"] == "errors":
+        rates = ", ".join(f"{ENDPOINT_LABELS.get(ep, ep)} {rate:.1%}" for ep, rate in entry.get("error_runs", {}).items())
+        return f"errors ({rates})"
     if entry["score"] is None:
         return entry["status"]
     if key == "startup":
@@ -222,6 +237,11 @@ def rankings_section(data: dict, level: str = "###") -> list[str]:
         f"- **Database (Tier 1):** /queries and /updates (20 random rows per request) and /fortunes, with the "
         f"same {t1.get('connections')} connections for {t1.get('duration_s')} s each; the score is the geometric "
         "mean of the three ratios to Axum.",
+        f"- **Application (Tier 1):** GET /world/{{id}} (random ids), GET /worlds (a validated, filtered, "
+        "paginated query), PUT /world/{id} (a validated JSON write), POST /form (a validated form with CSRF "
+        "verification) and GET /me (a signed-in session and the user's row), with the same "
+        f"{t1.get('connections')} connections for {t1.get('duration_s')} s each; the score is the geometric mean of "
+        "the five ratios to Axum. A run with more than 1% errors has no score.",
         f"- **Under pressure (Tier 2):** requests per second on /{t2.get('endpoint')} with "
         f"{t2.get('connections')} connections for {t2.get('duration_s')} s.",
         f"- **Memory (Tier 3):** the most RAM the server used while answering /{t3.get('endpoint')} with "
@@ -244,10 +264,43 @@ def rankings_section(data: dict, level: str = "###") -> list[str]:
         "no position. \"incomplete\": a result is missing, left out, or the endpoint is not implemented yet, so "
         "there is no position rather than one computed from fewer metrics. \"not comparable\": a run was "
         "client-bound in most rounds for both the implementation and Axum and server efficiency could not "
-        "score it, so its requests/s ratio would compare two load generators; there is no position.",
+        "score it, so its requests/s ratio would compare two load generators; there is no position. \"errors\": "
+        "a run of the Application category had more than 1% errors (every request the load sends is valid); "
+        "there is no position.",
         "",
         _table(header, lines),
     ]
+
+
+def _phase2_label(row: dict, kind: str) -> str:
+    """The CSRF design or session store a folder declares, with the mechanism's source."""
+    value = (row.get("phase2") or {}).get(kind) or {}
+    main = value.get("design" if kind == "csrf" else "store")
+    return f"{main} ({value.get('source')})" if main else "–"
+
+
+def application_table(rows: list[dict]) -> str:
+    """The phase-2 endpoints as ratios to Axum, with each implementation's CSRF design and session store."""
+    header = ["Implementation", *(f"{ENDPOINT_LABELS[ep]} vs Axum" for ep in PHASE2_ENDPOINTS), "CSRF",
+              "Session store", "Hot rows p99 (ms)", "Hot rows errors"]
+    lines = []
+    for row in _measured(rows):
+        lines.append([
+            _label(row),
+            *(_ratio(row, f"tier1.{ep}.rps") if _served(row, ep) else "n/i" for ep in PHASE2_ENDPOINTS),
+            _phase2_label(row, "csrf") if _served(row, "form") else "n/i",
+            _phase2_label(row, "session") if _served(row, "me") else "n/i",
+            _median(row, "hot_rows.latency_ms.p99", 2), _errors(row, "hot_rows.error_rate"),
+        ])
+    return _table(header, lines)
+
+
+APPLICATION_NOTE = ("Application endpoints (phase 2). CSRF is the design of the form protection (`token`: a secret "
+                    "the form echoes; `fetch-metadata`: `Sec-Fetch-Site`/`Origin` checks) and the session store is "
+                    "each framework's default for a signed-in user, with where the mechanism comes from (built-in, "
+                    "generator, stdlib, documented, library): /form and /me compare those defaults, not one common "
+                    "mechanism. Hot rows: PUT /world/{id} on ids 1-10 only, so requests wait for each other's row "
+                    "locks; reported, not ranked.")
 
 
 def _corrections(rows: list[dict]) -> str:
@@ -296,6 +349,8 @@ def render_results(data: dict) -> str:
                   f"{(env.get('load_generator') or {}).get('version')}. Full details per job are in "
                   "`results/raw/`.", ""]
     parts += ["## Summary", "", summary_table(rows), "", SUMMARY_NOTE, ""]
+    if any(_served(r, ep) for r in _measured(rows) for ep in PHASE2_ENDPOINTS):
+        parts += ["### Application endpoints", "", application_table(rows), "", APPLICATION_NOTE, ""]
     if _corrections(rows):
         parts += ["Corrections (left-out results are shown as –):", "", _corrections(rows), ""]
     if data.get("rankings"):
@@ -307,6 +362,7 @@ def render_results(data: dict) -> str:
               "Efficiency is requests per server CPU-second (req/s divided by the server's CPU use in cores): what "
               "a request costs the server, which stays comparable when the load generator or the database was "
               "the limit (client-bound). DB CPU is PostgreSQL's CPU use, on the client vCPUs.", ""]
+    config = data.get("config", {})
     for endpoint in t1.get("endpoints", []):
         base = f"tier1.{endpoint}"
         lines = [[_label(r), _range(r, f"{base}.rps"), _ratio(r, f"{base}.rps"),
@@ -314,10 +370,25 @@ def render_results(data: dict) -> str:
                   _median(r, f"{base}.latency_ms.p50", 2), _median(r, f"{base}.latency_ms.p99", 2),
                   _errors(r, f"{base}.error_rate"), _median(r, f"{base}.server_cpu_cores", 2),
                   _median(r, f"{base}.db_cpu_cores", 2),
-                  _bound(r, base) if _served(r, endpoint) else "not implemented yet"] for r in _measured(rows)]
-        parts += [f"### {paths.get(endpoint, '/' + endpoint)}", "", _table(
+                  _endpoint_notes(r, endpoint, base)] for r in _measured(rows)]
+        heading = endpoint_label(config, endpoint) if config else paths.get(endpoint, "/" + endpoint)
+        parts += [f"### {heading}", "", _table(
             ["Implementation", "req/s", "vs Axum", "Efficiency (req/CPU-s)", "vs Axum", "p50 (ms)", "p99 (ms)",
              "Errors", "Server CPU (cores)", "DB CPU (cores)", "Notes"], lines), ""]
+
+    hot = config.get("hot_rows") or {}
+    if any(_stat(r, "hot_rows.rps") for r in _measured(rows)):
+        parts += [f"### Write contention: PUT /world/{{id}} on ids 1-{hot.get('ids', 10)} (hot rows)", "",
+                  f"{t1.get('connections')} connections for {t1.get('duration_s')} s write the same "
+                  f"{hot.get('ids', 10)} rows, so requests wait for each other's row locks. Reported, not ranked: "
+                  "compare the errors, timeouts and p99 latency.", ""]
+        lines = [[_label(r), _range(r, "hot_rows.rps"), _ratio(r, "hot_rows.rps"),
+                  _median(r, "hot_rows.latency_ms.p50", 2), _median(r, "hot_rows.latency_ms.p99", 2),
+                  _ratio(r, "hot_rows.latency_ms.p99"), _errors(r, "hot_rows.error_rate"),
+                  _median(r, "hot_rows.timeouts"), _median(r, "hot_rows.db_cpu_cores", 2)]
+                 for r in _measured(rows) if _served(r, hot.get("endpoint", "world-update"))]
+        parts += [_table(["Implementation", "req/s", "vs Axum", "p50 (ms)", "p99 (ms)", "p99 vs Axum", "Errors",
+                          "Timeouts", "DB CPU (cores)"], lines), ""]
 
     t2 = tiers.get("tier2", {})
     parts += [f"## Tier 2: /{t2.get('endpoint')}, {t2.get('connections')} connections, {t2.get('duration_s')} s", ""]
@@ -383,6 +454,8 @@ def render_readme_table(data: dict) -> str:
     failed = [r for r in data["implementations"] if r["status"] not in ("measured", "crashed")]
     if failed:
         lines += ["", "Not measured in this run: " + ", ".join(f"{_label(r)} ({r['status']})" for r in failed) + "."]
+    if any(_served(r, ep) for r in _measured(data["implementations"]) for ep in PHASE2_ENDPOINTS):
+        lines += ["", application_table(data["implementations"]), "", APPLICATION_NOTE]
     if data.get("rankings"):
         lines += ["", *rankings_section(data)]
     return "\n".join(lines)

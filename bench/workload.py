@@ -17,6 +17,8 @@ from urllib.parse import urlencode
 MAX_ID = 10000
 # Fixed seed: every implementation and every round gets the same request mix.
 SEED = 20261119
+# What a browser sends with a same-origin form submission (docs/v2-phase2-spec.md section 2.4).
+ORIGIN = "http://127.0.0.1:8080"
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,18 @@ def worlds_pages(count: int = 2000) -> Workload:
     return Workload(requests, label="/worlds")
 
 
+def _put_headers(write_csrf: tuple[str, str, str] | None) -> tuple[tuple[str, str], ...]:
+    headers: tuple[tuple[str, str], ...] = (("Content-Type", "application/json"),)
+    if write_csrf:
+        cookie, header, token = write_csrf
+        headers += (("Cookie", f"{cookie}={token}"), (header, token))
+    return headers
+
+
+def _put_body(rng: random.Random) -> bytes:
+    return json.dumps({"randomNumber": rng.randint(1, MAX_ID)}, separators=(",", ":")).encode()
+
+
 def put_world(count: int = MAX_ID, write_csrf: tuple[str, str, str] | None = None) -> Workload:
     """PUT /world/{id} with {"randomNumber": n}: random id and value, drawn independently.
 
@@ -95,14 +109,18 @@ def put_world(count: int = MAX_ID, write_csrf: tuple[str, str, str] | None = Non
     rng = _rng("put")
     ids = list(range(1, count + 1))
     rng.shuffle(ids)
-    headers: tuple[tuple[str, str], ...] = (("Content-Type", "application/json"),)
-    if write_csrf:
-        cookie, header, token = write_csrf
-        headers += (("Cookie", f"{cookie}={token}"), (header, token))
-    requests = [Request("PUT", f"/world/{i}", headers,
-                        json.dumps({"randomNumber": rng.randint(1, MAX_ID)}, separators=(",", ":")).encode())
-                for i in ids]
+    headers = _put_headers(write_csrf)
+    requests = [Request("PUT", f"/world/{i}", headers, _put_body(rng)) for i in ids]
     return Workload(requests, label="PUT /world/{id}")
+
+
+def hot_rows(ids: int = 10, count: int = 2000, write_csrf: tuple[str, str, str] | None = None) -> Workload:
+    """PUT /world/{id} on a few rows (ids 1..`ids`): every connection writes the same rows, so
+    requests wait for each other's row locks (write contention)."""
+    rng = _rng("hot")
+    headers = _put_headers(write_csrf)
+    requests = [Request("PUT", f"/world/{rng.randint(1, ids)}", headers, _put_body(rng)) for _ in range(count)]
+    return Workload(requests, label=f"PUT /world/{{1..{ids}}}", notes={"ids": ids})
 
 
 @dataclass(frozen=True)
@@ -110,6 +128,7 @@ class Session:
     """What the harness obtained once before measuring (docs/v2-phase2-spec.md, CSRF and sessions)."""
 
     cookie: str  # the Cookie header value to send
+    fields: tuple[tuple[str, str], ...] = ()  # the hidden fields of the session's form page
     csrf_field: str = ""  # form field name for the token ("" when the token goes in a header)
     csrf_token: str = ""
     csrf_header: str = ""  # header name, for implementations that take the token in a header
@@ -125,14 +144,17 @@ def _session_headers(session: Session) -> list[tuple[str, str]]:
     return headers
 
 
-def form_posts(sessions: list[Session], count: int = 2000) -> Workload:
-    """POST /form (urlencoded) with each session's cookie and CSRF token: joint pairing."""
+def form_posts(sessions: list[Session], count: int = 2000, origin: str = ORIGIN) -> Workload:
+    """POST /form (urlencoded) as a browser submits it: each session's cookies and hidden fields
+    (its CSRF token), `Origin` and `Sec-Fetch-Site: same-origin`; joint pairing."""
     rng = _rng("form")
     requests = []
     for index in range(count):
         session = sessions[index % len(sessions)]
-        fields = {"name": f"user{rng.randint(1, 99999)}", "randomNumber": rng.randint(1, MAX_ID)}
-        headers = [("Content-Type", "application/x-www-form-urlencoded"), *_session_headers(session)]
+        fields = dict(session.fields)
+        fields.update({"name": f"user{rng.randint(1, 99999)}", "randomNumber": rng.randint(1, MAX_ID)})
+        headers = [("Content-Type", "application/x-www-form-urlencoded"), ("Origin", origin),
+                   ("Sec-Fetch-Site", "same-origin"), *_session_headers(session)]
         if session.csrf_field:
             fields[session.csrf_field] = session.csrf_token
         if session.csrf_header:
@@ -144,7 +166,7 @@ def form_posts(sessions: list[Session], count: int = 2000) -> Workload:
 
 def me(sessions: list[Session]) -> Workload:
     """GET /me with each signed-in session in turn: joint pairing when there are several."""
-    requests = [Request("GET", "/me", tuple(_session_headers(s))) for s in sessions]
+    requests = [Request("GET", "/me", (("Accept", "application/json"), *_session_headers(s))) for s in sessions]
     pairing = "joint" if len(sessions) > 1 else "independent"
     return Workload(requests, pairing=pairing, label="GET /me", notes={"sessions": len(sessions)})
 

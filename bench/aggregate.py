@@ -50,6 +50,8 @@ RESULTS = ROOT / "results"
 RULLST_SLUGS = ("rullst", "rullst-minimal")
 HISTORY_METRICS = ("tier1.json.rps", "tier1.db-single.rps", "tier1.html.rps", "tier1.text.rps",
                    "tier1.queries.rps", "tier1.updates.rps", "tier1.fortunes.rps",
+                   "tier1.world.rps", "tier1.worlds.rps", "tier1.world-update.rps", "tier1.form.rps",
+                   "tier1.me.rps", "hot_rows.latency_ms.p99",
                    "tier2.latency_ms.p99", "tier3.idle_ram_mib", "tier3.load_ram_peak_mib", "tier4.error_rate")
 # Absolute numbers shown next to the Axum value measured on the same runner.
 PAIRED_METRICS = tuple(f"tier1.{ep}.rps" for ep in ENDPOINTS) + ("tier2.rps", "tier4.rps")
@@ -96,6 +98,8 @@ def _row(slug: str, manifest: dict, entry: dict | None) -> dict:
         "logging": manifest.get("logging", ""),
         "maturity_note": manifest.get("maturity_note", ""),
         "endpoints": declared_endpoints(manifest),
+        # Phase 2: validation, CSRF design and session store, shown next to /form and /me.
+        "phase2": manifest.get("phase2") or {},
         "status": "missing" if entry is None else entry.get("status", "unknown"),
         "problem": "",
         "versions": {},

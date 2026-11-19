@@ -1,4 +1,4 @@
-"""Unit tests of the phase-2 prototypes: workloads and the wrk and oha parsers."""
+"""Unit tests of phase 2: workloads, browser sessions, conformance helpers, the wrk and oha parsers."""
 
 from __future__ import annotations
 
@@ -10,9 +10,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import conformance_phase2 as C  # noqa: E402
 import loadgen_oha  # noqa: E402
 import loadgen_wrk  # noqa: E402
+import sessions as S  # noqa: E402
 import workload as W  # noqa: E402
+from conformance import html_tokens  # noqa: E402
 
 
 class WorkloadTests(unittest.TestCase):
@@ -43,6 +46,80 @@ class WorkloadTests(unittest.TestCase):
         for r in wl.requests:
             cookie = dict(r.headers)["Cookie"]
             self.assertIn(f"_token=t{cookie.split('=')[1]}".encode(), r.body)
+
+
+    def test_form_posts_send_hidden_fields_and_browser_headers(self):
+        session = W.Session(cookie="csrf=abc; id=1", fields=(("_token", "t+/="), ("utf8", "✓")))
+        request = W.form_posts([session], count=1).requests[0]
+        headers = dict(request.headers)
+        self.assertEqual(headers["Origin"], "http://127.0.0.1:8080")
+        self.assertEqual(headers["Sec-Fetch-Site"], "same-origin")
+        self.assertEqual(headers["Cookie"], "csrf=abc; id=1")
+        self.assertTrue(request.body.startswith(b"_token=t%2B%2F%3D&utf8=%E2%9C%93&name=user"))
+
+    def test_hot_rows_write_a_few_rows(self):
+        wl = W.hot_rows(ids=10, count=500)
+        ids = {int(r.path.rsplit("/", 1)[1]) for r in wl.requests}
+        self.assertEqual(ids, set(range(1, 11)))
+        self.assertEqual({r.method for r in wl.requests}, {"PUT"})
+        self.assertEqual(wl.requests, W.hot_rows(ids=10, count=500).requests)  # fixed seed
+
+    def test_me_sends_cookies_or_bearer(self):
+        wl = W.me([W.Session(cookie="id=1"), W.Session(cookie="", bearer="tok")])
+        self.assertEqual(dict(wl.requests[0].headers), {"Accept": "application/json", "Cookie": "id=1"})
+        self.assertEqual(dict(wl.requests[1].headers)["Authorization"], "Bearer tok")
+
+
+class BrowserTests(unittest.TestCase):
+    PAGE = ('<html><body><form action="/search"><input type="hidden" name="q" value="x"></form>'
+            '<form method="POST" action="http://127.0.0.1:8080/form">'
+            '<input type="hidden" name="_token" value="a&amp;b"><input name="name">'
+            '<input type="number" name="randomNumber"/><input type="HIDDEN" name="_x" value=""></form></body></html>')
+
+    def test_find_form_and_hidden_fields(self):
+        form = S.find_form(self.PAGE, "/form")
+        self.assertEqual(form["method"], "post")
+        self.assertEqual(S.hidden_fields(form), [("_token", "a&b"), ("_x", "")])
+        self.assertIsNone(S.find_form(self.PAGE, "/login"))
+        self.assertIsNotNone(S.find_form('<form method="post"><input name="u"></form>', "/login"))
+
+    def test_cookie_jar_ignores_attributes_and_drops_expired_cookies(self):
+        browser = S.Browser(1)
+        names = browser.store(["__Host-sid=abc; Path=/; Secure; HttpOnly; SameSite=Strict",
+                               "csrf=t%2B1; Max-Age=3600", "bad", "old=1; Max-Age=3600"])
+        self.assertEqual(names, ["__Host-sid", "csrf", "old"])
+        browser.store(["old=; Max-Age=0", "csrf=t2; Expires=Thu, 01 Jan 2099 00:00:00 GMT",
+                       "sid=gone; expires=Thu, 01 Jan 1970 00:00:00 GMT"])
+        self.assertEqual(browser.cookies, {"__Host-sid": "abc", "csrf": "t2"})
+        self.assertEqual(browser.cookie_header(), "__Host-sid=abc; csrf=t2")
+
+
+class ConformanceHelperTests(unittest.TestCase):
+    def test_form_page_tokens_accept_any_escape_form(self):
+        expected = html_tokens(C.form_page(C.FORM_NAME, 42))
+        served = ("<!doctype html><html><head><title>Form</title></head><body><h1>Hello, &lt;b&gt;&#34;Tom&#34; "
+                  "&amp; &#x27;Jérôme&#x27;&lt;/b&gt;</h1><p>42</p></body></html>\n")
+        self.assertEqual(html_tokens(served), expected)
+        unescaped = served.replace("&lt;b&gt;", "<b>")
+        self.assertNotEqual(html_tokens(unescaped), expected)
+
+    def test_tampered_token_changes_one_middle_character(self):
+        self.assertEqual(C._tampered("abcde"), "abAde")
+        self.assertEqual(C._tampered("AAAAA"), "AABAA")
+        self.assertEqual(sum(a != b for a, b in zip("qzU4F8wicvIIdcJE=", C._tampered("qzU4F8wicvIIdcJE="))), 1)
+
+    def test_world_objects_are_strict(self):
+        self.assertEqual(C._world({"id": 1, "randomNumber": 2}), (1, 2))
+        self.assertIsNone(C._world({"id": 1.0, "randomNumber": 2}))
+        self.assertIsNone(C._world({"id": 1, "randomNumber": 2, "extra": 0}))
+
+    def test_worlds_cases_follow_the_contract(self):
+        for query, ids in C.WORLDS_CASES:
+            params = dict(p.split("=") for p in query.lstrip("?").split("&") if p)
+            low, high = int(params.get("min", 1)), int(params.get("max", 10000))
+            limit, page = int(params.get("limit", 20)), int(params.get("page", 1))
+            rows = list(range(low, high + 1))[(page - 1) * limit:page * limit]
+            self.assertEqual(rows, ids, query)
 
 
 class WrkTests(unittest.TestCase):

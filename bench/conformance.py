@@ -14,7 +14,9 @@ Rules (also in CONTRIBUTING.md):
 - /queries, /updates and /fortunes (when bench.json declares them) follow the
   TechEmpower Framework Benchmarks round 23 rules: see check_queries,
   check_updates and check_fortunes. pg_stat_statements counts the statements
-  each request runs.
+  each request runs;
+- the phase-2 endpoints (when declared) follow docs/v2-phase2-spec.md:
+  bench/conformance_phase2.py.
 """
 
 from __future__ import annotations
@@ -78,12 +80,17 @@ UPDATED_SHARE = 0.9
 
 
 def check_content_type(path: str, header: str | None, require_charset: bool = False) -> str | None:
+    return check_content_type_for(MEDIA_TYPES[path], header, require_charset)
+
+
+def check_content_type_for(expected: str, header: str | None, require_charset: bool = False) -> str | None:
+    """The media type must be `expected`; a charset, if present (or required), must be utf-8."""
     if not header:
         return "no Content-Type header"
     parts = [p.strip() for p in header.split(";")]
     media = parts[0].lower()
-    if media != MEDIA_TYPES[path]:
-        return f"Content-Type is '{header}', expected {MEDIA_TYPES[path]}"
+    if media != expected:
+        return f"Content-Type is '{header}', expected {expected}"
     charset = None
     for param in parts[1:]:
         key, _, value = param.partition("=")
@@ -92,7 +99,7 @@ def check_content_type(path: str, header: str | None, require_charset: bool = Fa
             if charset not in ("utf-8", "utf8"):
                 return f"charset is '{value}', expected utf-8"
     if require_charset and charset is None:
-        return f"Content-Type is '{header}', expected {MEDIA_TYPES[path]}; charset=utf-8"
+        return f"Content-Type is '{header}', expected {expected}; charset=utf-8"
     return None
 
 
@@ -310,8 +317,12 @@ def _queries_path(endpoint: str, value: str | None) -> str:
     return endpoint if value is None else f"{endpoint}?queries={value}"
 
 
-def run_checks(port: int, config: dict, row_id: int = 1, endpoints: list[str] | tuple = BASE_ENDPOINTS) -> dict:
-    """Run every check against a server on 127.0.0.1:port; returns a report."""
+def run_checks(port: int, config: dict, row_id: int = 1, endpoints: list[str] | tuple = BASE_ENDPOINTS,
+               manifest: dict | None = None) -> dict:
+    """Run every check against a server on 127.0.0.1:port; returns a report.
+
+    `manifest` (bench.json) gives the phase-2 settings (CSRF design, write_csrf).
+    """
     checks: list[dict] = []
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
 
@@ -368,6 +379,9 @@ def run_checks(port: int, config: dict, row_id: int = 1, endpoints: list[str] | 
             record("/updates", check_updates(get, config))
         if "fortunes" in endpoints:
             record("/fortunes", check_fortunes(get, config))
+        # Imported here: conformance_phase2 reuses this module's helpers.
+        import conformance_phase2
+        conformance_phase2.run_checks(port, config, endpoints, manifest, record)
     except (OSError, http.client.HTTPException) as exc:
         record("connection", f"{type(exc).__name__}: {exc}")
     finally:

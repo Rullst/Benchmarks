@@ -6,7 +6,9 @@ import statistics
 import time
 from pathlib import Path
 
-from common import ENDPOINTS, BenchError, declared_endpoints, endpoint_path, log
+import sessions
+import workload as W
+from common import ENDPOINTS, PHASE2_ENDPOINTS, BenchError, declared_endpoints, endpoint_path, log, phase2
 from containers import Server, database_handle, reset_tables, start_server
 from loadgen import MIB, efficiency, run_load
 from stats import get_path, ratio, summary, window_median
@@ -18,6 +20,9 @@ METRICS = [
     *(f"tier1.{ep}.{m}" for ep in ENDPOINTS
       for m in ("rps", "latency_ms.mean", "latency_ms.p50", "latency_ms.p99", "error_rate",
                 "server_cpu_cores", "rps_per_cpu", "db_cpu_cores")),
+    # Write contention (config "hot_rows"): PUT /world/{id} on a few rows; reported, not ranked.
+    *(f"hot_rows.{m}" for m in ("rps", "latency_ms.p50", "latency_ms.p99", "error_rate", "timeouts",
+                                "transport_errors", "server_cpu_cores", "rps_per_cpu", "db_cpu_cores")),
     "tier2.rps", "tier2.latency_ms.p50", "tier2.latency_ms.p99", "tier2.error_rate", "tier2.timeouts",
     "tier2.server_cpu_cores", "tier2.rps_per_cpu",
     "tier3.idle_ram_mib", "tier3.idle_cpu_cores", "tier3.load_ram_peak_mib", "tier3.load_cpu_cores",
@@ -28,7 +33,7 @@ METRICS = [
     "startup_s", "idle.tasks", "after.ram_mib", "after.memory_peak_mib",
 ]
 NO_RATIO = ("error_rate", "transport_errors", "timeouts", "ram_growth_mib", "tasks", "db_cpu_cores")
-LOAD_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "tier2", "tier3_load", "tier4"]
+LOAD_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "hot_rows", "tier2", "tier3_load", "tier4"]
 # Throughput runs whose capacity ratio the rankings use (see capacity_ratio).
 CAPACITY_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "tier2", "tier4"]
 
@@ -90,22 +95,69 @@ def ram_trend(samples: list[tuple[float, int]], leak: dict) -> dict:
     }
 
 
-def measure_round(manifest: dict, config: dict, split: dict, binary: Path, number: int) -> dict:
+# The phase-2 workload builders that config.json "endpoint_workloads" names
+# (bench/workload.py); each takes the round's sessions (phase2_context).
+BUILDERS = {
+    "world_by_id": lambda context: W.world_by_id(),
+    "worlds_pages": lambda context: W.worlds_pages(),
+    "put_world": lambda context: W.put_world(write_csrf=context.get("write_csrf")),
+    "form_posts": lambda context: W.form_posts(context["form_sessions"]),
+    "me": lambda context: W.me(context["login_sessions"]),
+}
+
+
+def phase2_context(manifest: dict, config: dict, port: int) -> dict:
+    """What the phase-2 workloads need, obtained before each round's warm-up (servers start empty).
+
+    One GET /form per future connection (its cookies and hidden fields), one
+    login per connection (user1..userN), and for phase2.write_csrf the CSRF
+    cookie the PUT requests carry.
+    """
+    served = declared_endpoints(manifest)
+    settings = phase2(manifest)
+    options = config.get("phase2", {})
+    count, parallel = options.get("sessions", 125), options.get("session_fetch_parallel", 8)
+    context: dict = {}
+    if "form" in served:
+        context["form_sessions"] = sessions.form_sessions(port, count, parallel)
+    if "me" in served:
+        context["login_sessions"] = sessions.login_sessions(port, count, parallel)
+    write_csrf = settings.get("write_csrf")
+    if write_csrf and "world-update" in served:
+        context["write_csrf"] = (write_csrf["cookie"], write_csrf["header"],
+                                 sessions.cookie_value(port, write_csrf["cookie"]))
+    return context
+
+
+def endpoint_workload(endpoint: str, config: dict, context: dict) -> W.Workload:
+    """The requests a load test of an endpoint sends: one fixed request, or a phase-2 workload."""
+    name = config.get("endpoint_workloads", {}).get(endpoint)
+    if name is None:
+        return W.static(endpoint_path(config, endpoint))
+    if name not in BUILDERS:
+        raise BenchError(f"config.json endpoint_workloads: unknown workload '{name}' for /{endpoint}")
+    return BUILDERS[name](context)
+
+
+def measure_round(manifest: dict, config: dict, split: dict, binary: Path, number: int,
+                  framework_tables: list[str] | tuple = ()) -> dict:
     tiers = config["tiers"]
     srv = config["server"]
     record: dict = {"round": number, "implementation": manifest["slug"], "crashed": None}
-    # Every round starts from the same `world` table (/updates rewrites rows).
-    reset_tables(config)
+    # Every round starts from the same `world` table (/updates rewrites rows)
+    # and empty session tables.
+    reset_tables(config, framework_tables)
     server = start_server(manifest, config, split["server"], keep_logs=False)
     client = split["client"]
     database = database_handle(config)
     served = declared_endpoints(manifest)
     endpoints = [ep for ep in tiers["tier1"]["endpoints"] if ep in served]
 
-    def load(path: str, connections: int, duration_s: int) -> dict:
-        return run_load(binary, server.base_url + path, connections=connections,
-                        duration_s=duration_s, config=config, client_cpus=client, server=server,
-                        database=database, db_cpus=split.get("database", client))
+    def load(workload: W.Workload, connections: int, duration_s: int, count_statuses: bool = False) -> dict:
+        return run_load(binary, server.base_url, connections=connections, duration_s=duration_s, config=config,
+                        client_cpus=client, server=server, database=database,
+                        db_cpus=split.get("database", client), workload=workload,
+                        count_statuses=count_statuses)
 
     try:
         record["startup_s"] = server.wait_ready(manifest.get("startup_timeout_s", 120))
@@ -113,10 +165,18 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
         idle = _idle_window(server, tiers["tier3"]["idle_s"], config["sampling_interval_s"])
         record["idle"] = idle
 
+        context = phase2_context(manifest, config, server.port)
+        record["sessions"] = {key: len(value) for key, value in context.items() if key.endswith("_sessions")}
+        if context.get("login_sessions"):
+            record["sessions"]["bearer"] = any(s.bearer for s in context["login_sessions"])
+        workloads = {endpoint: endpoint_workload(endpoint, config, context) for endpoint in endpoints}
+        # Every phase-2 response that is not 2xx counts as a failure (wrk's Lua status hook).
+        exact = {endpoint: endpoint in PHASE2_ENDPOINTS for endpoint in endpoints}
+
         warm = config["warmup"]
         warmup_errors = 0
         for endpoint in endpoints:
-            result = load(endpoint_path(config, endpoint), warm["connections"], warm["duration_s"])
+            result = load(workloads[endpoint], warm["connections"], warm["duration_s"], exact[endpoint])
             warmup_errors += result["non_2xx"] + result["transport_errors"]
             _check_alive(server, f"warm-up /{endpoint}")
         record["warmup_errors"] = warmup_errors
@@ -125,17 +185,26 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
         record["tier1"] = {}
         for endpoint in endpoints:
             record["tier1"][endpoint] = _strip_samples(
-                load(endpoint_path(config, endpoint), t1["connections"], t1["duration_s"]))
+                load(workloads[endpoint], t1["connections"], t1["duration_s"], exact[endpoint]))
             _check_alive(server, f"tier 1 /{endpoint}")
             time.sleep(srv["cooldown_s"])
 
+        hot = config.get("hot_rows")
+        if hot and hot.get("endpoint") in endpoints:
+            hot_workload = W.hot_rows(hot.get("ids", 10), hot.get("requests", 2000),
+                                      write_csrf=context.get("write_csrf"))
+            record["hot_rows"] = _strip_samples(load(hot_workload, t1["connections"], t1["duration_s"], True))
+            record["hot_rows"]["ids"] = hot.get("ids", 10)
+            _check_alive(server, "hot rows")
+            time.sleep(srv["cooldown_s"])
+
         t2 = tiers["tier2"]
-        record["tier2"] = _strip_samples(load(f"/{t2['endpoint']}", t2["connections"], t2["duration_s"]))
+        record["tier2"] = _strip_samples(load(W.static(f"/{t2['endpoint']}"), t2["connections"], t2["duration_s"]))
         _check_alive(server, "tier 2")
         time.sleep(srv["cooldown_s"])
 
         t3 = tiers["tier3"]
-        loaded = _strip_samples(load(f"/{t3['endpoint']}", t3["connections"], t3["duration_s"]))
+        loaded = _strip_samples(load(W.static(f"/{t3['endpoint']}"), t3["connections"], t3["duration_s"]))
         record["tier3"] = {
             "idle_ram_mib": idle["ram_mib"],
             "idle_cpu_cores": idle["cpu_cores"],
@@ -150,7 +219,7 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
         time.sleep(srv["cooldown_s"])
 
         t4 = tiers["tier4"]
-        stress = load(f"/{t4['endpoint']}", t4["connections"], t4["duration_s"])
+        stress = load(W.static(f"/{t4['endpoint']}"), t4["connections"], t4["duration_s"])
         samples = stress.pop("_ram_samples", [])
         stress.update(ram_trend(samples, config["leak"]))
         record["tier4"] = stress

@@ -1,11 +1,15 @@
 """Per-category and overall rankings, computed from the ratios to the Axum baseline.
 
-Six categories, each scored so that higher is better and Axum is 1.0:
+Seven categories, each scored so that higher is better and Axum is 1.0:
 
   speed      Tier 1: geometric mean of the capacity ratios of /text, /json,
              /db-single and /html
   database   Tier 1: geometric mean of the capacity ratios of /queries,
              /updates and /fortunes
+  application Tier 1: geometric mean of the capacity ratios of GET /world/{id},
+             GET /worlds, PUT /world/{id}, POST /form and GET /me; a run with
+             more than 1% errors (MAX_ERROR_RATE) gets no score, because fast
+             error responses would raise it
   pressure   Tier 2: capacity ratio (300 connections on /json)
   memory     Tier 3: 1 / peak RAM ratio (lower RAM is better)
   endurance  Tier 4: capacity ratio (500 connections on /json for 2 minutes)
@@ -20,7 +24,7 @@ per request. Client-bound results therefore get positions instead of ties.
 Rows without capacity ratios (results measured before they existed) use the
 requests/s ratios.
 
-The overall score is the geometric mean of the six category scores with equal
+The overall score is the geometric mean of the seven category scores with equal
 weights. An implementation without every metric is listed as incomplete, with
 no overall position, instead of being ranked on fewer metrics.
 
@@ -32,13 +36,17 @@ from __future__ import annotations
 
 import math
 
-from common import BASE_ENDPOINTS, EXTRA_ENDPOINTS, READY_POLL_S
+from common import BASE_ENDPOINTS, ENDPOINT_LABELS, EXTRA_ENDPOINTS, PHASE2_ENDPOINTS, READY_POLL_S
 
 # Client-bound results are scored by server efficiency instead of sharing a
 # position, so there is no tolerance; the published field stays (as 0).
 TIE_TOLERANCE = 0.0
 ENDPOINTS = BASE_ENDPOINTS
 DATABASE_ENDPOINTS = EXTRA_ENDPOINTS
+APPLICATION_ENDPOINTS = PHASE2_ENDPOINTS
+# A phase-2 run with a higher median error rate gets no score in Application
+# (docs/v2-phase2-spec.md section 2.5): every request the load sends is valid.
+MAX_ERROR_RATE = 0.01
 CAPACITY = ("the requests/s ratio, or the ratio of requests per server CPU-second when the run was "
             "client-bound")
 
@@ -54,6 +62,13 @@ CATEGORIES = [
      "lower_is_better": False, "throughput": True,
      "description": "geometric mean over /queries?queries=20, /updates?queries=20 and /fortunes (125 connections "
                     f"for 10 s each) of {CAPACITY}"},
+    {"key": "application", "title": "Application", "tier": "Tier 1",
+     "metrics": [f"tier1.{ep}.rps" for ep in APPLICATION_ENDPOINTS],
+     "runs": [f"tier1.{ep}" for ep in APPLICATION_ENDPOINTS],
+     "lower_is_better": False, "throughput": True, "max_error_rate": MAX_ERROR_RATE,
+     "description": "geometric mean over GET /world/{id}, GET /worlds, PUT /world/{id}, POST /form (with CSRF "
+                    "verification) and GET /me (a signed-in session) (125 connections for 10 s each) of "
+                    f"{CAPACITY}; a run with more than {MAX_ERROR_RATE:.0%} errors has no score"},
     {"key": "pressure", "title": "Under pressure", "tier": "Tier 2",
      "metrics": ["tier2.rps"], "runs": ["tier2"], "lower_is_better": False, "throughput": True,
      "description": f"on /json with 300 connections for 30 s, {CAPACITY}"},
@@ -76,7 +91,8 @@ CATEGORY_KEYS = [c["key"] for c in CATEGORIES]
 STARTUP_FLOOR_S = READY_POLL_S
 
 METHOD = {
-    "overall": "geometric mean of the six category scores, each weighted equally (1/6); every score is "
+    "overall": f"geometric mean of the {len(CATEGORIES)} category scores, each weighted equally "
+               f"(1/{len(CATEGORIES)}); every score is "
                "oriented so that higher is better and Axum is 1.00. The weighting is a choice; the "
                "per-category rankings are the detail.",
     "ratios": "medians of the per-round ratios to Axum measured on the same runner (results[].ratios), "
@@ -97,6 +113,9 @@ METHOD = {
                       "could not score, compares two load generators rather than two servers: the category "
                       "lists the implementation as not comparable, without a position, and it has no overall "
                       "position",
+    "errors": f"in Application, a run whose median error rate is above {MAX_ERROR_RATE:.0%} (every request the "
+              "load sends is valid, so any response that is not 2xx is a failure) gives the implementation no score "
+              "in that category and no overall position; the cell shows the error rate",
     "incomplete": "an implementation without a value for every metric of a category (not measured, not served "
                   "yet according to its bench.json \"endpoints\", or left out by a correction) has no position "
                   "in that category and no overall position",
@@ -127,6 +146,13 @@ def _detail(category: str, row: dict, ratios: dict) -> dict:
         return {ep: ratios.get(f"tier1.{ep}.rps") for ep in ENDPOINTS}
     if category == "database":
         return {ep: ratios.get(f"tier1.{ep}.rps") for ep in DATABASE_ENDPOINTS}
+    if category == "application":
+        detail = {ep: ratios.get(f"tier1.{ep}.rps") for ep in APPLICATION_ENDPOINTS}
+        detail["error_rates"] = {ep: _median(row, f"tier1.{ep}.error_rate") for ep in APPLICATION_ENDPOINTS}
+        settings = row.get("phase2") or {}
+        detail["csrf"] = (settings.get("csrf") or {}).get("design")
+        detail["session_store"] = (settings.get("session") or {}).get("store")
+        return detail
     if category == "pressure":
         return {"rps": _median(row, "tier2.rps"), "p99_ms": _median(row, "tier2.latency_ms.p99"),
                 "p99_ratio": ratios.get("tier2.latency_ms.p99")}
@@ -212,6 +238,15 @@ def _category_entry(category: dict, row: dict, base: dict | None, name) -> dict:
         missing = [] if own is not None and ref is not None else ["startup_s"]
         if not missing:
             ratios = {"startup_s": max(own, STARTUP_FLOOR_S) / max(ref, STARTUP_FLOOR_S)}
+    limit = category.get("max_error_rate")
+    if limit is not None and not missing and not is_reference:
+        failing = {m.split(".")[1]: _median(row, m[: -len(".rps")] + ".error_rate") for m in category["metrics"]}
+        failing = {ep: rate for ep, rate in failing.items() if rate is not None and rate > limit}
+        if failing:
+            entry.update(status="errors", error_runs=failing,
+                         reason="error rate above " + f"{limit:.0%}: " + ", ".join(
+                             f"{ENDPOINT_LABELS.get(ep, ep)} {rate:.1%}" for ep, rate in failing.items()))
+            return entry
     if missing:
         excluded = [p for p in row.get("excluded", []) if any(m == p or m.startswith(p + ".") for m in missing)]
         reason = "no value for " + ", ".join(missing)
@@ -279,7 +314,8 @@ def _assign_positions(scored: list[dict], same_group) -> None:
 
 
 def _order(entries: list[dict]) -> list[dict]:
-    status_order = {"ranked": 0, "reference": 0, "not comparable": 1, "incomplete": 1, "not measured": 2}
+    status_order = {"ranked": 0, "reference": 0, "not comparable": 1, "errors": 1, "incomplete": 1,
+                    "not measured": 2}
     return sorted(entries, key=lambda e: (status_order[e["status"]], -(e["score"] or 0), e["framework"].lower()))
 
 
@@ -310,8 +346,10 @@ def compute(rows: list[dict], baseline: str, name=lambda row: row.get("name", ro
             entry.update(status="not measured", reason=f"not measured ({row.get('status')})")
         elif missing:
             blocked = [key for key in missing if cells[key]["status"] == "not comparable"]
+            errors = [key for key in missing if cells[key]["status"] == "errors"]
             entry.update(status="incomplete", reason="no score in: " + ", ".join(missing)
-                         + (f" (not comparable: {', '.join(blocked)})" if blocked else ""))
+                         + (f" (not comparable: {', '.join(blocked)})" if blocked else "")
+                         + (f" (error rate above {MAX_ERROR_RATE:.0%}: {', '.join(errors)})" if errors else ""))
         else:
             entry["score"] = round(geometric_mean(list(scores.values())), 4)
         overall.append(entry)

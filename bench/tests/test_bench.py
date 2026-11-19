@@ -16,23 +16,10 @@ import report  # noqa: E402
 import conformance  # noqa: E402
 from common import BASE_ENDPOINTS, ENDPOINTS, declared_endpoints, endpoint_path, load_config, validate_manifest  # noqa: E402,E501
 from conformance import check_body, check_content_type  # noqa: E402
-from loadgen import MIB, efficiency, parse_result  # noqa: E402
+from loadgen import MIB, describe_binary, efficiency  # noqa: E402
 from measure import capacity_ratio, ram_trend, ratios, summarize  # noqa: E402
 from release_check import newest, semver_key  # noqa: E402
 from system import busy_fraction, parse_cpu_list, read_cpu_times, split_cpus, split_database  # noqa: E402
-
-BOMBARDIER = {
-    "spec": {"numberOfConnections": 125},
-    "result": {
-        "bytesRead": 1, "bytesWritten": 1, "timeTakenSeconds": 10.0,
-        "req1xx": 0, "req2xx": 99000, "req3xx": 0, "req4xx": 0, "req5xx": 500, "others": 0,
-        "errors": [{"description": "timeout", "count": 400}, {"description": "connection refused", "count": 100}],
-        "latency": {"mean": 1200.5, "stddev": 10, "max": 90000,
-                    "percentiles": {"50": 1000, "75": 1500, "90": 2000, "95": 2500, "99": 8000}},
-        "rps": {"mean": 9900, "stddev": 1, "max": 10000, "percentiles": {"50": 9900}},
-    },
-}
-
 
 def fake_round(scale: float, number: int = 1, endpoints=ENDPOINTS) -> dict:
     run = {"rps": 1000 * scale, "latency_ms": {"mean": 1.2 / scale, "p50": 1.0 / scale, "p99": 4.0 / scale},
@@ -42,6 +29,7 @@ def fake_round(scale: float, number: int = 1, endpoints=ENDPOINTS) -> dict:
         "round": number, "crashed": None, "startup_s": 0.5,
         "idle": {"ram_mib": 10 * scale, "cpu_cores": 0.001, "tasks": 4},
         "tier1": {ep: copy.deepcopy(run) for ep in endpoints},
+        **({"hot_rows": dict(copy.deepcopy(run), ids=10)} if "world-update" in endpoints else {}),
         "tier2": copy.deepcopy(run),
         "tier3": {"idle_ram_mib": 10 * scale, "idle_cpu_cores": 0.001, "load_ram_peak_mib": 20 * scale,
                   "load_cpu_cores": 1.9, "rps": 900 * scale, "client_bound": False},
@@ -63,7 +51,7 @@ def fake_job(framework: str, scale: float, rounds: int = 3, endpoints=ENDPOINTS)
         "schema": 1, "framework": framework, "baseline": "axum", "rounds_requested": rounds,
         "started_at": "2026-11-15T04:00:00Z", "finished_at": "2026-11-15T05:00:00Z",
         "config": config, "environment": {"cpu_model": "Test CPU", "cpu_count": 4, "memory_total_mib": 16000,
-                                          "runner": {}, "load_generator": {"name": "bombardier", "version": "2.0.2"}},
+                                          "runner": {}, "load_generator": {"name": "wrk", "version": "4.2.0"}},
         "database": {"version": "18.6"},
         "implementations": {
             framework: {"manifest": manifest, "status": "measured", "build": {"versions": versions},
@@ -77,22 +65,33 @@ def fake_job(framework: str, scale: float, rounds: int = 3, endpoints=ENDPOINTS)
 
 
 class LoadgenTests(unittest.TestCase):
-    def test_parse_result(self):
-        metrics = parse_result(BOMBARDIER)
-        self.assertEqual(metrics["requests_ok"], 99000)
-        self.assertEqual(metrics["rps"], 9900.0)
-        self.assertEqual(metrics["non_2xx"], 500)
-        self.assertEqual(metrics["transport_errors"], 500)
-        self.assertEqual(metrics["timeouts"], 400)
-        self.assertAlmostEqual(metrics["error_rate"], 1000 / 100000)
-        self.assertEqual(metrics["latency_ms"]["p50"], 1.0)
-        self.assertEqual(metrics["latency_ms"]["p99"], 8.0)
+    def test_wrk_binary_is_required(self):
+        from common import BenchError
+        with self.assertRaises(BenchError):
+            describe_binary(Path("/nonexistent/wrk"), load_config()["load_generator"])
 
-    def test_parse_result_without_latency(self):
-        raw = copy.deepcopy(BOMBARDIER)
-        del raw["result"]["latency"]
-        raw["result"]["errors"] = []
-        self.assertIsNone(parse_result(raw)["latency_ms"]["p99"])
+    def test_endpoint_workloads(self):
+        from measure import endpoint_workload
+        import workload as W
+        config = load_config()
+        static = endpoint_workload("queries", config, {})
+        self.assertTrue(static.static)
+        self.assertEqual(static.requests[0].path, "/queries?queries=20")
+        self.assertEqual(len(endpoint_workload("world", config, {}).requests), 10000)
+        sessions = [W.Session(cookie=f"id={i}") for i in range(125)]
+        me = endpoint_workload("me", config, {"login_sessions": sessions})
+        self.assertEqual(len(me.requests), 125)
+        put = endpoint_workload("world-update", config, {"write_csrf": ("c", "X-T", "tok")})
+        self.assertIn(("X-T", "tok"), put.requests[0].headers)
+
+    def test_every_phase2_endpoint_has_a_workload_and_a_tier1_run(self):
+        from common import PHASE2_ENDPOINTS
+        config = load_config()
+        for endpoint in PHASE2_ENDPOINTS:
+            self.assertIn(endpoint, config["endpoint_workloads"])
+            self.assertIn(endpoint, config["tiers"]["tier1"]["endpoints"])
+        order = config["tiers"]["tier1"]["endpoints"]
+        self.assertEqual(order[-2:], ["updates", "world-update"])  # writes last
 
 
 class SamplerTests(unittest.TestCase):
@@ -233,7 +232,7 @@ class ManifestTests(unittest.TestCase):
         config = load_config()
         self.assertEqual(endpoint_path(config, "queries"), "/queries?queries=20")
         self.assertEqual(endpoint_path(config, "fortunes"), "/fortunes")
-        self.assertEqual(config["tiers"]["tier1"]["endpoints"], list(ENDPOINTS))
+        self.assertEqual(sorted(config["tiers"]["tier1"]["endpoints"]), sorted(ENDPOINTS))
 
     def test_validation(self):
         manifest = {"name": "X", "language": "Rust", "group": "rust", "framework": "x", "framework_version": "1",
@@ -241,17 +240,29 @@ class ManifestTests(unittest.TestCase):
                     "logging": "none"}
         problems = lambda m: [p for p in validate_manifest("axum", m) if "missing" not in p or "endpoints" in p]  # noqa: E731,E501
         self.assertEqual(problems(manifest), [])
-        self.assertEqual(problems(dict(manifest, endpoints=list(ENDPOINTS))), [])
+        block = {"validation": "manual", "csrf": {"design": "token", "mechanism": "m", "source": "library"},
+                 "session": {"store": "postgresql", "mechanism": "m", "source": "library"}, "write_csrf": None}
+        self.assertEqual(problems(dict(manifest, endpoints=list(ENDPOINTS), phase2=block)), [])
+        self.assertIn("needs a 'phase2' block", problems(dict(manifest, endpoints=list(ENDPOINTS)))[0])
+        self.assertIn("phase2.csrf.design", problems(dict(manifest, endpoints=list(ENDPOINTS), phase2=dict(
+            block, csrf={"design": "cookie", "mechanism": "m", "source": "library"})))[0])
+        self.assertIn("phase2.session.store", problems(dict(manifest, endpoints=list(ENDPOINTS), phase2=dict(
+            block, session={"store": "redis", "mechanism": "m", "source": "library"})))[0])
+        self.assertIn("write_csrf", problems(dict(manifest, endpoints=list(ENDPOINTS), phase2=dict(
+            block, write_csrf={"cookie": "c"})))[0])
+        self.assertEqual(problems(dict(manifest, endpoints=[*BASE_ENDPOINTS, "world"],
+                                       phase2={"validation": "manual"})), [])
+        self.assertIn("db_setup", problems(dict(manifest, db_setup="../x.sql"))[0])
         self.assertIn("unknown endpoints", problems(dict(manifest, endpoints=[*BASE_ENDPOINTS, "plaintext"]))[0])
         self.assertIn("must include html", problems(dict(manifest, endpoints=["text", "json", "db-single"]))[0])
         self.assertIn("list of endpoint names", problems(dict(manifest, endpoints="all"))[0])
 
-    def test_every_rust_folder_declares_the_new_endpoints(self):
+    def test_every_rust_folder_declares_the_phase1_endpoints(self):
         import json
-        from common import FRAMEWORKS
+        from common import EXTRA_ENDPOINTS, FRAMEWORKS
         for slug in ("axum", "actix", "loco", "topcoat", "rullst", "rullst-minimal"):
             manifest = json.loads((FRAMEWORKS / slug / "bench.json").read_text())
-            self.assertEqual(declared_endpoints(manifest), list(ENDPOINTS), slug)
+            self.assertLessEqual(set(EXTRA_ENDPOINTS), set(declared_endpoints(manifest)), slug)
 
 
 class EfficiencyTests(unittest.TestCase):
@@ -433,14 +444,15 @@ class AggregateTests(unittest.TestCase):
 
 def rank_row(slug: str, speed=(1.0, 1.0, 1.0, 1.0), t2=1.0, ram=1.0, t4=1.0, startup_s=0.01, bound=(),
              status="measured", rounds=5, database=(1.0, 1.0, 1.0), capacity=None, efficiency_rounds=(),
-             **extra) -> dict:
+             application=(1.0, 1.0, 1.0, 1.0, 1.0), error_rates=None, **extra) -> dict:
     """A combined row with the ratios the rankings read; `bound` lists the client-bound runs.
 
     `capacity` maps runs to capacity ratios (otherwise the requests/s ratios
     are used); `efficiency_rounds` lists runs whose capacity came from
     efficiency in every round.
     """
-    tier1 = dict(zip(rankings.ENDPOINTS, speed)) | dict(zip(rankings.DATABASE_ENDPOINTS, database))
+    tier1 = (dict(zip(rankings.ENDPOINTS, speed)) | dict(zip(rankings.DATABASE_ENDPOINTS, database))
+             | dict(zip(rankings.APPLICATION_ENDPOINTS, application)))
     ratios = {f"tier1.{ep}.rps": value for ep, value in tier1.items() if value is not None}
     ratios.update({"tier2.rps": t2, "tier3.load_ram_peak_mib": ram, "tier4.rps": t4})
     stat = lambda v: {"median": v, "min": v, "max": v, "spread": 0.0, "n": rounds}  # noqa: E731
@@ -448,6 +460,7 @@ def rank_row(slug: str, speed=(1.0, 1.0, 1.0, 1.0), t2=1.0, ram=1.0, t4=1.0, sta
                "tier3.load_ram_peak_mib": stat(10 * ram), "tier4.rps": stat(1000 * t4),
                "tier4.error_rate": stat(0.0), "tier4.timeouts": stat(0)}
     metrics.update({f"tier1.{ep}.rps": stat(1000 * value) for ep, value in tier1.items() if value is not None})
+    metrics.update({f"tier1.{ep}.error_rate": stat(rate) for ep, rate in (error_rates or {}).items()})
     runs = [f"tier1.{ep}" for ep in ENDPOINTS] + ["tier2", "tier3_load", "tier4"]
     ratio_stats = {k: stat(v) for k, v in ratios.items()}
     for run, value in (capacity or {}).items():
@@ -483,7 +496,7 @@ class RankingTests(unittest.TestCase):
         self.assertAlmostEqual(a["memory"]["ratio"], 2.0)
         # 1 s against Axum's 0.01 s, which counts as the 0.25 s poll interval.
         self.assertAlmostEqual(a["startup"]["score"], 0.25)
-        expected = (1.0 * 0.5 * 0.8 * 0.5 * 0.9 * 0.25) ** (1 / 6)
+        expected = (1.0 * 0.5 * 1.0 * 0.8 * 0.5 * 0.9 * 0.25) ** (1 / 7)
         self.assertAlmostEqual(overall["a"]["score"], round(expected, 4))
         self.assertEqual(overall["a"]["position"], 1)
 
@@ -495,7 +508,7 @@ class RankingTests(unittest.TestCase):
         self.assertEqual((cats["pressure"]["fast"]["position"], cats["pressure"]["slow"]["position"]), (1, 2))
         pressure = next(c for c in result["categories"] if c["key"] == "pressure")
         self.assertEqual([e["slug"] for e in pressure["entries"]], ["fast", "axum", "slow"])
-        self.assertEqual(result["overall"]["weights"], {key: round(1 / 6, 4) for key in rankings.CATEGORY_KEYS})
+        self.assertEqual(result["overall"]["weights"], {key: round(1 / 7, 4) for key in rankings.CATEGORY_KEYS})
 
     def test_a_missing_metric_makes_the_row_incomplete(self):
         row = rank_row("fastapi", speed=(0.5, 0.5, None, 0.5), excluded=["tier1.db-single"])
@@ -520,6 +533,31 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(cats["speed"]["gin"]["status"], "ranked")
         self.assertEqual(overall["gin"]["missing"], ["database"])
         self.assertEqual(overall["full"]["position"], 1)
+
+    def test_phase2_endpoints_not_served_yet_make_the_application_category_incomplete(self):
+        from common import BASE_ENDPOINTS as BASE, EXTRA_ENDPOINTS
+        row = rank_row("gin", application=(None,) * 5, endpoints=[*BASE, *EXTRA_ENDPOINTS])
+        _, cats, overall = self.rank([row, rank_row("full", application=(0.5,) * 5)])
+        self.assertEqual(cats["application"]["gin"]["status"], "incomplete")
+        self.assertIn("does not serve /world, /worlds, /world-update, /form, /me yet",
+                      cats["application"]["gin"]["reason"])
+        self.assertEqual(overall["gin"]["missing"], ["application"])
+        self.assertAlmostEqual(cats["application"]["full"]["score"], 0.5)
+        self.assertEqual(overall["full"]["position"], 1)
+
+    def test_application_runs_with_too_many_errors_have_no_score(self):
+        rows = [rank_row("fast", application=(3.0,) * 5, error_rates={"me": 0.05, "form": 0.001}),
+                rank_row("ok", application=(0.9,) * 5, error_rates={"me": 0.01})]
+        _, cats, overall = self.rank(rows)
+        fast = cats["application"]["fast"]
+        self.assertEqual(fast["status"], "errors")
+        self.assertIsNone(fast["score"])
+        self.assertEqual(fast["error_runs"], {"me": 0.05})
+        self.assertIn("GET /me 5.0%", fast["reason"])
+        self.assertEqual(cats["application"]["ok"]["position"], 1)  # 1% is still allowed
+        self.assertEqual(overall["fast"]["status"], "incomplete")
+        self.assertIn("error rate above 1%: application", overall["fast"]["reason"])
+        self.assertIn("errors (GET /me 5.0%)", report._category_cell("application", fast))
 
     def test_client_bound_runs_are_ranked_by_efficiency(self):
         # Both client-bound at the same requests/s, but b needs a third more CPU per request.

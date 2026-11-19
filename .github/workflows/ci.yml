@@ -1,8 +1,8 @@
 name: CI
 
 # Fast checks for every pull request, plus a conformance check (build the
-# image, start PostgreSQL, check the four endpoints) of each framework folder
-# the pull request changes.
+# image, start PostgreSQL, check the endpoints it declares) of each framework
+# folder the pull request changes.
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   harness:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     outputs:
       changed: ${{ steps.changed.outputs.frameworks }}
     steps:
@@ -31,6 +31,11 @@ jobs:
         run: python3 -m unittest discover -s bench/tests -v
       - name: Validate framework folders
         run: python3 bench/harness.py validate
+      - name: Check the database setup
+        # Loads bench/db (init.sql, phase2.sql) into the pinned PostgreSQL,
+        # checks the phase-2 accounts and their password hashes, and applies
+        # every folder's db_setup file in a rolled-back transaction.
+        run: python3 bench/harness.py db-check
       - name: Changed framework folders
         id: changed
         env:

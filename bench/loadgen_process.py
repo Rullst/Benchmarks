@@ -1,24 +1,50 @@
 """Run one load generator process and measure both sides of it.
 
-The measurement is loadgen.run_load's (client CPUs from /proc/stat, the load
-generator's own CPU from rusage, the server's cgroup CPU and sampled RAM),
-factored out so that loadgen_wrk.py and loadgen_oha.py return the same
-metrics dict. It also fills the keys the phase-1 branch adds
-(loadgen_cpu_busy, db_cpu_busy, loadgen_cpu_cores, db_cpu_cores,
-rps_per_cpu) when given the database handle and CPUs.
+Client CPUs from /proc/stat, the load generator's own CPU from rusage, the
+server's and the database's cgroup CPU and the server's sampled RAM. The
+same measurement serves wrk (loadgen_wrk.py, the suite's load generator) and
+the documented fallback oha (loadgen_oha.py), so both return the same
+metrics dict.
 """
 
 from __future__ import annotations
 
 import resource
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Callable
 
 from common import BenchError
-from loadgen import MIB, RamSampler
 from system import busy_fraction, read_cpu_times
+
+MIB = 1024 * 1024
+
+
+class RamSampler(threading.Thread):
+    """Samples the server's RAM at a fixed interval while a load test runs."""
+
+    def __init__(self, server, interval_s: float):
+        super().__init__(daemon=True)
+        self.server = server
+        self.interval_s = interval_s
+        self.samples: list[tuple[float, int]] = []
+        self._halt = threading.Event()
+        self._t0 = time.monotonic()
+
+    def run(self) -> None:
+        while not self._halt.is_set():
+            try:
+                self.samples.append((time.monotonic() - self._t0, self.server.ram_bytes()))
+            except (OSError, ValueError, BenchError):
+                pass  # the container may have exited; the caller checks
+            self._halt.wait(self.interval_s)
+
+    def stop(self) -> list[tuple[float, int]]:
+        self._halt.set()
+        self.join(timeout=5)
+        return self.samples
 
 
 def measure(cmd: list[str], parse: Callable[[str], dict], *, tool: str, connections: int,

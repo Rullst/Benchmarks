@@ -137,6 +137,9 @@ def start_database(config: dict, cpus: list[int]) -> dict:
     fortunes = psql(config, "SELECT count(*) FROM fortune")
     if fortunes != str(db.get("fortune_rows", 12)):
         raise BenchError(f"fortune table has {fortunes} rows, expected {db.get('fortune_rows', 12)}")
+    users = psql(config, "SELECT count(*) FROM users")
+    if users != str(db.get("users", 1000)):
+        raise BenchError(f"users table has {users} rows, expected {db.get('users', 1000)} (bench/db/phase2.sql)")
     version = psql(config, "SHOW server_version")
     log(f"PostgreSQL {version} ready on CPUs {format_cpu_list(cpus)}")
     return {"image": db["image"], "digest": repo_digest(db["image"]), "version": version,
@@ -155,14 +158,49 @@ def set_statement_tracking(config: dict, enabled: bool) -> str:
     return psql(config, "SHOW pg_stat_statements.track")
 
 
-def reset_tables(config: dict) -> None:
+def reset_tables(config: dict, framework_tables: list[str] | tuple = ()) -> None:
     """Give every round the same `world` table: init.sql's values, rewritten without dead rows.
 
-    /updates leaves dead row versions behind; VACUUM FULL rewrites the
-    10,000-row table so that later rounds do not measure a bloated table.
+    /updates and PUT /world/{id} leave dead row versions behind; VACUUM FULL
+    rewrites the 10,000-row table so that later rounds do not measure a
+    bloated table. The tables a framework's db_setup created (sessions,
+    tokens) are emptied.
     """
     psql(config, "UPDATE world SET randomnumber = 1 + (id * 7919) % 10000")
     psql(config, "VACUUM (FULL, ANALYZE) world")
+    if framework_tables:
+        psql(config, f"TRUNCATE {', '.join(framework_tables)}")
+
+
+TABLES_SQL = ("SELECT quote_ident(schemaname) || '.' || quote_ident(tablename) FROM pg_tables "
+              "WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY 1")
+
+
+def tables(config: dict) -> set[str]:
+    """Every table outside PostgreSQL's own schemas, as quoted `schema.table` names."""
+    return {line for line in psql(config, TABLES_SQL).splitlines() if line}
+
+
+def run_sql_file(config: dict, sql: str, *, rollback: bool = False) -> None:
+    """Run a SQL script in one transaction, committed or (rollback=True: a dry run) rolled back."""
+    db = config["database"]
+    script = f"BEGIN;\n{sql}\n;ROLLBACK;\n" if rollback else sql
+    cmd = ["docker", "exec", "-i", DB_CONTAINER, "psql", "-p", str(db["port"]), "-U", db["user"],
+           "-d", db["name"], "-v", "ON_ERROR_STOP=1", "-q", "-X"]
+    cmd += ["-f", "-"] if rollback else ["--single-transaction", "-f", "-"]
+    run(cmd, input_text=script, timeout=120)
+
+
+def apply_db_setup(config: dict, manifest: dict) -> dict | None:
+    """Apply a folder's `db_setup` file (bench.json) and return it with the tables it created."""
+    setup = manifest.get("db_setup")
+    if not setup:
+        return None
+    before = tables(config)
+    run_sql_file(config, (FRAMEWORKS / manifest["slug"] / setup).read_text())
+    created = sorted(tables(config) - before)
+    log(f"{manifest['slug']}: applied {setup}, created {', '.join(created) or 'no tables'}")
+    return {"file": setup, "tables": created}
 
 
 def database_handle(config: dict) -> "Server":

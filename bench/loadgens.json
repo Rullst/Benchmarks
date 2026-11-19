@@ -1,30 +1,11 @@
 {
-  "_comment": "Phase-2 load generator candidates (docs/v2-phase2-spec.md). Not read by the v1 harness; bench/config.json keeps bombardier until the integration pull request moves the chosen entry there.",
-  "wrk": {
-    "name": "wrk",
-    "version": "4.2.0",
-    "license": "Modified Apache 2.0 (Apache 2.0 plus clause 4(e): a substantially changed derivative must drop the name)",
-    "source_url": "https://github.com/wg/wrk/archive/refs/tags/4.2.0.tar.gz",
-    "source_sha256": "e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad",
-    "build": "make WITH_OPENSSL=/usr VER=4.2.0 (bundled LuaJIT 2.1, system OpenSSL)",
-    "timeout_s": 5,
-    "saturation_threshold": 0.9
-  },
+  "_comment": "The documented fallback load generator (docs/v2-phase2-spec.md section 7.4); the harness uses bench/config.json's load_generator (wrk). Install it with bench/install-loadgen.sh DIR oha.",
   "oha": {
     "name": "oha",
     "version": "1.16.0",
     "license": "MIT",
     "url": "https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64-pgo",
     "sha256": "0bca94cc1f84cc360572eaed7a6c53e22b5f8994c4c5ed2ca45e423517a08525",
-    "timeout_s": 5,
-    "saturation_threshold": 0.9
-  },
-  "wrk2": {
-    "name": "wrk2",
-    "version": "44a94c1 (2019-09-24, last commit; no releases)",
-    "license": "Apache 2.0",
-    "source_url": "https://github.com/giltene/wrk2/archive/44a94c17d8e6a0bac8559b53da76848e430cb7a7.tar.gz",
-    "source_sha256": "40fb577303ae83bfc211855880696b6e14daf1eaea2a684fe8cf2252c735b47e",
     "timeout_s": 5,
     "saturation_threshold": 0.9
   }

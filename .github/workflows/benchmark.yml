@@ -150,8 +150,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the load generator
-        run: echo "BOMBARDIER=$(bench/install-bombardier.sh "$RUNNER_TEMP/bin")" >> "$GITHUB_ENV"
+      - name: Build the load generator
+        # wrk publishes no binaries: the pinned source tarball (SHA-256 in
+        # bench/config.json) is built on the runner; the results record the
+        # binary's SHA-256 and the compiler.
+        run: echo "WRK=$(bench/install-loadgen.sh "$RUNNER_TEMP/bin")" >> "$GITHUB_ENV"
       - name: Measure ${{ matrix.framework }} against the baseline
         env:
           RULLST_VERSION: ${{ needs.plan.outputs.rullst_version }}

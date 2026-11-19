@@ -1,4 +1,4 @@
-"""Prototype: wrk as the load generator, returning loadgen.run_load's metrics dict.
+"""wrk, the suite's load generator, returning loadgen.run_load's metrics dict.
 
 wrk (C, epoll, LuaJIT) sends either one fixed request (static mode: no Lua
 `request` function, wrk builds the request once) or, for a Workload with
@@ -7,10 +7,11 @@ the Lua `request` function returns the next prebuilt string, so no request
 is formatted while measuring). A Lua `done` function prints the summary as
 one `WRK_JSON {...}` line.
 
-Differences from bombardier that the results must state:
+What the results must state:
 - wrk itself counts a response as an error only when its status is 400 or
   above (3xx counts as success); count_statuses=True adds a Lua `response`
-  hook that counts every status class exactly, at a client CPU cost;
+  hook that counts every status class exactly, at a client CPU cost (the
+  phase-2 workloads use it);
 - `-t T -c C` opens C // T connections per thread (124 for 125 on 2 threads);
   `connections_open` records the real number;
 - a request slower than the timeout is counted in `timeouts` and, if it
@@ -20,6 +21,7 @@ Differences from bombardier that the results must state:
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -196,7 +198,7 @@ def run_load(binary: Path, url: str, *, connections: int, duration_s: int, confi
     base = f"{parts.scheme}://{parts.netloc}/"
     if workload is None:
         workload = static(parts.path + (f"?{parts.query}" if parts.query else "") or "/")
-    workdir = workdir or Path(config.get("workdir", "out")) / "wrk"
+    workdir = workdir or Path(tempfile.gettempdir()) / "bench-wrk"
     script, requests = write_files(workload, workdir, count_statuses)
     threads = max(1, min(len(client_cpus), connections))
     cmd = build_command(binary, base, script, requests, connections=connections, duration_s=duration_s,
