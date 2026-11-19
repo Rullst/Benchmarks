@@ -13,7 +13,7 @@ COPY --from=resolve /src/packages.lock.json /
 FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble AS build
 WORKDIR /src
 COPY AspNetCoreBench.csproj packages.lock.json ./
-RUN dotnet restore
+RUN dotnet restore --locked-mode
 COPY Program.cs appsettings.json ./
 COPY Pages ./Pages
 RUN dotnet publish --no-restore --configuration Release --output /app

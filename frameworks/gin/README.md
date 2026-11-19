@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Version | gin 1.12.0, gin-contrib/sessions 1.1.4, GORM 1.31.2, gorm.io/driver/postgres 1.6.3, pgx 5.13.0, golang.org/x/crypto 0.48.0 (exact versions in `go.mod` and `go.sum`) |
+| Version | gin 1.12.0, gin-contrib/sessions 1.1.4, GORM 1.31.2, gorm.io/driver/postgres 1.6.3, pgx 5.13.0, golang.org/x/crypto 0.58.0 (exact versions in `go.mod` and `go.sum`) |
 | Build | `CGO_ENABLED=0 go build -trimpath -ldflags="-s -w"` with Go 1.27.4 |
 | Server | `http.Server.ListenAndServe` (`net/http`, what `router.Run` does) with the engine wrapped in `http.CrossOriginProtection`, `GIN_MODE=release`; one process, and the Go runtime sets `GOMAXPROCS` to the CPUs it may use (2) |
 | Database | GORM with its PostgreSQL driver (pgx 5 through `database/sql`), models `World`, `Fortune` and `User` (`users`); one pool of `DB_POOL_SIZE` connections (16), with as many idle connections kept open |
