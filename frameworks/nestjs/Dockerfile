@@ -14,7 +14,7 @@ COPY --from=resolve /app/package-lock.json /
 FROM node:26.13.1-trixie-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev --no-audit --no-fund
