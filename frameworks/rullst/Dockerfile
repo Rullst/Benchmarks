@@ -14,10 +14,12 @@ RUN set -eu; \
     else \
       cargo build --release --locked; \
     fi
-# Record the resolved versions of the main crates for the results.
+# Record the resolved versions of the main crates for the results, and where
+# Cargo took the rullst crate from (`rullst-source`: crates.io or a git
+# revision), which the results show next to the version.
 RUN mkdir /out && cp target/release/rullst-bench /out/server \
-    && awk -F' = ' '/^name = /{gsub(/"/,"",$2); n=$2} /^version = /{gsub(/"/,"",$2); print n, $2}' Cargo.lock \
-       | grep -E '^(rullst|rullst-core|rullst-orm|rullst-auth|axum|hyper|tokio|sqlx|validator) ' > /out/versions.txt
+    && awk -F' = ' '/^name = /{gsub(/"/,"",$2); n=$2} /^version = /{gsub(/"/,"",$2); print n, $2} /^source = /{gsub(/"/,"",$2); if (n == "rullst") print "rullst-source", $2}' Cargo.lock \
+       | grep -E '^(rullst|rullst-source|rullst-core|rullst-orm|rullst-auth|axum|hyper|tokio|sqlx|validator) ' > /out/versions.txt
 
 # `docker build --target lockfile --output <dir>` writes Cargo.lock re-resolved
 # for Cargo.toml (Rust is not needed locally; CI uploads it): only what a

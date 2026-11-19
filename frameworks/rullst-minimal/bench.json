@@ -48,5 +48,7 @@
     "APP_KEY": "benchmark-only-vCgXZ853ra2gun5UaXkfNq8nY_RJdWuQ0E48bVur3ag6HqQC"
   },
   "startup_timeout_s": 120,
-  "notes": "Rullst router, ORM and html! without the Server middleware stack; comparable to the Axum app."
+  "notes": "Rullst router, ORM and html! without the Server middleware stack; comparable to the Axum app.",
+  "role": "diagnostic",
+  "role_note": "Rullst's router, ORM and html! served without the production middleware that cargo rullst new generates, comparable to the Axum app. It is not how Rullst sets up an application, so it is a diagnostic shown next to the reference, with scores and without a position; Rullst as generated is the ranked Rullst."
 }

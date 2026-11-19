@@ -6,6 +6,13 @@ baseline is, without `rullst::Server`. This shows the cost of Rullst's own
 layers (routing wrapper, ORM, `html!`, validation, sessions) apart from its
 production middleware stack, which [`../rullst`](../rullst) measures.
 
+**Unranked diagnostic.** This is not how `cargo rullst new` sets up an
+application, so it takes no position in any ranking (`"role":
+"diagnostic"` in `bench.json`): the results show its scores next to the
+Axum reference, labelled, and rank only Rullst as generated. The results
+also record whether the Rullst crates came from crates.io or from a git
+revision.
+
 | | |
 | --- | --- |
 | Version | `rullst = "=13.0.0-alpha.6"` (exact pin and `Cargo.lock`); the `RULLST_VERSION` build argument measures another published release. **Temporary:** until 13.0.0-alpha.6 is on crates.io, a `[patch.crates-io]` section in `Cargo.toml` builds the release candidate from git (Rullst/Rullst `58438b6`); remove it and regenerate `Cargo.lock` (the Dockerfile's `lockfile` stage, which CI exports) once the release is published |

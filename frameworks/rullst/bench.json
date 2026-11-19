@@ -12,7 +12,7 @@
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
   "database_layer": "rullst-orm (#[derive(Orm)] with RowSnapshot: find, save, all, query builder; SQLx PostgreSQL pool)",
   "template_engine": "html! macro",
-  "logging": "off (RULLST_ACCESS_LOG=off, which Rullst honours since 13.0.0-alpha.6)",
+  "logging": "none per request (RULLST_ACCESS_LOG=off, honoured since 13.0.0-alpha.6); Server's default tracing filter info,sqlx=warn for start-up messages and warnings",
   "endpoints": [
     "text",
     "json",
