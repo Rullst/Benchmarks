@@ -25,10 +25,32 @@ and every number on this page is generated from the measurement output.
   database share a single small virtual machine (4 vCPUs, 2 of them for the
   server) and talk over loopback. Tiers are short (10 s to 2 minutes).
 - **Servers faster than the load generator.** When a run is client-bound
-  (the load generator or PostgreSQL used its vCPUs fully), its requests/s
-  measure the load generator rather than the server. The rankings compare
-  such runs by server efficiency instead, and flag a run as not comparable
-  when that is not possible ([Rankings and client-bound runs](#rankings-and-client-bound-runs)).
+  (the load generator or PostgreSQL used the client vCPUs fully), its
+  requests/s measure the client side rather than the server. The rankings
+  then compare requests per CPU-second of the server and PostgreSQL
+  together, and flag a run as not comparable when that would extrapolate
+  from a server far below saturation
+  ([How the scores are computed](#how-the-scores-are-computed)).
+- **Scaling beyond 2 vCPUs.** Every server gets 2 vCPUs. Runtimes built to
+  spread work over many cores (the BEAM behind Phoenix, the JVM behind
+  Spring Boot, .NET behind ASP.NET Core) are measured where that design
+  helps least, and their fixed per-process costs (JIT and GC threads,
+  schedulers) weigh more on 2 vCPUs than on 16.
+- **Latency at a fixed, realistic request rate.** wrk is a closed-loop load
+  generator: each connection sends its next request when the previous one is
+  answered, so the latencies are those of a saturated server with 125-500
+  requests in flight, not those of a server at, say, 30% load, and a slow
+  response delays the requests behind it instead of being recorded as a
+  queue (coordinated omission).
+- **JIT steady state.** Runtimes with a JIT compiler get a longer warm-up
+  (15 s per endpoint instead of 5 s), but a 10 s run after it does not
+  guarantee their fastest compiled code; a longer run might rank them higher.
+- **A database on another host.** PostgreSQL runs on the same virtual
+  machine, over loopback. A real database on another host adds a network
+  round trip to every query, which favours implementations that send fewer
+  queries or pipeline them, and changes which side is the limit.
+- **HTTP/2, TLS and compression.** Everything is HTTP/1.1 with keep-alive,
+  in plain text, without response compression.
 
 ## Results
 
@@ -136,48 +158,61 @@ reported next to Axum's; it is not part of any ranking.
 
 The tiers:
 
-| Tier | Load | Reported |
-| --- | --- | --- |
-| 1 | 125 connections for 10 s on each endpoint (reads before writes; the application endpoints and the hot-rows run after Tier 4) | requests/s, p50 and p99 latency, errors, server CPU, server efficiency, PostgreSQL CPU |
-| 2 | 300 connections for 30 s on `/json` | requests/s, p50 and p99 latency, errors and timeouts, server efficiency |
-| 3 | idle for 10 s, then 200 connections for 15 s on `/json` | idle and peak RAM, idle and loaded CPU |
-| 4 | 500 connections for 2 minutes on `/json` | requests/s, p99, errors and timeouts, server efficiency, RAM growth, whether the server stopped |
+| Tier | Load | Reported | Used for |
+| --- | --- | --- | --- |
+| 1 | 125 connections for 10 s on each endpoint, each warmed up immediately before (reads before writes; the application endpoints and the hot-rows run come last) | requests/s, p50 and p99 latency, errors, server CPU, server efficiency, CPU per request of the server and of PostgreSQL | the Hello world, Database and Application scores |
+| 2 | 300 connections for 30 s on `/json` | requests/s, p50 and p99 latency, errors and timeouts, server efficiency | the Stability check (pass or fail) |
+| 4 | 500 connections for 2 minutes on `/json` | requests/s, p99, errors and timeouts, server efficiency, RAM growth, whether the server stopped | the Stability check (pass, warn or fail) |
+| 3 | idle for 10 s after start-up; then, after Tiers 1, 2 and 4 and a 10 s idle period, 200 connections for 15 s on `/json` | idle RAM; the RAM high-water mark under load, idle and loaded CPU | the Memory score |
 
-**Server efficiency** is requests per server CPU-second: the requests/s of a
-load run divided by the server's CPU use during it, in cores (both are
-measured in every run). It is what a request costs the server, and it stays
-comparable when the load generator or the database, not the server, was the
-limit. Tiers 2 to 4 stay on `/json`: they measure behaviour under more
-connections, memory and stability, which the database endpoints would mostly
-turn into a measurement of PostgreSQL on the shared vCPUs.
+**Efficiency.** Every load run measures the server's CPU use and
+PostgreSQL's (each container's cgroup), so the results report three costs
+per request: server efficiency (requests per server CPU-second), the
+server's and PostgreSQL's CPU time per request together ("CPU µs/req"), and
+PostgreSQL's alone ("PG µs/req"). The last one is how much database work a
+framework's queries cause: preparing statements or not, extra round trips,
+connection set-up. Tiers 2 to 4 stay on `/json`: they measure behaviour
+under more connections, memory and stability, which the database endpoints
+would mostly turn into a measurement of PostgreSQL on the shared vCPUs.
 
 Each metric is also reported as a ratio to the Axum baseline measured on the
 same runner (see below). The results also list requests/s per MiB of peak RAM
 as one column; it is not used to rank anything.
 
-The rankings under [Results](#results) are computed by `bench/rankings.py`
-from those ratios: one per category (Speed, Database, Application, Under
-pressure, Memory, Endurance, Startup) and an overall one, the geometric mean
-of the seven category scores with equal weights. Application is the
-geometric mean of the five phase-2 endpoints' ratios; every request the load
-sends to them is valid, so a run with more than 1% errors (any response that
-is not 2xx, a redirect included) gets no Application score, because fast
-error responses would otherwise raise it. The weighting is a choice; the
-per-category rankings are the detail. In the throughput categories (Speed,
-Database, Application, Under pressure, Endurance) each run counts with its requests/s ratio, or with its
-server efficiency ratio when either server's run was client-bound (see
-[Rankings and client-bound runs](#rankings-and-client-bound-runs)), so
-client-bound results get positions instead of ties. Equal scores, and
-start-up times within the 0.25 s readiness check interval, share a position.
-An implementation with a missing or left-out result, or one that does not
-serve an endpoint yet, is listed as incomplete in that category and overall,
-without a position.
+**Rankings.** `bench/rankings.py` computes one ranking per category from
+those ratios ([How the scores are computed](#how-the-scores-are-computed)):
+
+| Category | What it scores | Score |
+| --- | --- | --- |
+| Hello world | Tier 1 `/text`, `/json`, `/html` | geometric mean of the three capacity ratios |
+| Database | Tier 1 `/db-single`, `/queries`, `/updates`, `/fortunes` | geometric mean of the four capacity ratios |
+| Application | Tier 1 `GET /world/{id}`, `GET /worlds`, `PUT /world/{id}`, `POST /form`, `GET /me` | geometric mean of the five capacity ratios |
+| Memory (high-water mark) | Tier 3's RAM high-water mark after the load tiers | Axum's / the implementation's, both at least 64 MiB |
+| Startup | time to the first answer | Axum's / the implementation's, both at least 1 s |
+| Stability (a check, not a score) | Tiers 2 and 4 | fail: a stop, or a round with more than 1% errors (timeouts included); warn: RAM still growing at the end of Tier 4; otherwise pass |
+
+Every score is a ratio to Axum (1.00), higher is better, and the three
+throughput scores are efficiency-aware: a run counts with its requests/s
+ratio when neither server was client-bound, and with its ratio of requests
+per CPU-second of the server and PostgreSQL together when either was. A
+run with more than 1% errors has no score in its category. Ties come from
+an A/A control (an identical copy of Axum, measured like everything else).
+An overall ranking (the geometric mean of the five scores) is computed for
+review with a table of the positions under other weightings; it is
+published only when `scoring.publish_overall` in
+[bench/config.json](bench/config.json) is `true` (it is `false`: the
+maintainer has not decided to publish one). The per-category rankings are
+always shown.
 
 ## Method
 
-Each framework is measured by its own job on a GitHub-hosted `ubuntu-latest`
-runner (4 vCPUs, 16 GiB of RAM). The job records `lscpu`, the kernel, the
-memory, the Docker version, image digests and tool versions with the results.
+Each framework is measured by its own jobs, each on a GitHub-hosted
+`ubuntu-latest` runner (4 vCPUs, 16 GiB of RAM): 2 jobs per implementation
+by default (the `jobs_per_framework` input), so every implementation is
+measured on at least two machines, often with different CPU models. Each job
+records `lscpu`, the CPU model, the kernel, the memory, the Docker version,
+image digests and tool versions with the results, and every results row
+names the CPU model of each of its jobs.
 
 1. **Build.** The job builds the framework's image and the Axum baseline's
    image from their folders under `frameworks/`, with pinned base images and
@@ -212,26 +247,57 @@ memory, the Docker version, image digests and tool versions with the results.
    posts) and sessions (each session returns its own user, re-read on every
    request). Statement tracking is then turned off for the measurement. An
    implementation that fails is reported as failed with the reason and is
-   not measured.
-4. **Rounds.** The framework and Axum then alternate for 5 rounds (framework,
-   Axum, framework, Axum, …). Each round restores the `world` table to its
-   initial values and rewrites it (`VACUUM FULL`, so earlier `/updates` runs
-   leave no dead rows behind), empties the framework's own tables (its
-   sessions), starts a fresh container, waits for it to answer, measures it
-   idle, warms up each endpoint up to `/fortunes` for 5 s and runs the four
-   tiers. The application endpoints come last: the harness obtains the
-   sessions they need (125 `GET /form` pages and 125 logins, 8 at a time, not
-   timed), warms each of them up for 5 s, measures them at Tier 1 and runs
-   the hot-rows test. They run after Tier 4 because logging in hashes
-   passwords, and a memory-hard hash leaves memory in the allocator (Axum went
-   from 1 MiB to about 1 GiB after 125 Argon2id logins in the first trial),
-   which would distort the RAM measured in Tiers 3 and 4. Results are the median over rounds, with the lowest and
-   highest round shown as the spread.
-5. **Ratios.** For every round, each metric of the framework is divided by
-   Axum's value from the adjacent round on the same runner; the reported ratio
-   is the median of those per-round ratios. Runner-to-runner differences (CPU
-   model, noisy neighbours) largely cancel out in the ratio, so compare ratios
-   rather than absolute numbers across jobs and runs.
+   not measured. After the one-request-at-a-time checks pass, a short
+   **concurrent step** sends every declared endpoint its measurement
+   workload with 125 connections for 3 s (`concurrent_check` in
+   `bench/config.json`, [bench/load_check.py](bench/load_check.py)), with
+   wrk's status hook on: any response that is not 2xx (3xx included), any
+   transport error or timeout fails conformance. This catches what only
+   shows under load (a pool that times out waiting for a connection, a
+   server that closes connections).
+4. **Rounds.** The framework and Axum then alternate for 5 rounds per job,
+   in ABBA order (framework first in odd rounds, Axum first in even rounds;
+   a second job starts with Axum), so that a drift during the job (a runner
+   warming up or throttling) does not always fall on the same side. Each
+   round restores the `world` table to its initial values and rewrites it
+   (`VACUUM FULL`, so earlier `/updates` runs leave no dead rows behind),
+   empties the framework's own tables (its sessions), starts a fresh
+   container, waits for it to answer and measures it idle. Each phase-1
+   endpoint is then warmed up immediately before its own Tier 1 run (125
+   connections, with wrk's status hook so that a 3xx shows up as a warm-up
+   error; 5 s, or 15 s for a runtime whose JIT compiles code while running:
+   below), left idle for 2 s and measured. Then come Tier 2, Tier 4, a 10 s
+   idle period and Tier 3's load (the Memory high-water mark). The
+   application endpoints come last: the harness obtains the sessions they
+   need (125 `GET /form` pages and 125 logins, 8 at a time, not timed), and
+   warms up and measures each one the same way, then runs the hot-rows test.
+   They run last because logging in hashes passwords, and a memory-hard hash
+   leaves memory in the allocator (Axum went from 1 MiB to about 1 GiB after
+   125 Argon2id logins in the first trial), which would distort the RAM
+   measured in Tiers 3 and 4. Warm-up errors are reported with the results.
+   Results are medians over rounds, with the lowest and highest round shown
+   as the spread.
+
+   **Longer warm-up for JIT runtimes.** A folder whose runtime compiles hot
+   code at run time after profiling it sets `"jit": true` in its
+   `bench.json` and gets 15 s of warm-up per endpoint instead of 5 s: the
+   HotSpot JVM (Spring Boot), .NET's tiered compilation (ASP.NET Core), V8
+   (NestJS, Fastify) and Ruby's YJIT (Rails). Runtimes that compile ahead of
+   time (Rust, Go), the BEAM's JIT (it compiles each module when it is
+   loaded, without profiling) and the CPython and PHP versions used here
+   (their JITs are off) keep 5 s. The longer warm-up costs only time; it
+   cannot make a non-JIT runtime slower.
+5. **Ratios.** For every round pair, each metric of the framework is divided
+   by Axum's value from the paired round on the same runner; the reported
+   ratio is the median of those per-round ratios, pooled over every job of
+   the implementation. Runner-to-runner differences (CPU model, noisy
+   neighbours) largely cancel out in the ratio, so compare ratios rather
+   than absolute numbers across jobs and runs.
+6. **A/A control.** `frameworks/axum-control` is a byte-identical copy of
+   the Axum baseline (`harness.py validate` checks it), measured in its own
+   jobs exactly like every other implementation. Its ratios should all be
+   1.00, so how far they land from 1.00 is the noise of a ratio; it sets the
+   tie margins (below) and is listed, unranked, with the results.
 
 Fixed settings, the same for every implementation:
 
@@ -253,9 +319,13 @@ Fixed settings, the same for every implementation:
   to `/fortunes` and on Tiers 2-4, and on the phase-2 endpoints cycles
   through requests the harness built beforehand (ids, query strings, bodies,
   each session's cookies and CSRF token) with a fixed seed, so every
-  implementation gets the same mix. On the phase-2 endpoints a Lua hook
-  counts every response that is not 2xx as an error; elsewhere wrk counts
-  statuses of 400 and above, and conformance already refuses redirects.
+  implementation gets the same mix. On the phase-2 endpoints, in every
+  warm-up and in the concurrent conformance step, a Lua hook counts every
+  response that is not 2xx (3xx included) as an error; the measured runs of
+  the fixed-request endpoints run without it, because it costs client CPU
+  that would make more of those runs client-bound, so there wrk counts
+  statuses of 400 and above, and the warm-up just before each run and the
+  conformance check would show a redirect.
   wrk opens `connections / threads` connections per thread: 124 of Tier 1's
   125 with two threads (the results record `connections_open`). It was chosen
   over bombardier (one fixed request per run) and oha (no per-request
@@ -267,52 +337,104 @@ Fixed settings, the same for every implementation:
   across processes for multi-process servers.
 - **Workers.** Sized for the 2 vCPUs the server has (`BENCH_WORKERS=2`), the
   way each framework's production guidance says to size them.
-- **Logging.** Off. Where a framework cannot turn off its access log, it
-  stays on and the folder README says so. Container output is discarded
-  (`--log-driver none`) during measurement.
+- **Logging.** No per-request logging in any implementation (no access
+  log, no logger middleware); application logs stay at the framework's
+  production level, which writes nothing per request. Where a framework
+  cannot turn off its access log, it stays on and the folder README says
+  so. Container output is discarded (`--log-driver none`) during
+  measurement. Every folder README has a "Production settings" section that
+  lists each setting (logging, pool, prepared statements, middleware,
+  workers) with the documentation it follows.
 - **RAM** is the container's cgroup `memory.current` minus inactive file
   cache (what `docker stats` shows), sampled every 100 ms. CPU is the
   container's cgroup CPU time, in cores (2.00 means both vCPUs busy).
 
 Flags in the results:
 
-- **client-bound**: the client vCPUs (load generator and PostgreSQL) were at
-  least 90% busy during the test. The server might have answered more
-  requests than the load generator could send, so its requests/s understate
-  it; the rankings use its server efficiency instead (below).
+- **PostgreSQL-bound** and **load-generator-bound** (together:
+  client-bound): the client vCPUs, which the load generator and PostgreSQL
+  share, were at least 90% busy during the run (`saturation_threshold` in
+  `bench/config.json`). It is PostgreSQL-bound when PostgreSQL's container
+  used more of that CPU than the load generator, and load-generator-bound
+  otherwise. The server might have answered more requests, so its
+  requests/s understate it; the rankings then use efficiency (below). The
+  90% threshold is a hard cut: a run at 89% counts as server-limited and one
+  at 91% as client-bound. Instead of a hysteresis band, every table shows
+  both the requests/s ratio and the efficiency ratio, and each score says
+  which one it used, so a run near the threshold can be read both ways.
 - **RAM still growing**: in Tier 4, RAM rose by more than 10% and 8 MiB
   between the middle and the last tenth of the test. For garbage-collected
-  runtimes this can be heap growth rather than a leak.
+  runtimes this can be heap growth rather than a leak, so it is a warning in
+  the Stability check, not a failure.
 - **stopped**: the server process exited (crash or out-of-memory kill) during
   a round. The phase is reported.
 
-### Rankings and client-bound runs
+### How the scores are computed
 
-With 2 client vCPUs, the load generator (and, on the database endpoints,
-PostgreSQL) cannot saturate the fastest servers: their runs are client-bound
-and their requests/s mostly measure the client side. Calling close
-client-bound results ties hid real differences in what each request costs, so
-the rankings compare those runs by server efficiency:
+**Capacity ratio of a run.** For every round pair (the framework's round and
+the paired Axum round on the same runner):
 
-- for every round pair (the framework's round and the adjacent Axum round),
-  the run's **capacity ratio** is the requests/s ratio when neither run was
-  client-bound, and the ratio of requests per server CPU-second when either
-  was (`<run>.capacity` in `results[].ratios`, with `efficiency_rounds`
-  counting the round pairs that used efficiency);
-- a category's score is the geometric mean of its runs' capacity ratios
-  (medians over the rounds); a "*" in the rankings table marks a score where
-  a run used efficiency in at least half of the round pairs;
-- a run that was client-bound in most rounds for both the implementation and
-  its paired Axum run, and that efficiency could not score (no server CPU
-  measurement, as in results from before November 2026), would compare two
-  load generators: the category lists the implementation as **not
-  comparable**, without a position, and it has no overall position.
+- neither run client-bound: both servers were the limit, and the requests/s
+  ratio is the capacity ratio;
+- either run client-bound (PostgreSQL-bound or load-generator-bound): the
+  ratio of requests per CPU-second of **the server and PostgreSQL
+  together**. A framework is charged for the PostgreSQL work its queries
+  cause: a database run that is PostgreSQL-bound is mostly PostgreSQL's
+  CPU, and a framework whose queries cost PostgreSQL more (no prepared
+  statements, an extra round trip per query, a new connection per request)
+  scores lower even when its own server code is cheap. Until 19 November
+  2026 the scores used server CPU alone, which left PostgreSQL's cost out;
+  it is included now. On runs without database work PostgreSQL's CPU is
+  close to zero and this is the server efficiency;
+- **not comparable**: a side was load-generator-bound while its server used
+  less than 75% of its vCPUs (`MIN_SERVER_SHARE` in `bench/measure.py`).
+  Its efficiency was then measured far below the load it could take, and
+  efficiency changes with load (see [CPU split](#cpu-split)), so it is not
+  used as its capacity.
 
-When the server is the limit, both measures agree: it uses both of its vCPUs,
-so requests/s is efficiency times two. When it is not, efficiency is the
-better estimate of what it could serve, with one caveat: efficiency changes
-somewhat with the load (see [CPU split](#cpu-split)), so it compares servers
-best when both carry a similar load.
+`results[].ratios["<run>.capacity"]` holds the median over the comparable
+pairs, with `pairs`, `cpu_rounds`, `not_comparable_rounds`,
+`postgresql_rounds` and `load_generator_rounds`.
+
+**Category scores.** A throughput category's score is the geometric mean of
+its runs' capacity ratios; "*" marks a score where a run used CPU
+efficiency in most of its comparable pairs. A run is left without a score,
+and so is its category for that implementation, when:
+
+- most of its round pairs were not comparable ("not comparable");
+- its median error rate is above 1% ("errors"; any response that is not
+  2xx, any transport error or timeout; every request the load sends is
+  valid, so fast error responses would otherwise raise a score). This
+  applies to every scored run in every category;
+- it is missing, left out by a correction or not served yet ("incomplete").
+
+Memory and Startup are costs: the score is Axum's value divided by the
+implementation's, with floors (every high-water mark counts as at least
+64 MiB, every start-up as at least 1 s), so that differences far below what
+matters in production (11 MiB against 14 MiB, 0.01 s against 0.4 s) do not
+move a score. Stability is a check, not a score: Tiers 2 and 4 pass, warn
+(RAM still growing) or fail (a stop, or a round with more than 1% errors).
+
+**Ties and the A/A margin.** Each category's tie margin is the largest
+deviation from 1.00 of the A/A control's scores in that category (per job,
+and pooled over its jobs): the noise a score carries under the same
+procedure. Scores within the margin of the best score of their group share a
+position ("(tie)"), and a score within it of 1.00 is marked "≈": not
+distinguishable from Axum. Start-up times within the 0.25 s readiness check
+interval also share a position. The margins are printed above the rankings.
+
+**Unranked rows.** Axum is the reference (1.00). Rullst's minimal
+configuration, the A/A control and the Axum variant without SQLx's
+connection test are diagnostics: they get scores, labelled, without a
+position, so they never push a ranked implementation down.
+
+**Overall.** The geometric mean of the five category scores with equal
+weights, and the positions under other weightings (throughput only,
+Database and Application only, without Hello world, throughput counted
+twice), are computed for review and published only when
+`scoring.publish_overall` is `true`. An implementation that fails the
+Stability check has no overall position. The weighting is a choice; the
+sensitivity table shows how much the order depends on it.
 
 ### CPU split
 
@@ -347,26 +469,62 @@ database endpoint, at 25-30% fewer requests/s. Sharing two vCPUs lets
 whichever side needs the CPU use it (the load generator on `/json`,
 PostgreSQL on `/queries` and `/updates`). **Decision: the split stays shared**
 (server 2 vCPUs, load generator and PostgreSQL 2 vCPUs). The database
-endpoints are limited by PostgreSQL, which the results show as client-bound
-with PostgreSQL's CPU use next to them, and the rankings compare those runs
-by server efficiency. `BENCH_DATABASE_CPUS=1` (or `database.cpus` in
+endpoints are limited by PostgreSQL, which the results show as
+PostgreSQL-bound with PostgreSQL's CPU use next to them, and the rankings
+compare those runs by requests per CPU-second of the server and PostgreSQL
+together. `BENCH_DATABASE_CPUS=1` (or `database.cpus` in
 `bench/config.json`) reproduces the other split.
 
-The same runs show how much efficiency depends on the load: with less load
-(own-vCPU split), Axum's efficiency was 9-14% lower on `/text`, `/json` and
-`/html` and 26-28% higher on `/queries` and `/updates`. Efficiency ratios
-compare servers well when both run at similar loads, which the alternating
-rounds on one runner give; small efficiency differences between
-implementations whose loads differ a lot are not significant.
+The same runs show how much efficiency depends on the load. With less load
+(the own-vCPU split), Axum's server efficiency was 9-14% lower on `/text`,
+`/json` and `/html` and 26-28% higher on `/queries` and `/updates`; the
+efficiency the rankings use (requests per CPU-second of the server and
+PostgreSQL together) moved by -12% on `/json`, +7% on `/db-single`, -2% on
+`/fortunes` and +33-34% on `/queries` and `/updates` (where PostgreSQL ran
+on one vCPU instead of two: fewer queries in parallel cost it less CPU
+each). Efficiency ratios therefore compare servers well when both sides run
+at similar loads, which the paired rounds on one runner give when both are
+limited the same way. When one side is limited by its own server and the
+other by PostgreSQL, the side that loaded PostgreSQL less can look up to
+about a third cheaper on `/queries` and `/updates` for that reason alone,
+and differences of that size between such implementations are not
+significant. That is also why a server far below saturation is not compared
+by efficiency at all ([How the scores are computed](#how-the-scores-are-computed)).
 
 ## Fairness
+
+The rule is the same for every implementation, Rullst included: **what the
+framework's own documentation recommends for production.** How well each
+folder follows it is a judgement made by one maintainer
+([Authorship](#authorship)); the folder READMEs give the sources, so each
+choice can be checked and challenged.
 
 - Each implementation follows its own framework's production
   recommendations: release or production build, pinned versions and
   lockfiles, the framework's standard database layer (its ORM where it has
   one) and template engine, and its documented way to run in production.
-- Each folder has a README that says how the implementation is configured
-  and why.
+  Each folder README has a "Production settings" section: logging,
+  database pool and driver settings (prepared statements, connection
+  checks), middleware, server and workers, each with the documentation it
+  follows. Where the documentation recommends nothing, the framework's
+  default stays, even when another setting would be faster.
+- **Defaults differ, and the results show it.** Following each framework's
+  documentation does not make the stacks equal. Examples the results let you
+  see: Laravel on PHP-FPM opens a new PostgreSQL connection for every
+  request (its documentation does not recommend persistent PDO connections;
+  its database rows are labelled); SQLx, which Axum, Actix Web, Loco and
+  Rullst use, tests pooled connections with a round trip, while Topcoat's
+  and Gin's drivers mostly do not (the unranked Axum variant without the
+  test bounds that cost); node-postgres, under Fastify and NestJS, sends
+  unprepared statements, as its documentation advises for simple queries;
+  Rails uses 6 of its 16 connections (2 Puma workers × 3 threads, Rails'
+  production default). PostgreSQL's CPU per request is printed for every
+  database run so these costs are visible.
+- **Structural differences.** Some containers run more than the
+  application server inside the server's 2 vCPUs: Rails behind Thruster,
+  Laravel behind nginx with PHP-FPM; Django and FastAPI run on different
+  Python versions, each the one its documentation recommends. The results
+  list them under "Structural differences".
 - **Phase-2 mechanisms.** Each phase-2 endpoint uses the framework's
   standard mechanism for each concern, in this order: built into the
   framework, written by its generator, the language's standard library, a
@@ -387,32 +545,57 @@ implementations whose loads differ a lot are not significant.
   ASP.NET Core, Fastify's Ajv, Laravel, Pydantic, Django forms, Rails,
   Ecto) are configured or extended to refuse it. Each folder README says
   what it changed and why.
-- Rullst is not tuned more than the others. It is measured twice: **as
-  generated** by `cargo rullst new` and `cargo rullst deploy` (its default
-  production middleware included), and **minimal** (its router, ORM and
-  `html!` served without that middleware, comparable to the Axum app).
+- **Rullst is measured as generated and ranked as generated.** Rullst as
+  generated by `cargo rullst new` and `cargo rullst deploy` (its default
+  production middleware included) is the ranked Rullst. Rullst's minimal
+  configuration (its router, ORM and `html!` without that middleware,
+  comparable to the Axum app) is shown next to the reference as an unranked
+  diagnostic: it takes no position in any ranking. The results say whether
+  the measured Rullst came from crates.io or from a git revision.
+- **The method treats every implementation the same way**: the same
+  harness, CPU split, rounds in ABBA order against Axum on the same runner,
+  warm-up rule by runtime class, error gate and A/A tie margins. That does
+  not remove what 2 vCPUs, one shared machine and a closed-loop load
+  generator favour ([What this benchmark does not
+  measure](#what-this-benchmark-does-not-measure)).
 - Improvements from people who use a framework in production are welcome;
   see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Authorship
+
+One person, the maintainer of Rullst, wrote every implementation in this
+repository, with the help of AI coding assistants, and also designed the
+method. Nobody from the other frameworks' communities has reviewed their
+folders yet. The maintainer has tried to follow each framework's production
+documentation, and the folder READMEs cite it, but an expert in a framework
+will know things that its documentation does not say.
+
+If you use one of these frameworks in production, please review its folder:
+the configuration, the code of each endpoint and the README's "Production
+settings". Pull requests that bring an implementation closer to what its
+community runs in production are welcome, whichever way they move its
+numbers; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Limitations
 
 - **Shared, virtual runners.** GitHub-hosted runners are virtual machines on
-  shared hosts. Absolute numbers differ between runs and between jobs of the
-  same run; the per-round ratio to Axum reduces this but does not remove it.
-  Small differences (a few percent) are within the noise.
+  shared hosts, with different CPU models from job to job. Absolute numbers
+  differ between runs and between jobs of the same run; the per-round ratio
+  to Axum and the two jobs per implementation reduce this but do not remove
+  it. The A/A control measures what is left: differences smaller than its
+  margin are within the noise.
 - **The load generator limits the top.** With 2 vCPUs, the load generator
   (and PostgreSQL on the database endpoints) cannot saturate the fastest
-  servers. Those results are flagged client-bound, and the rankings compare
-  them by server efficiency, which is measured on a server that was not
-  saturated.
-- **Short tiers.** Tests last 10 s to 2 minutes, with a 5 s warm-up per
-  endpoint. They do not show long-term stability, and runtimes with a JIT
-  compiler may not reach their best speed.
+  servers. Those results are flagged, and the rankings compare them by CPU
+  efficiency, which depends somewhat on the load ([CPU split](#cpu-split)).
+- **Short tiers.** Tests last 10 s to 2 minutes, after a 5 s warm-up per
+  endpoint (15 s for JIT runtimes). They do not show long-term stability, and
+  runtimes with a JIT compiler may not reach their best speed.
 - **One small machine.** Client, server and database share one virtual
   machine and talk over loopback: no network latency, no TLS, HTTP/1.1 with
   keep-alive only.
-- **Small endpoints.** `/text`, `/json`, `/db-single` and `/html` measure
-  framework overhead (routing, serialization, ORM, templates, middleware).
+- **Small endpoints.** `/text`, `/json` and `/html` measure framework
+  overhead (routing, serialization, templates, middleware). `/db-single`,
   `/queries`, `/updates` and `/fortunes` add database work through the ORM
   and a template over database rows, but they are still small, fixed
   workloads on a 10,000-row table; a real application's code and data
@@ -421,11 +604,13 @@ implementations whose loads differ a lot are not significant.
   design and its default session store for a signed-in user: a database
   store costs a query (and some write the session on every request), a
   cookie store a signature check or decryption, an in-memory session a map
-  lookup. The results print the design and the store next to the numbers;
-  a faster or slower library or store would change them. Laravel keeps its
-  `cookie` session driver rather than its default `database` driver: the
-  load sends no cookies to `/html`, so the database driver would insert a
-  session row on every `/html` request, an artifact of the load generator.
+  lookup. Axum, the reference, uses a PostgreSQL store (tower-sessions), so
+  `/me` ratios above 1.00 for cookie stores partly measure that choice. The
+  results print the design and the store next to the numbers; a faster or
+  slower library or store would change them. Laravel keeps its `cookie`
+  session driver rather than its default `database` driver: the load sends
+  no cookies to `/html`, so the database driver would insert a session row
+  on every `/html` request, an artifact of the load generator.
 - **Hot rows are reported, not ranked.** The contention run shows lock waits
   on 10 rows; it does not model a real application's write pattern.
 - **One configuration per framework.** Experts may know better settings; the
@@ -435,14 +620,33 @@ implementations whose loads differ a lot are not significant.
 
 A nightly check (01:00 UTC-3) reads the newest `rullst` version on crates.io,
 prereleases included. When that version has not been measured yet, the
-workflow measures every implementation with it and commits the results to
-`main`: this README's table, [benchmarks_results.md](benchmarks_results.md) and
-the JSON files under [results/](results/). The dashboard is then rebuilt. Each
-measured Rullst version keeps its own results file, so the history shows how
-Rullst's numbers change between releases. If Rullst cannot be built or fails
+workflow measures every implementation with it (5 rounds on each of 2 jobs
+per implementation) and commits the results to `main`: this README's table,
+[benchmarks_results.md](benchmarks_results.md) and the JSON files under
+[results/](results/). The dashboard is then rebuilt. Each measured Rullst
+version keeps its own results file, so the history shows how Rullst's
+numbers change between releases. If Rullst cannot be built or fails
 conformance with the new version, nothing is published, the failure is
 recorded in `results/attempts.json` and the workflow run fails, so a
 maintainer can fix the benchmark app and rerun it by hand.
+
+**Publication gate.** A scheduled or manual publication also refuses, and
+publishes nothing, when (`publication_gate` in
+[bench/aggregate.py](bench/aggregate.py), limits in `publication` in
+[bench/config.json](bench/config.json)):
+
+- an implementation was not measured, or was measured on fewer than 2 jobs
+  or fewer than 5 rounds per job;
+- the jobs disagree on the harness commit, the configuration, the vCPU
+  count, the load generator binary, the PostgreSQL version or the rounds;
+- a scored run is above the 1% error limit, or an implementation fails the
+  Stability check;
+- the A/A control is missing, or its tie margin is above 5% in any
+  category (the run was too noisy to rank);
+- Rullst was not built from its crates.io release.
+
+The workflow summary then lists the reasons; the results of the run stay
+available as artifacts.
 
 **Shared runners.** The Rullst organization shares one pool of hosted runners
 between Rullst/Rullst and this repository. A measurement uses only Linux
@@ -466,7 +670,7 @@ instead). Labelled pull request trials use 3.
 | `https://rullst.win/Benchmarks/data/rullst/<version>.json` | the results for one Rullst version (same shape as `latest.json`) |
 
 The same files are in this repository under `results/`, with each job's full
-output (every round) under `results/raw/<version>/`.
+output (every round) under `results/raw/<version>/<framework>-job<N>.json`.
 
 `latest.json` and the per-version files use the shape
 `rullst.benchmarks.latest.v1`, which the Rullst website reads at build time
@@ -492,14 +696,23 @@ Fields are only ever added to it:
       "framework_version", "versions": { "<package>": "<version>" },
       "runtime", "server", "workers", "database_layer", "template_engine", "logging",
       "maturity_note", "status", "problem", "is_baseline" (Axum only),
+      "role": "ranked",                        ranked, diagnostic or control (bench.json), with
+      "role_note", "structure_note", "jit",    the folder's notes and its warm-up class
+      "dependency_source": { "kind", "label", "raw" },   Rullst rows: crates.io or a git revision
+      "jobs": [ { "job", "status", "rounds", "cpu_model", "runner", "round_orders" } ],
+      "runners": ["<cpu model>", ...],         the CPU model of each measured job
       "endpoints": ["text", ...],              the endpoints the implementation serves (bench.json)
       "metrics": { "<metric>": { "median", "min", "max", "spread", "n" } },
-      "ratios":  { "<metric>": { "median", "min", "max", "spread", "n" },
-                   "<run>.capacity": { ..., "efficiency_rounds" } },   capacity ratios (see Rankings
-                                               and client-bound runs); runs: tier1.<endpoint>, tier2, tier4
-      "flags": { "rounds", "crashed_rounds", "ram_growing_rounds", "client_bound_rounds": { ... } },
-      "paired_baseline": { "<metric>": median },   Axum's medians from the same job (same runner) for
-                                               tier1.<endpoint>.rps, tier2.rps and tier4.rps
+      "ratios":  { "<metric>": { "median", "min", "max", "spread", "n" },   pooled over every job
+                   "tier1.<endpoint>.capacity": { ..., "pairs", "cpu_rounds", "not_comparable_rounds",
+                                 "postgresql_rounds", "load_generator_rounds" } },   capacity ratios
+                                               (How the scores are computed)
+      "flags": { "rounds", "crashed_rounds", "ram_growing_rounds", "client_bound_rounds": { ... },
+                 "limited_rounds": { "<run>": { "postgresql": n, "load-generator": n } },
+                 "warmup_errors": { "<endpoint>": n } },
+      "paired_baseline": { "<metric>": median },   Axum's medians from the same jobs (same runners)
+                                               for tier1.<endpoint>.rps, tier2.rps, tier4.rps,
+                                               tier3.load_ram_peak_mib and startup_s
       "rps_per_mib", "build", "environment"
     }
   ],
@@ -508,59 +721,73 @@ Fields are only ever added to it:
   "metrics": { "<field>": "<definition>" },
   "auto_update": "...",
   "rullst_version": "13.0.0-alpha.5",
+  "rullst_source": { "kind": "crates.io", ... },   where the measured Rullst came from
   "note": "...",                               a note about this Rullst version
                                                (bench/notes.json), or ""
   "note_pt_br": "...",                         the same note in Brazilian Portuguese, or ""
   "measured_from", "measured_to", "generated_at",   ISO 8601 UTC
-  "run": { "id", "url", "sha", "event", "rounds" },
+  "run": { "id", "url", "sha", "event", "rounds", "jobs_per_framework", "jobs" },
+  "runners": [ { "cpu_model", "jobs" } ],     how many jobs ran on each CPU model
+  "publication_gate": { "passed", "problems": [...] },   why these results could not be published
+                                               automatically (empty when they could)
   "baseline": "axum",
   "config": { tiers, server limits, pool size, load generator, database },
   "environment": { "cpu_model", "cpu_count", "memory_total_mib", "kernel", "os",
                    "runner_image", "docker", "load_generator", "postgres", "cpu_split" },
-  "rankings": {                                per-category and overall positions (bench/rankings.py)
+  "rankings": {                                per-category positions (bench/rankings.py)
     "reference": "axum",                       listed with score 1.0 and no position
-    "tie_tolerance": 0.0,                      0 since client-bound runs are scored by efficiency
-                                               (it was 0.1 when close client-bound scores tied)
-    "startup_resolution_s": 0.25,              readiness check interval: start-up times below it count
-                                               as equal, and times this close share a position
-    "method": { "overall", "ratios", "ties", "incomplete", "reference" },   the rules in words
-    "categories": [                            speed, database, pressure, memory, endurance, startup, in
-                                               that order
+    "tie_margins": { "<category>": { "margin", "percent", "scores" }, "overall": ... },
+                                               from the A/A control: margin in natural-log units
+                                               (scores within it tie), percent, the control's scores
+    "tie_tolerance": 0.012,                    the overall tie margin (null without A/A data)
+    "startup_resolution_s": 0.25,              readiness check interval: start-up times this close
+                                               share a position
+    "settings": { "publish_overall", "max_error_rate", "memory_floor_mib", "startup_floor_s" },
+    "method": { ... },                         the rules in words
+    "categories": [                            hello, database, application, memory, startup, in that
+                                               order
       {
-        "key": "speed", "title": "Speed", "tier": "Tier 1", "description": "...",
-        "metrics": ["tier1.text.rps", ...],    the ratios the score is computed from
-        "lower_is_better": false,              true for memory and startup (the score is inverted)
-        "entries": [                           ranked and reference rows by score, then the others
+        "key": "hello", "title": "Hello world", "tier": "Tier 1", "kind": "throughput",
+        "description": "...", "runs": ["tier1.text", ...], "metrics": ["tier1.text.rps", ...],
+        "lower_is_better": false,              true for memory and startup (costs)
+        "tie_margin": { "margin", "percent", "scores" },
+        "entries": [                           scored rows by score, then the others
           {
             "slug", "framework",               "framework" as in results[]
-            "position": 1,                     1, 1, 3 for a tie; null for the reference, incomplete
-                                               and not measured rows
-            "status": "ranked",                ranked, reference, incomplete or not measured
-            "tie": true, "tied_with": ["<slug>", ...],   rows sharing the position (the reference too)
-            "score": 0.99,                     higher is better, Axum = 1.0; null without a position;
-                                               throughput categories: from the capacity ratios
-            "ratio": 0.99,                     the measured ratio to Axum (requests/s ratio, peak RAM
-                                               ratio for memory, start-up time ratio for startup)
-            "client_bound": true,              every run of the category client-bound in at least
-                                               half of the rounds (throughput categories only)
-            "client_bound_runs": ["tier1.json", ...],
-            "efficiency_runs": ["tier1.json", ...],   runs scored by efficiency in at least half of
-                                               the round pairs
-            "detail": { ... },                 speed and database: the endpoints' requests/s ratios and
-                                               "capacity"; pressure: rps, p99_ms,
-                                               p99_ratio; memory: peak_ram_mib; endurance: rps,
-                                               error_rate, timeouts, ram_growing_rounds,
-                                               crashed_rounds, rounds; startup: startup_s
-            "reason": ""                       why an incomplete or not measured row has no position
+            "position": 1,                     1, 1, 3 for a tie; null for every row that is not
+                                               "ranked"
+            "status": "ranked",                ranked, reference, diagnostic, A/A control,
+                                               incomplete, not comparable, errors or not measured
+            "role_note": "",
+            "tie": true, "tied_with": ["<slug>", ...],   ranked rows sharing the position
+            "score": 0.99,                     higher is better, Axum = 1.0; throughput categories:
+                                               from the capacity ratios
+            "ratio": 0.99,                     the requests/s ratio (throughput), or the RAM or
+                                               start-up time ratio
+            "within_reference_margin": true,   the score is within the A/A margin of 1.00
+            "efficiency_runs": ["tier1.json", ...],   runs scored by CPU efficiency
+            "limited_runs": { "<run>": { "postgresql": n, "load-generator": n } },
+            "client_bound", "client_bound_runs",   kept for older readers
+            "detail": { ... },                 throughput: rps_ratio, capacity and basis per
+                                               endpoint, error_rates, db_us_per_request and
+                                               db_us_ratio; memory: value, reference, floor,
+                                               peak_ram_mib; startup: value, reference, floor,
+                                               startup_s
+            "error_runs": { "<endpoint>": rate },   runs above the error limit
+            "reason": ""                       why a row has no score
           }
         ]
       }
     ],
-    "overall": {
-      "weights": { "speed": 0.1667, ... },     geometric mean of the category scores, equal weights
-      "entries": [ { "slug", "framework", "position", "status", "tie", "tied_with",
-                     "score", "categories": { "<key>": score or null }, "missing": [keys], "reason" } ]
-    }
+    "stability": { "key": "stability", "title", "tier", "description",
+                   "entries": [ { "slug", "framework", "status", "result": "pass", "reasons": [...],
+                                  "detail": { "tier2": {...}, "tier4": {...}, "crashed_rounds",
+                                              "ram_growing_rounds", "rounds" } } ] },
+    "publish_overall": false,                  when true, "overall" and "sensitivity" are included:
+    "overall": { "weights": {...}, "entries": [ { "slug", "framework", "position", "status", "tie",
+                 "tied_with", "score", "categories", "missing", "stability", "reason" } ] },
+    "sensitivity": [ { "key", "title", "weights", "entries": [ ... ] } ]   positions under other
+                                               weightings
   },
   "results_schema": 1
 }
@@ -574,8 +801,10 @@ Metric names: `tier1.<endpoint>.rps`, `tier1.<endpoint>.latency_ms.mean`, `tier1
 `tier1.<endpoint>.latency_ms.p99`, `tier1.<endpoint>.error_rate`,
 `tier1.<endpoint>.server_cpu_cores`, `tier1.<endpoint>.rps_per_cpu` (server
 efficiency, requests per server CPU-second), `tier1.<endpoint>.db_cpu_cores`
-(PostgreSQL's CPU use) (endpoints `text`, `json`, `db-single`, `html`,
-`queries`, `updates`, `fortunes`); `tier2.rps`, `tier2.latency_ms.p50`,
+(PostgreSQL's CPU use), `tier1.<endpoint>.db_us_per_request` (PostgreSQL's
+CPU microseconds per request), `tier1.<endpoint>.cpu_us_per_request` (the
+server's and PostgreSQL's together), `tier1.<endpoint>.total_rps_per_cpu`
+(requests per CPU-second of both) (all twelve endpoints); `tier2.rps`, `tier2.latency_ms.p50`,
 `tier2.latency_ms.p99`, `tier2.error_rate`, `tier2.timeouts`,
 `tier2.server_cpu_cores`, `tier2.rps_per_cpu`; `tier3.idle_ram_mib`,
 `tier3.idle_cpu_cores`, `tier3.load_ram_peak_mib`, `tier3.load_cpu_cores`,
@@ -594,8 +823,10 @@ name.
 | Group | Implementation | Folder |
 | --- | --- | --- |
 | Rust | Axum (baseline) | [frameworks/axum](frameworks/axum) |
+| Rust | Axum, A/A control (an identical copy; unranked) | [frameworks/axum-control](frameworks/axum-control) |
+| Rust | Axum, SQLx `test_before_acquire` off (diagnostic; unranked) | [frameworks/axum-no-ping](frameworks/axum-no-ping) |
 | Rust | Rullst, as generated | [frameworks/rullst](frameworks/rullst) |
-| Rust | Rullst, minimal | [frameworks/rullst-minimal](frameworks/rullst-minimal) |
+| Rust | Rullst, minimal (diagnostic; unranked) | [frameworks/rullst-minimal](frameworks/rullst-minimal) |
 | Rust | Actix Web | [frameworks/actix](frameworks/actix) |
 | Rust | Loco | [frameworks/loco](frameworks/loco) |
 | Rust | Topcoat (early 0.x) | [frameworks/topcoat](frameworks/topcoat) |
@@ -616,8 +847,8 @@ versions that were measured.
 ## Reproduce
 
 On GitHub: fork the repository, open **Actions → Benchmark → Run workflow**,
-and choose the frameworks (folder names, or `all`), the number of rounds and,
-optionally, a published `rullst` version.
+and choose the frameworks (folder names, or `all`), the number of rounds, the
+jobs per implementation and, optionally, a published `rullst` version.
 
 On a Linux machine with Docker, cgroup v2, Python 3.10+ and at least 4 CPUs
 (builds and load tests are heavy; 8 GiB of RAM or more is advisable):
@@ -625,7 +856,7 @@ On a Linux machine with Docker, cgroup v2, Python 3.10+ and at least 4 CPUs
 ```sh
 export WRK="$(bench/install-loadgen.sh "$HOME/.local/bin")"  # builds wrk 4.2.0 (make, cc, OpenSSL headers)
 python3 bench/harness.py conformance --framework rullst
-python3 bench/harness.py run --framework rullst --rounds 1 --out out/rullst.json
+python3 bench/harness.py run --framework rullst --rounds 1 --job 1 --out out/rullst-job1.json
 python3 bench/aggregate.py --input out --summary report.md
 ```
 
@@ -655,6 +886,21 @@ from wrk 4.2.0, v2 numbers from bombardier 2.0.2, so absolute requests/s and
 latencies before and after are not comparable** (wrk needs less client CPU
 per request, which raises client-bound results most). Ratios to Axum are
 always measured with the same tool in the same job.
+
+**v3 scoring revision (19 November 2026).** After an independent review of
+the first full v3 trial, the scoring was rebuilt: client-bound runs are
+compared by requests per CPU-second of the server **and PostgreSQL**
+(PostgreSQL's cost was left out before), a load-generator-bound run whose
+server used less than 75% of its vCPUs is not comparable, the 1% error limit
+applies to every scored run, ties come from an A/A control instead of being
+exact, Hello world replaces Speed (`/db-single` moved to Database), Tiers 2
+and 4 became a pass/fail Stability check, Memory and Startup got floors,
+Rullst's minimal configuration became an unranked diagnostic, the overall
+ranking became optional (off), each endpoint is warmed up just before its
+run (longer for JIT runtimes), rounds run in ABBA order, every
+implementation runs on 2 jobs by default, and conformance gained a
+concurrent step. Rankings from before the revision are not comparable with
+later ones.
 
 ## License
 

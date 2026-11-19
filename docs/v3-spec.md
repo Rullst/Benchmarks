@@ -17,6 +17,23 @@ place). Written on 2026-11-19 against `upstream/main` (2727378) and the
 phase-1 branch `feat/v2-phase1`; sections 2, 3, 5, 6, 9 and 10 were updated
 with what the implementations found. Section 10 is the per-folder checklist.
 
+**Scoring revision (2026-11-19, after an independent review of the first
+full trial).** The scoring and round procedure described in the README's
+"How the scores are computed" and "Method" replace what this document says
+about them: client-bound runs are scored by requests per CPU-second of the
+server and PostgreSQL together; a load-generator-bound run whose server used
+less than 75% of its vCPUs is not comparable; the 1% error rule applies to
+every scored run (not only Application); ties come from an A/A control
+(`frameworks/axum-control`); the categories are Hello world (`/text`,
+`/json`, `/html`), Database (`/db-single` and the three TechEmpower
+endpoints), Application, Memory and Startup (with floors), plus a Stability
+check (Tiers 2 and 4, pass or fail); Rullst's minimal configuration is an
+unranked diagnostic; the overall ranking is optional (off by default); each
+endpoint is warmed up immediately before its run, for 15 s on JIT runtimes;
+rounds run in ABBA order on 2 jobs per implementation; conformance adds a
+concurrent step (125 connections, 3 s, no error allowed). The endpoint
+contracts below are unchanged.
+
 Phase 1 adds the TechEmpower-style `/queries`, `/updates` and `/fortunes`, a
 requests-per-server-CPU-second efficiency metric and the CPU split
 experiment. Phase 2 answers the rest of the review: the suite has no route
@@ -45,7 +62,7 @@ Phase 2 adds five endpoints:
 | Sessions in the load | 125 sessions (one per connection, like 125 signed-in users), obtained in every round before the phase-2 warm-up, cycled across requests | no single hot session row; the same work for every store |
 | Tables a framework owns | `frameworks/<name>/db.sql`, declared in bench.json and applied by the harness; no schema changes at start-up | session tables differ per framework; start-up time stays comparable |
 | Tier | All five in Tier 1: 125 connections, 10 s, after a 5 s warm-up, measured at the end of the round, after Tier 4 | like phase 1's endpoints; reads before writes; after Tier 4 because 125 logins with a memory-hard hash leave allocator memory that would distort the RAM of Tiers 3-4 (§8) |
-| Rankings | A new **Application** category: geometric mean of the five capacity ratios, weighted like the others (1/7); no score for a run with more than 1% errors | same method as phase 1's Database category |
+| Rankings | A new **Application** category: geometric mean of the five capacity ratios; no score for a run with more than 1% errors (since the 2026-11-19 revision, the rule of every scored run) | same method as phase 1's Database category |
 | Contention | A **hot-rows** run: `PUT /world/{id}` on ids 1-10, Tier 1 connections and duration, after the Tier 1 runs; errors, timeouts and p99 reported, not ranked | a reviewer asked for contention; needs no new endpoint (§3.4) |
 | Coexistence | bench.json `"endpoints"` (phase 1's capability list) gains the five names; an implementation that does not declare one is "incomplete" in the Application category, as in phase 1 | §8 |
 
@@ -738,11 +755,13 @@ it):
   `bench/loadgens.json`).
 - `bench/sessions.py`: the browser (cookie jar, form parsing, logins), used by
   conformance and by `measure.phase2_context`.
-- **Round order** (`measure.measure_round`): start, idle window, warm-up and
-  Tier 1 of the endpoints up to `/fortunes` (`/updates` last), Tiers 2-4,
-  the `after` RAM snapshot, then the application phase: sessions (125
-  `GET /form`, 125 logins), warm-up and Tier 1 of the declared phase-2
-  endpoints (reads first, `world-update` last), and the hot-rows run. The
+- **Round order** (`measure.measure_round`, since the 2026-11-19 revision):
+  start, idle window, then for each endpoint up to `/fortunes` (`/updates`
+  last) its warm-up, a 2 s idle settle and its Tier 1 run; Tier 2, Tier 4, a
+  10 s idle period, Tier 3's load (the Memory high-water mark) and the
+  `after` RAM snapshot; then the application phase: sessions (125
+  `GET /form`, 125 logins), warm-up, settle and Tier 1 of each declared
+  phase-2 endpoint (reads first, `world-update` last), and the hot-rows run. The
   first trial (fork run 44571055268) logged in before the warm-up, as the
   plan said: Axum's RAM went from 1.3 MiB idle to 1,041 MiB after the 125
   Argon2id verifications (19 MiB each; glibc keeps the freed memory in its
@@ -1046,5 +1065,7 @@ by the integration of the 16 folders).
    `bench/rankings.py` (`MAX_ERROR_RATE`).
 9. **Each framework's default production session store**, labelled next to
    each result (§6.2).
-10. **The Application category weighs the same as the others** (1/7).
+10. **The Application category weighs the same as the others** in the
+    overall score, which since the 2026-11-19 revision is computed for review
+    and published only when `scoring.publish_overall` is true.
 11. **wrk is built on the runner** (`bench/install-loadgen.sh`), as in 6.

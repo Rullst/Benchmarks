@@ -13,7 +13,10 @@ Each implementation is one folder under `frameworks/`:
 frameworks/<name>/
   bench.json    manifest (below)
   Dockerfile    builds and runs the production server
-  README.md     how it is configured and why
+  README.md     how it is configured and why, with a "Production settings"
+                section: each setting (logging, pool, prepared statements,
+                middleware, server and workers) with the documentation it
+                follows
   ...           application code and lockfile
 ```
 
@@ -143,6 +146,12 @@ Use the framework's own production recommendations for everything else:
 - no response caching, no endpoint-specific tricks, and no tuning that the
   framework's documentation would not recommend to its users.
 
+The rule is the same for every folder, the Rullst ones included. Where the
+documentation recommends nothing, keep the framework's (or the driver's)
+default, even when another setting would be faster, and say so in the
+README. List every setting you checked in the README's "Production settings"
+section with a link to the documentation it follows.
+
 The Dockerfile may write `name version` lines to `/bench/versions.txt` in the
 image; the results then show the resolved versions instead of the manifest's.
 
@@ -207,17 +216,35 @@ its value in that header with `PUT /world/{id}`), `variant`
 environment variables for the container), `build_args_from_env` (environment
 variables passed to `docker build` as build arguments, such as
 `RULLST_VERSION`), `maturity_note` (shown with the results, for example for
-an early 0.x framework) and `notes`.
+an early 0.x framework), `notes`, `jit` (`true` for a runtime whose JIT
+compiles hot code at run time after profiling it: the HotSpot JVM, .NET's
+tiered compilation, V8 for Node.js, Ruby with YJIT, PHP with the OPcache JIT
+turned on; it gets a 15 s warm-up per endpoint instead of 5 s),
+`structure_note` (what else runs inside the server's 2 vCPUs, such as a
+proxy in front of the application server, or a runtime version worth
+naming; shown with the results), and `role` with `role_note`: `ranked` (the
+default), `diagnostic` (shown with a score next to the reference, without a
+position, for example Rullst's minimal configuration) or `control` (the A/A
+control, with `control_of` naming the folder it copies).
+
+The A/A control, `frameworks/axum-control`, is a byte-identical copy of
+`frameworks/axum` except for `bench.json` and `README.md`; `harness.py
+validate` fails otherwise. A change to Axum's folder copies every changed file
+there in the same commit. Its scores set the tie margins of the rankings.
 
 ### Checking your folder
 
 ```sh
+export WRK="$(bench/install-loadgen.sh "$HOME/.local/bin")"  # wrk 4.2.0, for the concurrent step
 python3 bench/harness.py validate
 python3 bench/harness.py conformance --framework <name>
 ```
 
 `conformance` builds the image, starts PostgreSQL and prints the result of
-every check. It checks, and `run` measures, only the endpoints `endpoints`
+every check: first one request at a time, then a concurrent step that sends
+each declared endpoint its measurement workload with 125 connections for
+3 s and requires zero errors (any response that is not 2xx, any transport
+error or timeout fails it). It checks, and `run` measures, only the endpoints `endpoints`
 lists. While the database and application endpoints are being added to every
 folder, a folder without them is measured on the others and listed as
 incomplete in the Database or Application ranking (and so overall); once
