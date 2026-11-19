@@ -31,15 +31,18 @@ export function HowToRead() {
           <strong>How the ranking is computed.</strong> Each category has a score where higher is better and Axum
           is 1.00. <em>Speed</em> (Tier 1, 125 connections) is the geometric mean of the requests/s ratios of
           /text, /json, /db-single and /html; <em>Database</em> (Tier 1) of /queries and /updates (20 random rows
-          per request) and /fortunes. <em>Under pressure</em> (Tier 2, 300 connections for 30 s) and{' '}
+          per request) and /fortunes; <em>Application</em> (Tier 1) of GET /world/{'{id}'}, GET /worlds, PUT
+          /world/{'{id}'}, POST /form (with each framework&apos;s CSRF check) and GET /me (each framework&apos;s
+          default session store), where a run with more than 1% errors gets no score. <em>Under pressure</em> (Tier
+          2, 300 connections for 30 s) and{' '}
           <em>Endurance</em> (Tier 4, 500 connections for 2 minutes) are requests/s ratios; Endurance also lists
-          errors, timeouts, RAM still growing and stops. In these four categories, a run where either server was
+          errors, timeouts, RAM still growing and stops. In these five categories, a run where either server was
           client-bound counts with its server efficiency ratio instead of its requests/s ratio (marked
           &quot;*&quot;). <em>Memory</em> (Tier 3) is 1 divided by the peak RAM ratio, so using half of
           Axum&apos;s RAM scores 2.00 (the table also shows the RAM ratio itself). <em>Startup</em> is Axum&apos;s
           start-up time divided by the framework&apos;s; the harness checks every 0.25 s, so times below 0.25 s
-          count as equal. The <strong>overall score</strong> is the geometric mean of the six category scores,
-          each weighted equally (one sixth). That weighting is a choice, not a fact about the frameworks: the
+          count as equal. The <strong>overall score</strong> is the geometric mean of the seven category scores,
+          each weighted equally (one seventh). That weighting is a choice, not a fact about the frameworks: the
           per-category rankings are the detail, and the one that matters depends on your application.
         </li>
         <li>

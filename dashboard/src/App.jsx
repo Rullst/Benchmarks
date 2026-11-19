@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { History } from './components/History';
 import { HowToRead } from './components/HowToRead';
 import { Ranking } from './components/Ranking';
-import { Implementations, NotMeasured, SummaryTable, TierTables } from './components/Tables';
+import { ApplicationTable, Implementations, NotMeasured, SummaryTable, TierTables } from './components/Tables';
 import { date, num } from './format';
 import './App.css';
 
@@ -68,9 +68,11 @@ export default function App() {
         <h1>Rullst Benchmarks</h1>
         <p className="lede">
           HTTP benchmarks of Rullst and other web frameworks, measured by a GitHub Actions workflow that anyone can
-          rerun. Seven endpoints (<code>/text</code>, <code>/json</code>, <code>/db-single</code>, <code>/html</code>,
-          and the database endpoints <code>/queries</code>, <code>/updates</code>, <code>/fortunes</code>), four load
-          tiers, conformance-checked responses.
+          rerun. Twelve endpoints (<code>/text</code>, <code>/json</code>, <code>/db-single</code>, <code>/html</code>;
+          the database endpoints <code>/queries</code>, <code>/updates</code>, <code>/fortunes</code>; the application
+          endpoints <code>GET /world/{'{id}'}</code>, <code>GET /worlds</code>, <code>PUT /world/{'{id}'}</code>,
+          <code>POST /form</code> with CSRF and <code>GET /me</code> with a session), four load tiers,
+          conformance-checked responses.
         </p>
         <nav className="links">
           <a href={`${REPO}#method`}>Method and limitations</a>
@@ -94,10 +96,11 @@ export default function App() {
           <section>
             <h2>Ranking</h2>
             <p className="note">
-              An overall ranking and one per category: Speed and Database (Tier 1), Under pressure (Tier 2), Memory
-              (Tier 3), Endurance (Tier 4) and Startup. &quot;3=&quot; is a shared position (a tie); Axum is the
+              An overall ranking and one per category: Speed, Database and Application (Tier 1), Under pressure
+              (Tier 2), Memory (Tier 3), Endurance (Tier 4) and Startup. &quot;3=&quot; is a shared position (a tie); Axum is the
               reference and has no position; an implementation with a missing or left-out result, or an endpoint it
-              does not serve yet, is listed as incomplete, without a position. &quot;How to read these results&quot;
+              does not serve yet, is listed as incomplete, without a position, and an Application run with more than
+              1% errors gets no score. &quot;How to read these results&quot;
               above explains the scores.
             </p>
             <Ranking rankings={state.data.rankings} rows={state.rows} />
@@ -105,6 +108,7 @@ export default function App() {
           <section>
             <h2>Summary</h2>
             <SummaryTable rows={state.rows} />
+            <ApplicationTable rows={state.rows} />
             {state.rows
               .filter((row) => row.excluded?.length)
               .map((row) => (

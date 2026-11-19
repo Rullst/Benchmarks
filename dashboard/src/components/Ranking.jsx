@@ -24,12 +24,17 @@ const RUN_NAMES = {
   'tier1.queries': '/queries',
   'tier1.updates': '/updates',
   'tier1.fortunes': '/fortunes',
+  'tier1.world': 'GET /world/{id}',
+  'tier1.worlds': 'GET /worlds',
+  'tier1.world-update': 'PUT /world/{id}',
+  'tier1.form': 'POST /form',
+  'tier1.me': 'GET /me',
   tier2: 'Tier 2',
   tier4: 'Tier 4',
 };
 
 function notes(entry, names) {
-  if (['not measured', 'incomplete', 'not comparable'].includes(entry.status)) return entry.reason;
+  if (['not measured', 'incomplete', 'not comparable', 'errors'].includes(entry.status)) return entry.reason;
   const out = [];
   if (entry.tie && entry.tied_with?.length) out.push(`tie with ${entry.tied_with.map(names).join(', ')}`);
   if (entry.client_bound) out.push('client-bound');
@@ -77,6 +82,19 @@ const DETAIL = {
     value: score,
     columns: ['/queries', '/updates', '/fortunes'],
     cells: (e) => ['queries', 'updates', 'fortunes'].map((ep) => times(e.detail[ep])),
+  },
+  application: {
+    title: 'Score',
+    value: score,
+    columns: ['GET /world/{id}', 'GET /worlds', 'PUT /world/{id}', 'POST /form', 'GET /me', 'CSRF', 'Session store'],
+    cells: (e) => [
+      ...['world', 'worlds', 'world-update', 'form', 'me'].map((ep) => {
+        const rate = e.detail.error_rates?.[ep];
+        return rate > 0.01 ? `${(rate * 100).toFixed(1)}% errors` : times(e.detail[ep]);
+      }),
+      e.detail.csrf ?? '–',
+      e.detail.session_store ?? '–',
+    ],
   },
   pressure: {
     title: 'Score',
@@ -165,7 +183,7 @@ export function Ranking({ rankings, rows }) {
       </div>
       {category ? (
         <RankTable
-          caption={`${category.title}${category.tier ? ` (${category.tier})` : ''}: ${category.description}. The bar shows the score (longer is better); the line marks Axum.${['speed', 'database', 'pressure', 'endurance'].includes(category.key) ? ' Endpoint columns are requests/s ratios; "*" marks a score where a client-bound run counted with its server efficiency.' : ''}`}
+          caption={`${category.title}${category.tier ? ` (${category.tier})` : ''}: ${category.description}. The bar shows the score (longer is better); the line marks Axum.${['speed', 'database', 'application', 'pressure', 'endurance'].includes(category.key) ? ' Endpoint columns are requests/s ratios; "*" marks a score where a client-bound run counted with its server efficiency.' : ''}`}
           title={DETAIL[category.key]?.title ?? 'vs Axum'}
           entries={category.entries}
           extra={DETAIL[category.key]?.columns ?? []}
