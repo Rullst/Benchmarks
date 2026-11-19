@@ -1,0 +1,48 @@
+{
+  "name": "Axum",
+  "language": "Rust",
+  "group": "rust",
+  "framework": "axum",
+  "framework_version": "0.8.9",
+  "version_package": "axum",
+  "runtime": "Rust 1.99.1 (release build, thin LTO)",
+  "server": "Hyper via axum::serve",
+  "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
+  "database_layer": "SQLx 0.9 PgPool with test_before_acquire(false) (the baseline keeps SQLx's default, true)",
+  "template_engine": "Askama 0.16",
+  "logging": "none",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "Path, Query, Json and Form extractors (type errors: 400, Json data errors 422); ranges checked by hand (422)",
+    "csrf": {
+      "design": "token",
+      "mechanism": "axum_csrf 0.12 (token in an encrypted cookie, HMAC in the form field)",
+      "source": "library"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "tower-sessions 0.15 with tower-sessions-sqlx-store 0.16 PostgresStore",
+      "source": "library"
+    },
+    "write_csrf": null
+  },
+  "startup_timeout_s": 120,
+  "notes": "Diagnostic: frameworks/axum with SQLx's test_before_acquire off; unranked.",
+  "variant": "test_before_acquire off",
+  "role": "diagnostic",
+  "role_note": "Axum with one change: the SQLx pool does not ping an idle connection before handing it out (PgPoolOptions::test_before_acquire(false); the default is true). It bounds how much the ping costs Axum, and every other SQLx implementation, in the database endpoints. SQLx 0.9 also pings every connection when it returns to the pool, whatever this setting; that ping stays. Unranked."
+}
