@@ -68,12 +68,16 @@ RUN mkdir /bench \
        } > /bench/versions.txt \
     && rm /tmp/versions.txt && cat /bench/versions.txt
 # Production settings, read by `php artisan optimize` at start-up. APP_KEY is a
-# fixed dummy key: there is nothing to protect in this benchmark.
+# fixed dummy key (every PHP-FPM process encrypts the session and CSRF
+# cookies with it); it protects only the benchmark's test accounts.
+# BCRYPT_ROUNDS is the cost of the stored hashes (bench/db/phase2.sql: 10), so
+# Laravel's rehash-on-login does not rewrite users.password_bcrypt.
+# The session driver is set in config/session.php (cookie; see README.md).
 ENV APP_ENV=production \
     APP_DEBUG=false \
     APP_KEY=base64:YmVuY2htYXJrLWR1bW15LWtleS1wcm90ZWN0cy1ubyE= \
     DB_CONNECTION=pgsql \
-    SESSION_DRIVER=cookie \
+    BCRYPT_ROUNDS=10 \
     LOG_CHANNEL=stderr \
     LOG_LEVEL=warning
 EXPOSE 8080

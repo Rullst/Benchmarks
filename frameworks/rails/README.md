@@ -1,7 +1,10 @@
 # Ruby on Rails
 
 A `rails new bench --database=postgresql` application with the Dockerfile
-that command generates, and the four endpoints as actions of one controller.
+that command generates. The four original endpoints and phase 1's database
+endpoints are actions of one controller (`BenchController`); phase 2's are in
+`WorldsController`, `FormsController`, `SessionsController` and
+`UsersController`.
 
 | | |
 | --- | --- |
@@ -10,7 +13,11 @@ that command generates, and the four endpoints as actions of one controller.
 | Server | Thruster, the HTTP proxy the generated Dockerfile starts, on `$PORT`, in front of Puma on port 3000 |
 | Workers | Puma cluster mode with `WEB_CONCURRENCY` = `BENCH_WORKERS` (2) workers, the application preloaded (Puma's default in cluster mode), 3 threads per worker (the generated `RAILS_MAX_THREADS` default) |
 | Database | Active Record, `World.find(1)`; each worker's pool holds up to `DB_POOL_SIZE / WEB_CONCURRENCY` = 8 connections (16 in total, never fewer than the thread count) |
-| Templates | ERB, `app/views/bench/hello_html.html.erb` (the app has no layout) |
+| Database endpoints | `/queries`: `World.find` per row. `/updates`: per row, `World.find`, a new random value (drawn again while it equals the current one, so the row changes) and `save!`, all in one `World.transaction` with the ids sorted, so concurrent requests lock rows in the same order. Both run inside `World.uncached`: Rails enables Active Record's query cache for every request, which would answer a repeated id without a query. `/fortunes`: `Fortune.all` (no `ORDER BY`), sorted in Ruby (`sort_by(&:message)`, byte order, i.e. code points), rendered by ERB without a layout |
+| Request input (phase 2) | `GET /world/:id` and `PUT /world/:id` have the route constraint `id: /\d+/`, so a non-integer id matches no route (404). `GET /worlds` and the bodies are validated with Active Model form objects (`app/forms/`, `ActiveModel::API` with `numericality` and `length` validations): 422 with the errors. The raw strings are validated, so `abc` and `1.5` fail; the JSON body's `randomNumber` must also be an `Integer` (a JSON string `"5"` passes `numericality`). Malformed JSON raises `ActionDispatch::Http::Parameters::ParseError` (400). `GET /worlds` is one `World.where(id: min..max).order(:id).limit().offset()` query. `PUT /world/:id` validates the body, then `World.find_by` (404 without a row) and `update!` (Active Record's transaction for a save) |
+| CSRF | `protect_from_forgery`, on by default in `ActionController::Base` (`with: :exception`): `GET /form` and `GET /login` (`form_with`) put a masked `authenticity_token` in the form and the real token in the encrypted cookie session (`_bench_session`); a post is checked against it, and its `Origin` header, when present, against the request's base URL (`forgery_protection_origin_check`, on since Rails 5). A forged post raises `InvalidAuthenticityToken`, answered 422. The token does not change during the session. `PUT /world/:id` is exempt with `skip_forgery_protection only: :update` (a public JSON API call) |
+| Sessions | `bin/rails generate authentication` (Rails 8.1), adapted to the shared `users` table: `User` with `has_secure_password` (bcrypt 3.1, the gem the generator uncomments) reading `users.password_bcrypt` (`alias_attribute :password_digest, :password_bcrypt`), `User.authenticate_by(username:, password:)`, the `Session` model and the `Authentication` concern. A login inserts a `sessions` row (table in [`db.sql`](db.sql), the SQL of the generated migration) and sets the signed `session_id` cookie; `GET /me` finds the row by that id, then loads the user through the session's association (one `SELECT` each); without a session it redirects to `/login` (302) |
+| Templates | ERB, `app/views/` (the app has no layout; the HTML actions also say `layout false`) |
 | Logging | `RAILS_LOG_LEVEL=warn`: the generated `info` level writes lines for every request. Thruster's request log is off (`LOG_REQUESTS=false`) |
 | Image | `ruby:4.0.9-slim-trixie` (the generated `ruby:$RUBY_VERSION-slim`, tag written out) |
 
@@ -24,6 +31,20 @@ through Rails' default middleware stack and the generated
 the harness and the load generator are not browsers).
 
 Changes from the generated files, and why:
+
+- **Authentication, phase 2**: the generator includes the `Authentication`
+  concern in `ApplicationController`, which puts every action behind a login.
+  Here only `SessionsController` and `UsersController` include it, so the
+  other endpoints keep their stack (docs/v2-phase2-spec.md, section 2.3). The
+  generated `rate_limit to: 10, within: 3.minutes` on the login is left out:
+  it would refuse the harness's 125 logins from 127.0.0.1 in every round.
+  The login form posts `username` (generated: `email_address`), and a login
+  redirects to `/me` (generated: `root_url`; the app has no root route). The
+  routes are `/login` and `/me` instead of `resource :session`.
+- **Middleware**: none added. The cookie session and `protect_from_forgery`
+  are part of the generated `ActionController::Base` stack that every
+  endpoint already went through; they write a cookie only when an action
+  uses the session.
 
 - **Pool size** (`config/database.yml`): `DB_POOL_SIZE / WEB_CONCURRENCY`
   per worker instead of `RAILS_MAX_THREADS` (5), so the server never opens

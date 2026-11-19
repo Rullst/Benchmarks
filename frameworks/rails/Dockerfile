@@ -78,8 +78,9 @@ COPY --chown=rails:rails --from=build /rails /rails
 COPY --from=build /bench/versions.txt /bench/versions.txt
 
 # Benchmark: the settings below replace what a deployment would provide.
-# A fixed dummy secret: there are no sessions, cookies or credentials to
-# protect in this benchmark.
+# A fixed dummy secret, the same in every Puma worker: it encrypts the cookie
+# session (CSRF token) and signs the session_id cookie of the benchmark's
+# test accounts, and protects nothing else.
 ENV SECRET_KEY_BASE="benchmark-dummy-secret-key-base-it-protects-nothing-0123456789abcdef0123456789abcdef" \
     RAILS_LOG_LEVEL="warn" \
     LOG_REQUESTS="false"

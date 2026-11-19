@@ -11,6 +11,35 @@
   "database_layer": "Ecto 3.14 with Postgrex, pool of DB_POOL_SIZE (16) connections",
   "template_engine": "HEEx",
   "logging": "Logger level :warning (no request lines)",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "Schemaless Ecto changesets for the query string, the JSON body and the form: 422; the id cast with Ecto.Type.cast: 400 for a non-integer; malformed JSON 400",
+    "csrf": {
+      "design": "token",
+      "mechanism": "protect_from_forgery (:browser pipeline, Plug.CSRFProtection): token in the signed cookie session, masked _csrf_token field; 403",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "mix phx.gen.auth: a session token in the signed cookie session, looked up in users_tokens joined with users (one query); bcrypt_elixir on users.password_bcrypt",
+      "source": "generator"
+    },
+    "write_csrf": null
+  },
   "startup_timeout_s": 120,
   "notes": "mix phx.new and mix phx.gen.release --docker; the generated force_ssl excludes localhost and 127.0.0.1."
 }

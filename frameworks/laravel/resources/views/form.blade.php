@@ -1,0 +1,1 @@
+<!DOCTYPE html><html><head><title>Form</title></head><body><form method="post" action="/form">@csrf<input type="text" name="name"><input type="number" name="randomNumber"><button type="submit">Send</button></form></body></html>

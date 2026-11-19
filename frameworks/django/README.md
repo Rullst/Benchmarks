@@ -8,12 +8,17 @@ and served by Gunicorn as in
 
 | | |
 | --- | --- |
-| Version | Django 6.1.3, Gunicorn 27.0.1, psycopg 3.3.9 on Python 3.15.2 (exact versions and hashes in `requirements.txt`) |
+| Version | Django 6.1.3, Gunicorn 27.0.1, psycopg 3.3.9, bcrypt 5.0.0 on Python 3.15.2 (exact versions and hashes in `requirements.txt`) |
 | Build | `pip install --require-hashes -r requirements.txt` into a virtual environment; psycopg's C extension is built against Debian's libpq |
 | Server | Gunicorn with the threaded worker (`gthread`), configured in `gunicorn.conf.py` |
 | Workers | `BENCH_WORKERS` (2) worker processes, 8 threads each |
 | Database | Django ORM, `World.objects.get(pk=1)` on an unmanaged model of the `world` table; persistent connections (`CONN_MAX_AGE = 600`): each thread keeps one, so at most 2 x 8 = 16 |
-| Templates | Django templates (`world/templates/hello.html`); with `DEBUG = False` Django uses the cached template loader, which keeps compiled templates, not rendered pages |
+| Database endpoints | `/queries`: `World.objects.get(pk=…)` per row. `/updates`: per row, `get`, a new random value (drawn again while it equals the current one) and `save(update_fields=['randomnumber'])`, all in one `transaction.atomic()` with the ids sorted, so concurrent requests lock rows in the same order. `/fortunes`: `Fortune.objects.all()` (no `ORDER BY`), sorted in Python (code points), rendered by a Django template (autoescaped) |
+| Request input (phase 2) | `path('world/<int:id>')`: the `int` converter matches digits only, so a non-integer id is 404. Django forms validate `GET /worlds` (`WorldsForm(request.GET)`, `IntegerField` with `min_value`/`max_value`, defaults for absent parameters, `min <= max` in `clean()`), the PUT body (`WorldUpdateForm(json.loads(request.body))`, plus a check that the value is a JSON integer, since `IntegerField` accepts the string `"5"`) and `POST /form` (`GreetingForm(request.POST)`): 422 with the errors (the form page is rendered again for `/form`). Malformed JSON is 400 (`json.loads` in a `try`; Django has no JSON body parser). `GET /worlds` is one query (`filter(id__gte, id__lte).order_by('id')[offset:offset + limit]`). `PUT /world/{id}` validates first, then loads the row (404 without one) and `save(update_fields=…)`s it |
+| CSRF | `CsrfViewMiddleware` (in the generated `MIDDLEWARE`): `{% csrf_token %}` sets the secret in the `csrftoken` cookie and puts a masked copy in the `csrfmiddlewaretoken` field; a post's field must unmask to the cookie's secret, and its `Origin`, when present, must match the host. A forged post gets 403. The cookie keeps its secret until a login rotates it. `PUT /world/{id}` is `@csrf_exempt` (a public JSON API call) |
+| Sessions | `django.contrib.auth` with the default database session backend: `LoginView` (`AuthenticationForm`: `username`, `password`) on `/login` redirects to `/me` (`LOGIN_REDIRECT_URL`); `AuthenticationMiddleware` gives `/me` its `request.user`: one `SELECT` of the `django_session` row (table in [`db.sql`](db.sql), from `manage.py sqlmigrate sessions 0001`), then the user's row (`ModelBackend.get_user`), with no write. `@login_required` redirects a request without a session to `/login` (302). The user model is a custom `AbstractBaseUser` on the shared `users` table (`AUTH_USER_MODEL = 'world.User'`, unmanaged) |
+| Passwords | `BCryptPasswordHasher` (Django's plain bcrypt hasher, with the `bcrypt` package) on `users.password_bcrypt`, read with the `bcrypt$` prefix Django's hashers expect; subclassed with `rounds = 10`, the cost of the stored hashes, as Django's documentation changes a work factor, so a login does not rehash and rewrite the password. The table has no `last_login` column, so the model removes that field and Django does not record logins |
+| Templates | Django templates (`world/templates/`); with `DEBUG = False` Django uses the cached template loader, which keeps compiled templates, not rendered pages |
 | Logging | none: Gunicorn's access log is off (its default) and Django logs nothing for successful requests; warnings and errors go to stderr |
 | Image | `python:3.15.2-slim-trixie` |
 
@@ -30,8 +35,13 @@ Settings changed from the generated `settings.py`, and why:
   `INSTALLED_APPS` (no admin site and no static files). The default
   `MIDDLEWARE` list and template context processors are unchanged, so every
   request goes through the security, session, common, CSRF, authentication,
-  messages and clickjacking middleware. None of them writes to the database
-  or sets a cookie for these requests.
+  messages and clickjacking middleware (Django has no per-route middleware;
+  phase 2's endpoints add no middleware). The session and the user are loaded
+  lazily, so the existing endpoints neither query `django_session` nor set a
+  cookie.
+- Phase 2: `AUTH_USER_MODEL`, `PASSWORD_HASHERS`, `LOGIN_URL` and
+  `LOGIN_REDIRECT_URL` (see the table). There is no login throttle in Django
+  to configure.
 - The checklist's HTTPS settings (`SECURE_SSL_REDIRECT`, HSTS, secure
   cookies) stay at their defaults: there is no TLS, and the redirect would
   send every request to `https://`.
@@ -51,4 +61,5 @@ psycopg is installed from source with its C extension (`psycopg[c]`), the
 [documentation](https://www.psycopg.org/psycopg3/docs/basic/install.html)
 recommends for production. `requirements.txt` was compiled from
 `requirements.in` for Python 3.15 on x86_64 Linux with
-`uv pip compile --generate-hashes` (command at the top of the file).
+`uv pip compile --generate-hashes` (command at the top of the file); the
+Dockerfile's `lockfile` stage runs that command for the pull request check.

@@ -5,3 +5,6 @@ gunicorn==27.0.1
 # psycopg's "local installation" (C extension built against the system libpq),
 # which its documentation recommends for production.
 psycopg[c]==3.3.9
+# The hasher of Django's BCryptPasswordHasher (the login checks
+# users.password_bcrypt; see README.md).
+bcrypt==5.0.0
