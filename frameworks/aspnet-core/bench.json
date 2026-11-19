@@ -8,7 +8,7 @@
   "runtime": ".NET 10.0.15 (Release build, framework-dependent publish)",
   "server": "Kestrel",
   "workers": ".NET thread pool sized by the runtime for 2 vCPUs; Server GC (the ASP.NET Core default)",
-  "database_layer": "Entity Framework Core 10.0 with the Npgsql provider, pool of 16 connections",
+  "database_layer": "Entity Framework Core 10.0 with the Npgsql provider, pool of 16 connections, Npgsql automatic preparation (Max Auto Prepare=20)",
   "template_engine": "Razor Pages",
   "logging": "none per request (Microsoft.AspNetCore and EF Core command logs at Warning); start-up log at Information",
   "endpoints": [
@@ -39,5 +39,6 @@
     },
     "write_csrf": null
   },
-  "startup_timeout_s": 120
+  "startup_timeout_s": 120,
+  "jit": true
 }

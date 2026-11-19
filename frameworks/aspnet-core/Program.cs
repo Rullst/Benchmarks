@@ -208,7 +208,12 @@ static class Database
 {
     /// <summary>
     /// Translates postgres://user:password@host:port/database into an Npgsql
-    /// connection string with "Maximum Pool Size" set to the harness's pool size.
+    /// connection string with "Maximum Pool Size" set to the harness's pool size
+    /// and Npgsql's automatic preparation turned on ("Max Auto Prepare", 0 and
+    /// so off by default): EF Core does not prepare its commands, and Npgsql's
+    /// performance guide offers automatic preparation for O/RMs. The application
+    /// runs fewer than ten distinct statements, so 20 keeps all of them prepared;
+    /// "Auto Prepare Min Usages" keeps its default (5).
     /// </summary>
     public static string ConnectionString(string databaseUrl, int maxPoolSize)
     {
@@ -222,6 +227,7 @@ static class Database
             Username = Uri.UnescapeDataString(credentials[0]),
             Password = credentials.Length > 1 ? Uri.UnescapeDataString(credentials[1]) : null,
             MaxPoolSize = maxPoolSize,
+            MaxAutoPrepare = 20,
         };
         return builder.ConnectionString;
     }
