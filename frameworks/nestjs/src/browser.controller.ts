@@ -6,27 +6,38 @@ import {
   Post,
   Redirect,
   Render,
+  Req,
   UnauthorizedException,
-  UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AuthenticationGuard, CurrentUser, SignInService } from '@nestjs/authentication';
 import bcrypt from 'bcrypt';
+import type { Session, SessionData } from 'express-session';
 import { Repository } from 'typeorm';
 import { FormInput, LoginInput } from './dto.js';
 import { User } from './user.entity.js';
 
+declare module 'express-session' {
+  interface SessionData {
+    userId: number;
+  }
+}
+
+/** The request as express-session leaves it (app.module.ts applies it to these routes only). */
+interface SessionRequest {
+  session: Session & Partial<SessionData>;
+}
+
 /**
  * The browser routes. CSRF: app.enableCsrfProtection() (main.ts) refuses
- * cross-origin POSTs before any handler runs. Sessions: @nestjs/authentication.
+ * cross-origin POSTs before any handler runs. Sessions: express-session with
+ * connect-pg-simple, as middleware of these routes only.
  */
 @Controller()
 export class BrowserController {
   constructor(
     @InjectRepository(User)
     private readonly users: Repository<User>,
-    private readonly signIn: SignInService,
   ) {}
 
   @Get('form')
@@ -51,10 +62,14 @@ export class BrowserController {
     return {};
   }
 
-  /** bcrypt (the package Nest's hashing chapter names) against users.password_bcrypt, then a server-side session. */
+  /**
+   * bcrypt (the package Nest's hashing chapter names) against
+   * users.password_bcrypt, then a new session id (no session fixation) that
+   * holds the user's id; express-session stores it when the response ends.
+   */
   @Post('login')
   @Redirect('/me', 303)
-  async submitLogin(@Body(new ValidationPipe()) input: LoginInput): Promise<void> {
+  async submitLogin(@Req() request: SessionRequest, @Body(new ValidationPipe()) input: LoginInput): Promise<void> {
     const user = await this.users.findOne({
       select: { id: true, passwordBcrypt: true },
       where: { username: input.username },
@@ -62,13 +77,26 @@ export class BrowserController {
     if (user === null || !(await bcrypt.compare(input.password, user.passwordBcrypt))) {
       throw new UnauthorizedException();
     }
-    await this.signIn.signIn(String(user.id), { method: 'password' });
+    await new Promise<void>((resolve, reject) =>
+      request.session.regenerate((error: unknown) => (error ? reject(error) : resolve())),
+    );
+    request.session.userId = user.id;
   }
 
-  /** The guard resolves the session and loads the user's row (SessionAuth) on every request. */
+  /** express-session loads the session from PostgreSQL; the user's row is read on every request. */
   @Get('me')
-  @UseGuards(AuthenticationGuard)
-  me(@CurrentUser() user: User): { id: number; username: string; displayName: string } {
+  async me(@Req() request: SessionRequest): Promise<{ id: number; username: string; displayName: string }> {
+    const id = request.session.userId;
+    if (id === undefined) {
+      throw new UnauthorizedException();
+    }
+    const user = await this.users.findOne({
+      select: { id: true, username: true, displayName: true },
+      where: { id },
+    });
+    if (user === null) {
+      throw new UnauthorizedException();
+    }
     return { id: user.id, username: user.username, displayName: user.displayName };
   }
 }

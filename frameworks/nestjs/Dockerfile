@@ -14,13 +14,13 @@ COPY --from=resolve /app/package-lock.json /
 FROM node:26.13.1-trixie-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 # Record the resolved versions of the main packages for the results.
 RUN node -e 'const fs = require("node:fs"); \
-      for (const name of ["@nestjs/core", "@nestjs/platform-node", "@nestjs/authentication", "@nestjs/typeorm", "typeorm", "pg", "hbs", "handlebars", "class-validator", "bcrypt"]) \
+      for (const name of ["@nestjs/core", "@nestjs/platform-node", "@nestjs/typeorm", "typeorm", "pg", "hbs", "handlebars", "class-validator", "bcrypt", "express-session", "connect-pg-simple"]) \
         console.log(name, JSON.parse(fs.readFileSync(`node_modules/${name}/package.json`, "utf8")).version); \
       console.log("node", process.versions.node);' > versions.txt \
     && cat versions.txt

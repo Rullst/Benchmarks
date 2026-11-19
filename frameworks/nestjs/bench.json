@@ -35,10 +35,13 @@
     },
     "session": {
       "store": "postgresql",
-      "mechanism": "@nestjs/authentication 0.1 SessionCookieProvider, server-side sessions in a TypeORM SessionStore (hand-written)",
+      "mechanism": "express-session 1.19 with connect-pg-simple 10 (the documented session middleware with its PostgreSQL store), on /form, /login and /me only",
       "source": "documented"
     },
     "write_csrf": null
+  },
+  "env": {
+    "SESSION_SECRET": "22f8ac011589e0f89464699dd11177a7384d321dbfe689d27099f48abf4bcb97"
   },
   "startup_timeout_s": 120,
   "notes": "Nest's documentation recommends the NodeAdapter since v12.3; Nest still uses Express when no adapter is passed."
