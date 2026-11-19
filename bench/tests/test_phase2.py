@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import random
+import socket
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -83,6 +86,48 @@ class BrowserTests(unittest.TestCase):
         self.assertIsNone(S.find_form(self.PAGE, "/login"))
         self.assertIsNotNone(S.find_form('<form method="post"><input name="u"></form>', "/login"))
 
+    def test_browser_reconnects_after_an_error_response(self):
+        """A server that closes the connection after a 404 without `Connection: close`."""
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(2)
+        listener.settimeout(10)
+        accepted = []
+
+        def serve():
+            for _ in range(2):
+                conn, _ = listener.accept()
+                accepted.append(conn)
+                with conn:
+                    buffer = b""
+                    while True:
+                        while b"\r\n\r\n" not in buffer:
+                            chunk = conn.recv(4096)
+                            if not chunk:
+                                break
+                            buffer += chunk
+                        if b"\r\n\r\n" not in buffer:
+                            break
+                        head, buffer = buffer.split(b"\r\n\r\n", 1)
+                        missing = head.split(b" ", 2)[1] == b"/missing"
+                        status = b"404 Not Found" if missing else b"200 OK"
+                        conn.sendall(b"HTTP/1.1 " + status + b"\r\nContent-Length: 2\r\n\r\nok")
+                        if missing:
+                            break
+
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        browser = S.Browser(listener.getsockname()[1])
+        try:
+            self.assertEqual(browser.get("/ok").status, 200)
+            self.assertEqual(browser.get("/missing").status, 404)
+            self.assertEqual(browser.get("/ok").status, 200)
+        finally:
+            browser.close()
+            thread.join(10)
+            listener.close()
+        self.assertEqual(len(accepted), 2)
+
     def test_cookie_jar_ignores_attributes_and_drops_expired_cookies(self):
         browser = S.Browser(1)
         names = browser.store(["__Host-sid=abc; Path=/; Secure; HttpOnly; SameSite=Strict",
@@ -107,6 +152,26 @@ class ConformanceHelperTests(unittest.TestCase):
         self.assertEqual(C._tampered("abcde"), "abAde")
         self.assertEqual(C._tampered("AAAAA"), "AABAA")
         self.assertEqual(sum(a != b for a, b in zip("qzU4F8wicvIIdcJE=", C._tampered("qzU4F8wicvIIdcJE="))), 1)
+
+    def test_changed_value_never_repeats_the_stored_one(self):
+        class Fixed:
+            def __init__(self, value):
+                self.value = value
+
+            def randint(self, low, high):
+                self.bounds = (low, high)
+                return self.value
+
+        for current, draw, expected in ((1, 1, 2), (5000, 4999, 4999), (5000, 5000, 5001), (10000, 9999, 9999),
+                                        (54321, 9999, 9999)):
+            rng = Fixed(draw)
+            self.assertEqual(C.changed_value(rng, current), expected, (current, draw))
+            self.assertEqual(rng.bounds, (1, 9999))
+        rng = random.Random(7)
+        for current in (1, 2, 5000, 9999, 10000, 54321):
+            values = {C.changed_value(rng, current) for _ in range(2000)}
+            self.assertNotIn(current, values)
+            self.assertTrue(values <= set(range(1, 10001)))
 
     def test_world_objects_are_strict(self):
         self.assertEqual(C._world({"id": 1, "randomNumber": 2}), (1, 2))

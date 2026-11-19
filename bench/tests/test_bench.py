@@ -196,6 +196,21 @@ class EndpointConformanceTests(unittest.TestCase):
         one = [(i, i if i == 3 else 100 + i) for i in range(1, 21)]
         self.assertIsNone(conformance.check_update_rows(one, before, after | {3: 3}))
 
+    def test_required_update_rows_ignore_unchanged_values(self):
+        required = conformance.required_update_rows
+        before = {i: i for i in range(1, 31)}
+        rows = [(i, 100 + i) for i in range(1, 21)]
+        after = before | {i: 100 + i for i in range(1, 21)}
+        self.assertEqual(required(rows, before, after), 20)
+        # A new random value equal to the old one: an ORM that tracks changes writes nothing for it.
+        same = [(i, i if i == 3 else 100 + i) for i in range(1, 21)]
+        self.assertEqual(required(same, before, after | {3: 3}), 19)
+        # A repeated id counts once, and not at all when it ends where it started.
+        self.assertEqual(required(rows + [(5, 999)], before, after | {5: 999}), 20)
+        self.assertEqual(required(rows + [(5, 5)], before, after | {5: 5}), 19)
+        # Only the database before and after matters, not the order of the rows.
+        self.assertEqual(required(list(reversed(rows)), before, after), 20)
+
     def test_fortunes_html(self):
         check = conformance.check_fortunes_body
         expected = conformance.FORTUNES_HTML

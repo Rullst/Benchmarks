@@ -74,7 +74,11 @@ def _expired(attributes: list[str]) -> bool:
 
 
 class Browser:
-    """A cookie jar and one keep-alive connection to the server under test."""
+    """A cookie jar and one keep-alive connection to the server under test.
+
+    The connection is replaced after a response that closes it and after an
+    error response (4xx, 5xx).
+    """
 
     def __init__(self, port: int, cookies: dict[str, str] | None = None):
         self.port = port
@@ -113,7 +117,9 @@ class Browser:
         except (OSError, http.client.HTTPException):
             self.close()
             raise
-        if response.will_close:
+        if response.will_close or response.status >= 400:
+            # A server may close the connection after an error response without
+            # saying so (no `Connection: close`): the next request reconnects.
             self.close()
         self.store(response.set_cookies)
         return response

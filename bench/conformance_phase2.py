@@ -79,6 +79,23 @@ def _row(config: dict, ident: int) -> int:
     return int(psql(config, f"SELECT randomnumber FROM world WHERE id = {int(ident)}"))
 
 
+def _rows(config: dict, ids) -> dict[int, int]:
+    """The randomNumber of each of `ids`, in one query."""
+    listed = ",".join(str(int(ident)) for ident in ids)
+    rows = psql(config, f"SELECT id, randomnumber FROM world WHERE id IN ({listed})")
+    return {int(i): int(n) for i, n in (line.split("|") for line in rows.splitlines() if line)}
+
+
+def changed_value(rng: random.Random, current: int) -> int:
+    """A randomNumber in 1..10000 other than `current`, uniform over the others.
+
+    A PUT of the stored value may write nothing (an ORM that tracks changes
+    skips the UPDATE), so the checks that count UPDATEs never send one.
+    """
+    value = rng.randint(1, MAX_ID - 1)
+    return value + 1 if value >= current else value
+
+
 # ---------------------------------------------------------------- GET /world/{id}
 
 def check_world(port: int, config: dict, _settings: dict) -> str | None:
@@ -100,6 +117,8 @@ def check_world(port: int, config: dict, _settings: dict) -> str | None:
                 return problem
             if _world(body) != (ident, value):
                 return f"{what}: {body!r} != {{'id': {ident}, 'randomNumber': {value}}} (the row in the database)"
+        # The browser reconnects after each refusal: a server may close the
+        # connection after an error response.
         for path in ("/world/0", "/world/10001"):
             problem = _status(browser.get(path), (404,), f"GET {path}")
             if problem:
@@ -212,8 +231,11 @@ def check_world_update(port: int, config: dict, settings: dict) -> str | None:
     rng = random.Random()
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
     try:
-        for ident in rng.sample(range(1, MAX_ID + 1), 5):
-            value = rng.randint(1, MAX_ID)
+        ids = rng.sample(range(1, MAX_ID + 1), 5)
+        current = _rows(config, ids)
+        for ident in ids:
+            # A new value: the database after the request shows that the PUT wrote it.
+            value = changed_value(rng, current[ident])
             what = f"PUT /world/{ident} {{\"randomNumber\": {value}}}"
             response = _put(port, conn, ident, json.dumps({"randomNumber": value}), headers)
             problem = _ok(response, JSON_TYPE, what)
@@ -247,12 +269,17 @@ def check_world_update(port: int, config: dict, settings: dict) -> str | None:
         if problem:
             return problem
         conn.close()
+        # 20 different rows, each given a value other than the stored one, so
+        # that every request must run an UPDATE (read before the reset: the
+        # harness's own SELECT is not counted).
+        ids = rng.sample(range(1, MAX_ID + 1), 20)
+        current = _rows(config, ids)
         reset_statements(config)
-        for _ in range(20):
-            response = _put(port, conn, rng.randint(1, MAX_ID), json.dumps({"randomNumber": rng.randint(1, MAX_ID)}),
+        for ident in ids:
+            response = _put(port, conn, ident, json.dumps({"randomNumber": changed_value(rng, current[ident])}),
                             headers)
             if response.status != 200:
-                return f"PUT /world/{{id}}: status {response.status}"
+                return f"PUT /world/{ident}: status {response.status}"
         stats = statements(config, "world")
         if stats["update_calls"] < 20:
             return f"20 requests ran {stats['update_calls']} UPDATE statements on world: write on every request"

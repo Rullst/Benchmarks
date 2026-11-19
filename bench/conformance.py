@@ -24,7 +24,6 @@ from __future__ import annotations
 import http.client
 import json
 import random
-from collections import Counter
 from html.parser import HTMLParser
 
 from common import BASE_ENDPOINTS
@@ -179,6 +178,20 @@ def check_update_rows(rows: list[tuple[int, int]], before: dict[int, int], after
     if changed < int(UPDATED_SHARE * len(returned)):
         return f"only {changed} of {len(returned)} returned rows have a new value in the database"
     return None
+
+
+def required_update_rows(rows: list[tuple[int, int]], before: dict[int, int], after: dict[int, int]) -> int:
+    """The rows /updates' UPDATE statements must have written at least: the returned ids whose value changed.
+
+    An ORM that tracks changes skips the UPDATE of an object whose new value
+    equals the one it read (Rullst's RowSnapshot, ActiveRecord, Eloquent,
+    Ecto, SQLAlchemy): a new random value that equals the old one (1 row in
+    10,000), or a repeated id that ends where it started. Such a row still
+    passes check_update_rows (its returned value is the stored one) but
+    needs no UPDATE, so the count depends only on the database before and
+    after the request.
+    """
+    return len({ident for ident, _ in rows if after.get(ident) != before.get(ident)})
 
 
 class _Tokens(HTMLParser):
@@ -428,12 +441,13 @@ def check_updates(get, config: dict) -> str | None:
             stats = statements(config, "world")
             after = world_table(config)
             problem = check_update_rows(rows, before, after)
-            distinct = len(Counter(ident for ident, _ in rows))
+            required = required_update_rows(rows, before, after)
             if not problem and stats["select_calls"] < count:
                 problem = (f"{stats['select_calls']} SELECT statements read {stats['select_rows']} rows; each of "
                            f"the {count} rows must be read by its own query")
-            if not problem and stats["update_rows"] < distinct:
-                problem = f"UPDATE statements changed {stats['update_rows']} rows, expected at least {distinct}"
+            if not problem and stats["update_rows"] < required:
+                problem = (f"UPDATE statements changed {stats['update_rows']} rows, expected at least {required} "
+                           "(the returned rows whose value changed)")
         if problem:
             return f"queries={value!r}: {problem}"
     return None
