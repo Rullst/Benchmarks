@@ -41,5 +41,6 @@
   },
   "startup_timeout_s": 120,
   "structure_note": "Nginx (2 workers) and PHP-FPM (16 processes) share the 2 vCPUs",
-  "notes": "php artisan optimize runs at start-up. The web group (/html, /form, /login, /me) uses the cookie session driver, not Laravel's default database driver: the load sends /html no cookies, so the database driver would insert a sessions row on every /html request (decision 4 of docs/v3-spec.md, pending the maintainer's confirmation)."
+  "notes": "php artisan optimize runs at start-up. The web group (/html, /form, /login, /me) uses the cookie session driver, not Laravel's default database driver: the load sends /html no cookies, so the database driver would insert a sessions row on every /html request (decision 4 of docs/v3-spec.md, pending the maintainer's confirmation).",
+  "database_note": "opens a new PostgreSQL connection for every request (PHP-FPM; Laravel's documentation does not recommend persistent PDO connections)"
 }

@@ -91,6 +91,7 @@ def _row(slug: str, manifest: dict, entry: dict | None) -> dict:
         "role": manifest.get("role", "ranked"),
         "role_note": manifest.get("role_note", ""),
         "structure_note": manifest.get("structure_note", ""),
+        "database_note": manifest.get("database_note", ""),
         "jit": bool(manifest.get("jit")),
         "language": manifest.get("language", ""),
         "group": manifest.get("group", ""),
@@ -229,15 +230,18 @@ def _job_brief(slug: str, job: dict) -> dict:
             "round_orders": job.get("round_orders", [])}
 
 
+PRESENTATION = ("role", "role_note", "structure_note", "database_note")
+
+
 def framework_row(slug: str, jobs: list[dict]) -> tuple[dict, list[dict]]:
     """A framework's row pooled over its jobs, and (for the A/A control) its row per job."""
     measured = [job for job in jobs if (job["implementations"].get(slug) or {}).get("rounds")]
     first = next((job["implementations"].get(slug) for job in jobs if job["implementations"].get(slug)), None)
     manifest = (first or {}).get("manifest") or _manifest(slug)
-    if "role" not in manifest:
-        # Results measured before bench.json had a role: the folder's current one.
-        current = _manifest(slug)
-        manifest = dict(manifest, **{k: current[k] for k in ("role", "role_note") if k in current})
+    # Presentation fields added to bench.json after the results were measured:
+    # the folder's current values (they label rows; they change no number).
+    current = _manifest(slug)
+    manifest = dict(manifest, **{k: current[k] for k in PRESENTATION if k in current and k not in manifest})
     if not measured:
         row = _row(slug, manifest, first)
         row["jobs"] = [_job_brief(slug, job) for job in jobs]

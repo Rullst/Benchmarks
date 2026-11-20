@@ -190,6 +190,8 @@ def _endpoint_notes(row: dict, endpoint: str, run: str) -> str:
     if not _served(row, endpoint):
         return "not implemented yet"
     notes = [n for n in (_bound(row, run),) if n]
+    if endpoint in DB_ENDPOINTS and row.get("database_note"):
+        notes.insert(0, f"**{row['database_note']}**")
     warm = row.get("flags", {}).get("warmup_errors", {}).get(endpoint)
     if warm:
         notes.append(f"{warm} warm-up errors")
@@ -253,6 +255,8 @@ def _category_cell(key: str, entry: dict) -> str:
     value = f"{_times(entry['score'])}×"
     if key in THROUGHPUT and entry.get("efficiency_runs"):
         value += "*"
+    if entry.get("database_note"):
+        value += " †"
     if entry.get("within_reference_margin"):
         value += " ≈"
     if key == "startup" and entry["detail"].get("startup_s") is not None:
@@ -314,6 +318,8 @@ def rankings_section(data: dict, level: str = "###", review: bool = False) -> li
         lines.append([labels.get(slug, entry["framework"]), *([_overall_cell(entry)] if show_overall else []),
                       *(_category_cell(key, cells[key][slug]) for key in keys),
                       _stability_cell(stability.get(slug)), _runners(by_slug.get(slug, {}))])
+    noted = [(labels.get(e["slug"], e["framework"]), e["database_note"])
+             for e in cells.get("database", {}).values() if e.get("database_note")]
     out = [
         f"{level} Rankings", "",
         f"- **Hello world (Tier 1):** /text, /json and /html with {t1.get('connections')} connections for "
@@ -347,6 +353,7 @@ def rankings_section(data: dict, level: str = "###", review: bool = False) -> li
         _margins_line(rankings),
         "",
         _table(header, lines),
+        *(["", "† Database: " + "; ".join(f"{name}: {note}" for name, note in noted) + "."] if noted else []),
     ]
     if show_overall:
         note = ("published" if rankings.get("publish_overall")
@@ -452,6 +459,8 @@ def category_tables(data: dict) -> list[str]:
                 row = by_slug.get(entry["slug"], {})
                 limits = "; ".join(f"/{run.split('.', 1)[1]}: {_bound(row, run)}" for run in category["runs"]
                                    if _bound(row, run))
+                if key == "database" and row.get("database_note"):
+                    limits = f"**{row['database_note']}**" + (f"; {limits}" if limits else "")
                 lines.append([_label(row) if row else entry["framework"], _rank_text(entry),
                               _times(entry["score"]) + ("≈" if entry.get("within_reference_margin") else "")
                               if entry["score"] is not None else (entry.get("reason") or entry["status"]),

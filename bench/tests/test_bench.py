@@ -773,6 +773,13 @@ class RankingTests(unittest.TestCase):
         result, _, _ = self.rank([rank_row("a")], settings={"publish_overall": True})
         self.assertIn("overall", rankings.published(result))
 
+    def test_database_notes_label_the_database_rows(self):
+        _, cats, _ = self.rank([rank_row("laravel", database_note="a connection per request")])
+        entry = cats["database"]["laravel"]
+        self.assertEqual(entry["database_note"], "a connection per request")
+        self.assertIn("†", report._category_cell("database", entry))
+        self.assertNotIn("database_note", cats["hello"]["laravel"])
+
     def test_sensitivity_table_ranks_under_other_weightings(self):
         rows = [rank_row("fast", hello=(3.0,) * 3, database=(0.5,) * 4),
                 rank_row("db", hello=(0.5,) * 3, database=(2.0,) * 4)]

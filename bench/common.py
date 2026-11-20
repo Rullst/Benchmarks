@@ -116,7 +116,7 @@ def validate_manifest(slug: str, manifest: dict) -> list[str]:
         problems.append(f"{slug}: a {role} implementation needs a 'role_note' saying what it is for")
     if "jit" in manifest and not isinstance(manifest["jit"], bool):
         problems.append(f"{slug}: 'jit' must be true or false")
-    for field in ("structure_note", "role_note", "control_of"):
+    for field in ("structure_note", "role_note", "control_of", "database_note"):
         if field in manifest and not isinstance(manifest[field], str):
             problems.append(f"{slug}: '{field}' must be a string")
     setup = manifest.get("db_setup")

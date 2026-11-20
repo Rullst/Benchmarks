@@ -214,6 +214,8 @@ def _throughput_entry(category: dict, row: dict, entry: dict, settings: dict) ->
                                   if rounds and row.get("flags", {}).get("client_bound_rounds", {}).get(run, 0) * 2
                                   >= rounds]
     entry["client_bound"] = bool(runs) and set(entry["client_bound_runs"]) == set(runs)
+    if category["key"] == "database" and row.get("database_note"):
+        entry["database_note"] = row["database_note"]
     if category["key"] == "application":
         settings_p2 = row.get("phase2") or {}
         detail["csrf"] = (settings_p2.get("csrf") or {}).get("design")
