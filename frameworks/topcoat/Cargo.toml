@@ -1,6 +1,9 @@
 # Dependencies as `topcoat new` generates them (topcoat without default
 # features plus asset/router/serve/view/discover; Toasty as the database
 # layer, with its PostgreSQL driver instead of the generated SQLite one).
+# Phase 2 (docs/v3-spec.md) adds Topcoat's `session` and `cookie`
+# features (both in its default feature set) and argon2 for the login, since
+# Topcoat has no password hasher.
 [package]
 name = "topcoat-bench"
 version = "0.1.0"
@@ -8,10 +11,12 @@ edition = "2024"
 publish = false
 
 [dependencies]
+argon2 = "0.6"
+rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 toasty = { version = "=0.11.0", features = ["postgresql"] }
 tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread"] }
-topcoat = { version = "=0.12.1", default-features = false, features = ["asset", "discover", "router", "serve", "view"] }
+topcoat = { version = "=0.12.1", default-features = false, features = ["asset", "cookie", "discover", "router", "serve", "session", "view"] }
 
 # The same release profile for every Rust implementation (the one
 # `cargo rullst new` generates), so compiler settings are not a variable.

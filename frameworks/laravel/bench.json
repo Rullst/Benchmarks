@@ -7,10 +7,40 @@
   "version_package": "laravel/framework",
   "runtime": "PHP 8.5.12 with OPcache",
   "server": "Nginx with PHP-FPM, as in Laravel's deployment documentation",
-  "workers": "Nginx: BENCH_WORKERS (2) workers; PHP-FPM: the default pool (pm = dynamic, at most 5 processes)",
-  "database_layer": "Eloquent (pdo_pgsql); one connection per PHP-FPM process, opened for each request (at most 5)",
+  "workers": "Nginx: BENCH_WORKERS (2) workers; PHP-FPM: pm = static with pm.max_children = DB_POOL_SIZE (16) processes",
+  "database_layer": "Eloquent (pdo_pgsql); a new connection for every request, no persistent PDO connections (Laravel's default; at most 16 open, one per PHP-FPM process)",
   "template_engine": "Blade",
   "logging": "none (Nginx and PHP-FPM access logs off; Laravel logs warnings and errors to stderr)",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "whereNumber('id') (404); $request->validate (422; integer:strict for the JSON body; an invalid form post is redirected back, 302)",
+    "csrf": {
+      "design": "token",
+      "mechanism": "PreventRequestForgery (web group): Sec-Fetch-Site same-origin accepted, else the session's _token field; 419",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "cookie-encrypted",
+      "mechanism": "session guard with the cookie session driver (Laravel's default database driver is not used: decision 4, pending; see README.md)",
+      "source": "built-in"
+    },
+    "write_csrf": null
+  },
   "startup_timeout_s": 120,
-  "notes": "php artisan optimize runs at start-up; the HTML page uses the web middleware group with the cookie session driver."
+  "structure_note": "Nginx (2 workers) and PHP-FPM (16 processes) share the 2 vCPUs",
+  "notes": "php artisan optimize runs at start-up. The web group (/html, /form, /login, /me) uses the cookie session driver, not Laravel's default database driver: the load sends /html no cookies, so the database driver would insert a sessions row on every /html request (decision 4 of docs/v3-spec.md, pending the maintainer's confirmation).",
+  "database_note": "opens a new PostgreSQL connection for every request (PHP-FPM; Laravel's documentation does not recommend persistent PDO connections)"
 }

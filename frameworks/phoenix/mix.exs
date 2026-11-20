@@ -48,7 +48,10 @@ defmodule Bench.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "1.14.1"}
+      {:bandit, "1.14.1"},
+      # Benchmark: added as `mix phx.gen.auth` adds it (the login checks
+      # users.password_bcrypt with it).
+      {:bcrypt_elixir, "3.3.2"}
     ]
   end
 

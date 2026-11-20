@@ -11,6 +11,36 @@
   "database_layer": "Django ORM with psycopg 3.3 (C extension); persistent connections (CONN_MAX_AGE), one per thread, 16 in total",
   "template_engine": "Django templates (cached loader)",
   "logging": "none (Gunicorn's access log is off; Django logs only warnings and errors)",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "<int:id> path converter (404); Django forms for the query string (Form(request.GET)), the JSON body (Form(json.loads(body)), plus a JSON integer check) and the form (Form(request.POST)): 422; malformed JSON 400",
+    "csrf": {
+      "design": "token",
+      "mechanism": "CsrfViewMiddleware: secret in the csrftoken cookie, masked csrfmiddlewaretoken field, Origin checked when present; 403",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "django.contrib.auth (LoginView, AuthenticationMiddleware) with the database session backend (django_session); custom user model on users, BCryptPasswordHasher",
+      "source": "built-in"
+    },
+    "write_csrf": null
+  },
   "startup_timeout_s": 120,
+  "structure_note": "Python 3.15.2, the newest Django 6.1 supports (FastAPI runs 3.14.10)",
   "notes": "startproject settings with the deployment checklist applied; HTTPS settings stay off (no TLS)."
 }

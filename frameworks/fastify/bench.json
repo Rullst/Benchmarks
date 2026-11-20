@@ -11,5 +11,37 @@
   "database_layer": "@fastify/postgres 6.1 (node-postgres 8.23 pool), DB_POOL_SIZE / BENCH_WORKERS connections per process",
   "template_engine": "@fastify/view 12 with EJS 7",
   "logging": "none (Fastify's logger is off by default)",
-  "startup_timeout_s": 120
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "JSON schemas for params, querystring and bodies (Ajv; the PUT body without type coercion): 400",
+    "csrf": {
+      "design": "token",
+      "mechanism": "@fastify/csrf-protection 8 with @fastify/cookie (secret in the _csrf cookie, token in the _csrf field)",
+      "source": "library"
+    },
+    "session": {
+      "store": "cookie-encrypted",
+      "mechanism": "@fastify/secure-session 8 (libsodium secretbox), key shared by the cluster processes",
+      "source": "library"
+    },
+    "write_csrf": null
+  },
+  "env": {
+    "SESSION_KEY": "901836cd1ab6b87d640fa6d918907f29f9735cf2a7d6a53fef6b5bf4ec92efa7"
+  },
+  "startup_timeout_s": 120,
+  "jit": true
 }

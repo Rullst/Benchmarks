@@ -1,0 +1,12 @@
+{
+  "_comment": "The documented fallback load generator (docs/v3-spec.md section 7.4); the harness uses bench/config.json's load_generator (wrk). Install it with bench/install-loadgen.sh DIR oha.",
+  "oha": {
+    "name": "oha",
+    "version": "1.16.0",
+    "license": "MIT",
+    "url": "https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64-pgo",
+    "sha256": "0bca94cc1f84cc360572eaed7a6c53e22b5f8994c4c5ed2ca45e423517a08525",
+    "timeout_s": 5,
+    "saturation_threshold": 0.9
+  }
+}

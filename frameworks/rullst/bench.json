@@ -5,19 +5,52 @@
   "language": "Rust",
   "group": "rust",
   "framework": "rullst",
-  "framework_version": "13.0.0-alpha.5",
+  "framework_version": "13.0.0-alpha.6",
   "version_package": "rullst",
   "runtime": "Rust 1.99.1 (release build, thin LTO)",
   "server": "rullst::Server (production stack)",
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
-  "database_layer": "rullst-orm (#[derive(Orm)], SQLx PostgreSQL pool)",
+  "database_layer": "rullst-orm (#[derive(Orm)] with RowSnapshot: find, save, all, query builder; SQLx PostgreSQL pool)",
   "template_engine": "html! macro",
-  "logging": "off (RULLST_ACCESS_LOG=off, Rullst 13.0.0-alpha.6 and later; earlier releases ignore it and write the access log)",
+  "logging": "none per request (RULLST_ACCESS_LOG=off, honoured since 13.0.0-alpha.6); Server's default tracing filter info,sqlx=warn for start-up messages and warnings",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "ValidatedJson and ValidatedForm (#[derive(Validate)]: constraint failures 422, unreadable bodies 400); GET /worlds: Query (400) and FieldErrors::validate (422); Path<i32> (400)",
+    "csrf": {
+      "design": "token",
+      "mechanism": "Server security baseline (global): double-submit rullst_csrf cookie, token masked per response in the _token field (or X-CSRF-Token), compared in constant time; 403",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "session registry as cargo rullst auth generates it: rullst_session cookie sealed with APP_KEY, one rullst_auth_sessions row per sign-in, read by primary key on every request",
+      "source": "generator"
+    },
+    "write_csrf": {
+      "cookie": "rullst_csrf",
+      "header": "X-CSRF-Token"
+    }
+  },
   "build_args_from_env": [
     "RULLST_VERSION"
   ],
   "env": {
-    "RULLST_ACCESS_LOG": "off"
+    "RULLST_ACCESS_LOG": "off",
+    "APP_KEY": "benchmark-only-vCgXZ853ra2gun5UaXkfNq8nY_RJdWuQ0E48bVur3ag6HqQC"
   },
   "startup_timeout_s": 120,
   "notes": "Router, layers and production settings as cargo rullst new and cargo rullst deploy generate them."

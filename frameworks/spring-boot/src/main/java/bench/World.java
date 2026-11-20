@@ -25,4 +25,8 @@ public class World {
     public Integer getRandomNumber() {
         return randomNumber;
     }
+
+    public void setRandomNumber(Integer randomNumber) {
+        this.randomNumber = randomNumber;
+    }
 }

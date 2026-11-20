@@ -1,0 +1,6 @@
+@page "/fortunes"
+@model AspNetCoreBench.Pages.FortunesModel
+<!DOCTYPE html><html><head><title>Fortunes</title></head><body><table><tr><th>id</th><th>message</th></tr>@foreach (var fortune in Model.Fortunes)
+{
+<tr><td>@fortune.Id</td><td>@fortune.Message</td></tr>
+}</table></body></html>

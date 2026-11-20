@@ -7,3 +7,11 @@ sqlmodel==0.0.50
 sqlalchemy==2.1.8
 psycopg[binary]==3.3.9
 jinja2==3.1.6
+# Phase 2: FastAPI's Form() needs python-multipart; Starlette's
+# SessionMiddleware needs itsdangerous; asgi-csrf is the CSRF middleware
+# Starlette's documentation lists; pwdlib with Argon2 is the hasher FastAPI's
+# security tutorial uses.
+python-multipart==0.0.34
+itsdangerous==2.2.0
+asgi-csrf==0.11
+pwdlib[argon2]==0.4.2

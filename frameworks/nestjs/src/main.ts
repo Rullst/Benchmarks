@@ -9,6 +9,13 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestNodeApplication>(AppModule, new NodeAdapter());
   app.setBaseViewsDir(join(import.meta.dirname, '..', 'views'));
   app.setViewEngine('hbs');
+  // There is no layout file: hbs's `layout: false`, set for every view
+  // through the `layout` local (as Nest's MVC chapter sets an hbs layout),
+  // renders each view on its own instead of trying views/layout.hbs first.
+  app.setLocal('layout', false);
+  // Built-in CSRF protection (Nest 12.1+): unsafe requests whose
+  // Sec-Fetch-Site or Origin shows another origin are refused (403).
+  app.enableCsrfProtection();
   await app.listen(port, '0.0.0.0');
 }
 

@@ -8,9 +8,40 @@
   "runtime": "Ruby 4.0.9 with YJIT and jemalloc",
   "server": "Puma 8.1 behind Thruster 0.1, as in the Dockerfile rails new generates",
   "workers": "Puma cluster mode: WEB_CONCURRENCY = BENCH_WORKERS (2) workers x 3 threads (the generated RAILS_MAX_THREADS default)",
-  "database_layer": "Active Record (pg 1.7), up to 8 connections per worker (16 in total)",
+  "database_layer": "Active Record (pg 1.7), pools of up to 8 connections per worker (16 in total); 6 in use, one per Puma thread (2 workers x 3 threads)",
   "template_engine": "ERB (Action View)",
   "logging": "Rails at warn (no request lines); Thruster's request log off",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "Route constraint id: /\\d+/ (404); Active Model form objects (ActiveModel::API with numericality and length validations) for the query string, the JSON body and the form: 422; malformed JSON 400",
+    "csrf": {
+      "design": "token",
+      "mechanism": "protect_from_forgery (ActionController::Base default): token in the encrypted cookie session, masked authenticity_token field, Origin checked when present; InvalidAuthenticityToken, 422",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "bin/rails generate authentication: a sessions row looked up through the signed session_id cookie, the user loaded through it; has_secure_password (bcrypt) on users.password_bcrypt",
+      "source": "generator"
+    },
+    "write_csrf": null
+  },
   "startup_timeout_s": 120,
+  "jit": true,
+  "structure_note": "Thruster (HTTP proxy) and Puma (2 workers x 3 threads) share the 2 vCPUs",
   "notes": "The rails new production setup; force_ssl stays commented out (no TLS) and db:prepare does not run at start-up."
 }

@@ -21,7 +21,7 @@ RUN dotnet publish --no-restore --configuration Release --output /app
 RUN awk '/^      "[^"]+": \{$/ { name = $1; gsub(/[":]/, "", name) } \
          /^        "resolved": / { version = $2; gsub(/[",]/, "", version); print name, version }' \
         packages.lock.json \
-    | grep -E '^(Microsoft\.EntityFrameworkCore|Microsoft\.EntityFrameworkCore\.Relational|Npgsql|Npgsql\.EntityFrameworkCore\.PostgreSQL) ' \
+    | grep -E '^(Microsoft\.EntityFrameworkCore|Microsoft\.EntityFrameworkCore\.Relational|Npgsql|Npgsql\.EntityFrameworkCore\.PostgreSQL|BCrypt\.Net-Next) ' \
     | sort > /versions.txt \
     && cat /versions.txt
 

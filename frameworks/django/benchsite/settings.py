@@ -95,6 +95,19 @@ DATABASES = {
 }
 
 
+# Benchmark: phase 2 (docs/v3-spec.md, section 6). django.contrib.auth
+# with a custom user model on the shared users table (world.User), the default
+# database session backend (django_session, created by db.sql), and Django's
+# bcrypt hasher with the work factor of the stored hashes (world/hashers.py).
+AUTH_USER_MODEL = 'world.User'
+
+PASSWORD_HASHERS = ['world.hashers.BCryptCost10PasswordHasher']
+
+LOGIN_URL = '/login'
+
+LOGIN_REDIRECT_URL = '/me'
+
+
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
 

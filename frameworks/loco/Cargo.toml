@@ -1,8 +1,11 @@
 # Dependencies as `loco new` generates them for a PostgreSQL app with
 # server-side views (loco-rs features: the defaults without db-sqlite), minus
-# the crates this app does not use (auth/mail models, validator, uuid, ts-rs,
-# i18n). The empty migrator lives in src/migrator.rs instead of a separate
-# `migration` crate: the `world` table is created by the harness.
+# the crates this app does not use (auth/mail models, uuid, ts-rs, i18n).
+# Phase 2 (docs/v3-spec.md) adds the `auth_session` feature (Loco's
+# cookie session and `CurrentUser`) and axum_csrf for the browser forms (Loco
+# has no CSRF protection; it is built on Axum). The empty migrator lives in
+# src/migrator.rs instead of a separate `migration` crate: the `world` table
+# is created by the harness.
 [workspace]
 
 [package]
@@ -13,15 +16,18 @@ publish = false
 default-run = "loco_bench-cli"
 
 [dependencies]
-loco-rs = { version = "=1.3.1", default-features = false, features = ["auth", "cli", "with-db", "cache_inmem", "worker", "db-postgres", "compression", "generators", "mailer"] }
+loco-rs = { version = "=1.3.1", default-features = false, features = ["auth", "cli", "with-db", "cache_inmem", "worker", "db-postgres", "compression", "generators", "mailer", "auth_session"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 tokio = { version = "1.45", default-features = false, features = ["rt-multi-thread"] }
 async-trait = { version = "0.1" }
 axum = { version = "0.8" }
 tracing = { version = "0.1" }
+rand = "0.10"
 sea-orm = { version = "2.0", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = { version = "2.0", default-features = false, features = ["runtime-tokio-rustls"] }
+validator = { version = "0.20" }
+axum_csrf = { version = "0.12", features = ["layer"] }
 
 [[bin]]
 name = "loco_bench-cli"

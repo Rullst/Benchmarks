@@ -11,5 +11,33 @@
   "database_layer": "SQLx 0.9 (Actix Web has no ORM)",
   "template_engine": "Askama 0.16",
   "logging": "none",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "web::Path, web::Query, web::Json and web::Form extractors (type errors 400; a non-integer id 404, PathConfig's default); ranges checked by hand (422)",
+    "csrf": {
+      "design": "token",
+      "mechanism": "actix-csrf 0.8 (double-submit cookie: random token in the __Host-Csrf-Token cookie, echoed in the form; Csrf<Form<_>> extractor)",
+      "source": "library"
+    },
+    "session": {
+      "store": "cookie-encrypted",
+      "mechanism": "actix-session 0.11 CookieSessionStore (private cookie, key shared by the workers)",
+      "source": "documented"
+    },
+    "write_csrf": null
+  },
   "startup_timeout_s": 120
 }

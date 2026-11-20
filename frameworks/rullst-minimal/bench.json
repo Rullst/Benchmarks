@@ -4,17 +4,51 @@
   "language": "Rust",
   "group": "rust",
   "framework": "rullst",
-  "framework_version": "13.0.0-alpha.5",
+  "framework_version": "13.0.0-alpha.6",
   "version_package": "rullst",
   "runtime": "Rust 1.99.1 (release build, thin LTO)",
   "server": "Hyper via axum::serve (no rullst::Server)",
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
-  "database_layer": "rullst-orm (#[derive(Orm)], SQLx PostgreSQL pool)",
+  "database_layer": "rullst-orm (#[derive(Orm)] with RowSnapshot: find, save, all, query builder; SQLx PostgreSQL pool)",
   "template_engine": "html! macro",
   "logging": "none",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "ValidatedJson and ValidatedForm (#[derive(Validate)]: constraint failures 422, unreadable bodies 400); GET /worlds: Query (400) and FieldErrors::validate (422); Path<i32> (400)",
+    "csrf": {
+      "design": "token",
+      "mechanism": "csrf_middleware on /form and /login only: double-submit rullst_csrf cookie, token masked per response in the _token field, compared in constant time; 403",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "session registry as cargo rullst auth generates it: rullst_session cookie sealed with APP_KEY, one rullst_auth_sessions row per sign-in, read by primary key on every request",
+      "source": "generator"
+    },
+    "write_csrf": null
+  },
   "build_args_from_env": [
     "RULLST_VERSION"
   ],
+  "env": {
+    "APP_KEY": "benchmark-only-vCgXZ853ra2gun5UaXkfNq8nY_RJdWuQ0E48bVur3ag6HqQC"
+  },
   "startup_timeout_s": 120,
-  "notes": "Rullst router, ORM and html! without the Server middleware stack; comparable to the Axum app."
+  "notes": "Rullst router, ORM and html! without the Server middleware stack; comparable to the Axum app.",
+  "role": "diagnostic",
+  "role_note": "Rullst's router, ORM and html! served without the production middleware that cargo rullst new generates, comparable to the Axum app. It is not how Rullst sets up an application, so it is a diagnostic shown next to the reference, with scores and without a position; Rullst as generated is the ranked Rullst."
 }

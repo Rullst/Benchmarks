@@ -11,5 +11,33 @@
   "database_layer": "GORM 1.31 with gorm.io/driver/postgres 1.6 (pgx 5), one database/sql pool of DB_POOL_SIZE connections",
   "template_engine": "html/template via router.LoadHTMLGlob",
   "logging": "none (gin.New() without the Logger middleware, GORM logger silent)",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "ShouldBindUri, ShouldBindQuery, ShouldBindJSON and ShouldBind with validator tags; the handlers answer 400",
+    "csrf": {
+      "design": "fetch-metadata",
+      "mechanism": "net/http.CrossOriginProtection (Check) as middleware of the /form, /login and /me group (Sec-Fetch-Site, then Origin against Host; 403)",
+      "source": "stdlib"
+    },
+    "session": {
+      "store": "cookie-signed",
+      "mechanism": "gin-contrib/sessions 1.1 cookie store (gorilla/sessions, HMAC-signed)",
+      "source": "library"
+    },
+    "write_csrf": null
+  },
   "startup_timeout_s": 120
 }

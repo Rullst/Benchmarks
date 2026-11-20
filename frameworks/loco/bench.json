@@ -8,9 +8,40 @@
   "runtime": "Rust 1.99.1 (release build, thin LTO)",
   "server": "loco start (Axum/Hyper), LOCO_ENV=production",
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
-  "database_layer": "SeaORM 2.0 (Entity::find_by_id), pool max_connections = DB_POOL_SIZE",
-  "template_engine": "Tera (Loco TeraView)",
-  "logging": "Loco logger at warn level (no per-request logs)",
+  "database_layer": "SeaORM 2.0 (find_by_id, ActiveModel::update, Entity::find().all), pool max_connections = DB_POOL_SIZE",
+  "template_engine": "Tera 2 (Loco TeraView)",
+  "logging": "none per request (logger middleware off in config/production.yaml); application logger at warn",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "Loco's QueryValidate, JsonValidate and FormValidate extractors (validator 0.20: 400; Axum's Json data errors 422, Form parse errors 422); Path<i32> (400)",
+    "csrf": {
+      "design": "token",
+      "mechanism": "axum_csrf 0.12 layer on /form and /login (token in an encrypted cookie, HMAC in the form field)",
+      "source": "library"
+    },
+    "session": {
+      "store": "cookie-signed",
+      "mechanism": "Loco auth_session feature, default cookie store (Session, CurrentUser<users::Model>)",
+      "source": "built-in"
+    },
+    "write_csrf": null
+  },
+  "env": {
+    "SESSION_SECRET": "benchmark-only-session-secret-not-for-production-use-0123456789abcdef"
+  },
   "startup_timeout_s": 120,
   "notes": "Structure, features and production.yaml as loco new generates them for a PostgreSQL app with server-side views."
 }

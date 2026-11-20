@@ -8,8 +8,37 @@
   "runtime": ".NET 10.0.15 (Release build, framework-dependent publish)",
   "server": "Kestrel",
   "workers": ".NET thread pool sized by the runtime for 2 vCPUs; Server GC (the ASP.NET Core default)",
-  "database_layer": "Entity Framework Core 10.0 with the Npgsql provider, pool of 16 connections",
+  "database_layer": "Entity Framework Core 10.0 with the Npgsql provider, pool of 16 connections, Npgsql automatic preparation (Max Auto Prepare=20)",
   "template_engine": "Razor Pages",
   "logging": "none per request (Microsoft.AspNetCore and EF Core command logs at Warning); start-up log at Information",
-  "startup_timeout_s": 120
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "Route constraint {id:int} (404); DataAnnotations: Minimal API validation (AddValidation) for /worlds and the PUT body, Razor Pages model binding (ModelState) for /form: 400, or the form re-rendered (200)",
+    "csrf": {
+      "design": "token",
+      "mechanism": "ASP.NET Core antiforgery (cookie token + __RequestVerificationToken field, Data Protection), validated by Razor Pages",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "cookie-encrypted",
+      "mechanism": "Cookie authentication (AddCookie, SignInAsync), ticket encrypted with Data Protection",
+      "source": "built-in"
+    },
+    "write_csrf": null
+  },
+  "startup_timeout_s": 120,
+  "jit": true
 }

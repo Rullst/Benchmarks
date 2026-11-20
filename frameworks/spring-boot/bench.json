@@ -11,5 +11,34 @@
   "database_layer": "Spring Data JPA (Hibernate 7.4), HikariCP pool of 16 connections",
   "template_engine": "Thymeleaf 3.1",
   "logging": "none per request (Tomcat's access log is off by default); start-up log at INFO",
-  "startup_timeout_s": 120
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "@PathVariable int, @RequestParam with @Min/@Max (Spring MVC method validation), @Valid @RequestBody and @Valid @ModelAttribute records (spring-boot-starter-validation): 400",
+    "csrf": {
+      "design": "token",
+      "mechanism": "Spring Security CSRF protection (token in the HttpSession, XOR-masked _csrf field added by Thymeleaf's th:action; a garbled token answers 403 instead of 7.1.2's 500)",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "memory",
+      "mechanism": "Spring Security form login, SecurityContext in Tomcat's in-memory HttpSession",
+      "source": "built-in"
+    },
+    "write_csrf": null
+  },
+  "startup_timeout_s": 120,
+  "jit": true
 }

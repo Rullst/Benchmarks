@@ -1,13 +1,23 @@
 name: CI
 
 # Fast checks for every pull request, plus a conformance check (build the
-# image, start PostgreSQL, check the four endpoints) of each framework folder
-# the pull request changes.
+# image, start PostgreSQL, check the endpoints it declares, sequentially and
+# then under a short concurrent load) of each framework folder the pull
+# request changes. A manual run checks the folders it names, or all of them
+# (after a harness change that affects every folder).
 
 on:
   pull_request:
   push:
     branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      frameworks:
+        description: Comma-separated framework folders to check, or "all"
+        default: all
+      max_parallel:
+        description: Conformance jobs at once (1-8)
+        default: "4"
 
 permissions:
   contents: read
@@ -19,7 +29,7 @@ concurrency:
 jobs:
   harness:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     outputs:
       changed: ${{ steps.changed.outputs.frameworks }}
     steps:
@@ -31,16 +41,37 @@ jobs:
         run: python3 -m unittest discover -s bench/tests -v
       - name: Validate framework folders
         run: python3 bench/harness.py validate
+      - name: Check the database setup
+        # Loads bench/db (init.sql, phase2.sql) into the pinned PostgreSQL,
+        # checks the phase-2 accounts and their password hashes, and applies
+        # every folder's db_setup file in a rolled-back transaction.
+        run: python3 bench/harness.py db-check
       - name: Changed framework folders
         id: changed
         env:
           # A new push to a pull request checks only the folders that push
           # changed; opening it checks every folder it changes.
           BASE_SHA: ${{ github.event.action == 'synchronize' && github.event.before || github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+          IN_FRAMEWORKS: ${{ inputs.frameworks }}
         run: |
           set -euo pipefail
           changed='[]'
-          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA" 2>/dev/null; then
+          if [ "$EVENT" = workflow_dispatch ]; then
+            changed="$(python3 -c 'import json,sys; sys.path.insert(0, "bench"); from harness import resolve_frameworks
+          from common import load_config
+          spec = sys.argv[1]
+          slugs = resolve_frameworks(spec)
+          base = load_config()["baseline"]
+          print(json.dumps(sorted(set(slugs) | ({base} if spec.strip().lower() in ("", "all") else set()))))' "${IN_FRAMEWORKS:-all}")"
+          elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA" 2>/dev/null \
+              && git diff --name-only "$BASE_SHA"...HEAD -- bench | grep -E \
+                '^bench/(harness|conformance|conformance_phase2|load_check|measure|containers|loadgen|loadgen_wrk|loadgen_process|sessions|workload|common|config)\.(py|json)$|^bench/db/' \
+                > /dev/null; then
+            # A change to the conformance checks or what they run checks every folder.
+            changed="$(python3 -c 'import json,sys; sys.path.insert(0, "bench"); from common import framework_slugs
+          print(json.dumps(framework_slugs()))')"
+          elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA" 2>/dev/null; then
             changed="$(git diff --name-only "$BASE_SHA"...HEAD -- frameworks | cut -d/ -f2 | sort -u \
               | while read -r slug; do [ -f "frameworks/$slug/bench.json" ] && echo "$slug"; done \
               | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')"
@@ -50,12 +81,12 @@ jobs:
 
   conformance:
     needs: harness
-    if: github.event_name == 'pull_request' && needs.harness.outputs.changed != '[]'
+    if: (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && needs.harness.outputs.changed != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.max_parallel) || 4 }}
       matrix:
         framework: ${{ fromJson(needs.harness.outputs.changed) }}
     steps:
@@ -78,6 +109,9 @@ jobs:
           name: lockfile-${{ matrix.framework }}
           path: lockfiles/
           if-no-files-found: ignore
+      - name: Build the load generator
+        # The concurrent conformance step runs wrk (bench/load_check.py).
+        run: echo "WRK=$(bench/install-loadgen.sh "$RUNNER_TEMP/bin")" >> "$GITHUB_ENV"
       - name: Build and check ${{ matrix.framework }}
         env:
           FRAMEWORK: ${{ matrix.framework }}

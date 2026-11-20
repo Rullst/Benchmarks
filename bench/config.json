@@ -1,21 +1,14 @@
 {
   "baseline": "axum",
-  "server": {
-    "port": 8080,
-    "cpus": 2,
-    "memory": "2g",
-    "pool_size": 16,
-    "settle_s": 5,
-    "cooldown_s": 2,
-    "recovery_s": 10
-  },
+  "server": {"port": 8080, "cpus": 2, "memory": "2g", "pool_size": 16, "settle_s": 5, "cooldown_s": 2, "recovery_s": 10},
   "min_runner_cpus": 4,
   "load_generator": {
-    "name": "bombardier",
-    "version": "2.0.2",
-    "url": "https://github.com/codesenberg/bombardier/releases/download/v2.0.2/bombardier-linux-amd64",
-    "sha256": "d3dc4a9ecec3f8bd43f8c196ad533cb4b79ca55b11fc74c3184231e00a95bc0b",
-    "client": "fasthttp",
+    "name": "wrk",
+    "version": "4.2.0",
+    "license": "Modified Apache 2.0 (Apache 2.0 plus clause 4(e): a substantially changed derivative must drop the name)",
+    "source_url": "https://github.com/wg/wrk/archive/refs/tags/4.2.0.tar.gz",
+    "source_sha256": "e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad",
+    "build": "make WITH_OPENSSL=/usr VER=4.2.0 (bundled LuaJIT 2.1, system OpenSSL)",
     "timeout_s": 5,
     "saturation_threshold": 0.9
   },
@@ -27,12 +20,27 @@
     "port": 5432,
     "max_connections": 200,
     "rows": 10000,
-    "row_id": 1
+    "fortune_rows": 12,
+    "users": 1000,
+    "row_id": 1,
+    "cpus": 0,
+    "settings": {"synchronous_commit": "off", "shared_preload_libraries": "pg_stat_statements"}
   },
+  "endpoint_paths": {"queries": "/queries?queries=20", "updates": "/updates?queries=20"},
+  "endpoint_workloads": {"world": "world_by_id", "worlds": "worlds_pages", "world-update": "put_world", "form": "form_posts", "me": "me"},
+  "phase2": {"sessions": 125, "session_fetch_parallel": 8},
+  "hot_rows": {"endpoint": "world-update", "ids": 10, "requests": 2000},
   "sampling_interval_s": 0.1,
-  "warmup": {"connections": 125, "duration_s": 5},
+  "warmup": {"connections": 125, "duration_s": 5, "jit_duration_s": 15, "settle_s": 2},
+  "concurrent_check": {"connections": 125, "duration_s": 3},
+  "scoring": {"publish_overall": false, "max_error_rate": 0.01, "memory_floor_mib": 64, "startup_floor_s": 1.0},
+  "publication": {"min_rounds": 5, "min_jobs": 3, "max_aa_margin": 0.05, "control": "axum-control"},
   "tiers": {
-    "tier1": {"connections": 125, "duration_s": 10, "endpoints": ["text", "json", "db-single", "html"]},
+    "tier1": {
+      "connections": 125,
+      "duration_s": 10,
+      "endpoints": ["text", "json", "db-single", "html", "queries", "fortunes", "world", "worlds", "form", "me", "updates", "world-update"]
+    },
     "tier2": {"connections": 300, "duration_s": 30, "endpoint": "json"},
     "tier3": {"connections": 200, "duration_s": 15, "endpoint": "json", "idle_s": 10},
     "tier4": {"connections": 500, "duration_s": 120, "endpoint": "json"}

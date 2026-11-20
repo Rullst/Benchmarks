@@ -11,5 +11,34 @@
   "database_layer": "SQLModel 0.0.50 on SQLAlchemy 2.1 with psycopg 3 (sync sessions, as in the FastAPI SQL tutorial), DB_POOL_SIZE / BENCH_WORKERS connections per process",
   "template_engine": "Jinja2 3.1 (Jinja2Templates)",
   "logging": "none (Uvicorn --no-access-log)",
-  "startup_timeout_s": 120
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "phase2": {
+    "validation": "Path and query parameter types, a Query() parameter model, a Pydantic body model (StrictInt) and a Form() model: 422",
+    "csrf": {
+      "design": "token",
+      "mechanism": "asgi-csrf 0.11 (signed double-submit csrftoken cookie and form field; 403), on the mounted browser sub-application",
+      "source": "documented"
+    },
+    "session": {
+      "store": "cookie-signed",
+      "mechanism": "Starlette SessionMiddleware (itsdangerous-signed cookie holding the user id), on the mounted browser sub-application; pwdlib Argon2 on users.password_argon2id",
+      "source": "documented"
+    },
+    "write_csrf": null
+  },
+  "startup_timeout_s": 120,
+  "structure_note": "Python 3.14.10, as in FastAPI's container guide (Django runs 3.15.2)"
 }

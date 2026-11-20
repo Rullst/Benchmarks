@@ -1,7 +1,8 @@
 # The production.yaml `loco new` generates, without the static-assets and
 # mailer sections this app does not use. Values come from the environment the
 # harness sets (PORT, DATABASE_URL, DB_POOL_SIZE) and from the Dockerfile
-# (LOG_LEVEL=warn: no per-request logs, as for every implementation).
+# (LOG_LEVEL=warn). Request logging is off, as for every implementation: the
+# logger middleware below.
 logger:
   enable: true
   pretty_backtrace: false
@@ -14,6 +15,11 @@ server:
   port: <%= get_env(name="PORT", default="5150") %>
   binding: <%= get_env(name="BINDING", default="0.0.0.0") %>
   host: <%= get_env(name="HOST", default="http://localhost") %>
+  # Loco's request logging (a TraceLayer span on every request), on by
+  # default; every other middleware keeps Loco's default (README).
+  middlewares:
+    logger:
+      enable: false
 database:
   uri: <%= get_env(name="DATABASE_URL") %>
   enable_logging: false
@@ -27,6 +33,13 @@ database:
   dangerously_recreate: false
 auth:
   jwt:
-    # Unused by this app (no auth routes); required by the `auth` feature.
+    # Unused by this app (it signs in with the session); required by the
+    # `auth` feature.
     secret: <%= get_env(name="JWT_SECRET", default="benchmark-only-not-a-secret") %>
     expiration: 604800
+  # The `auth_session` section Loco's generator writes: the session cookie is
+  # signed with SESSION_SECRET (set in bench.json `env`; Loco refuses the
+  # development default in production) and the data lives in the cookie.
+  session:
+    secret: <%= get_env(name="SESSION_SECRET") %>
+    store: cookie

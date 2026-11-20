@@ -1,0 +1,9 @@
+defmodule BenchWeb.UserSessionHTML do
+  use BenchWeb, :html
+
+  def new(assigns) do
+    ~H"""
+    <!DOCTYPE html><html><head><title>Login</title></head><body><form method="post" action="/login"><input type="hidden" name="_csrf_token" value={get_csrf_token()} /><input type="text" name="username" /><input type="password" name="password" /><button type="submit">Sign in</button></form></body></html>
+    """
+  end
+end

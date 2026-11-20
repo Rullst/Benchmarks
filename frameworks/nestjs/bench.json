@@ -11,6 +11,39 @@
   "database_layer": "TypeORM 1.1 via @nestjs/typeorm with pg, 8 connections per process (16 in total)",
   "template_engine": "hbs 4.4 (Handlebars)",
   "logging": "none per request (Nest has no request logger); start-up log per process",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "ParseIntPipe for the id; ValidationPipe with class-validator DTOs for the query, the JSON body and the form: 400",
+    "csrf": {
+      "design": "fetch-metadata",
+      "mechanism": "app.enableCsrfProtection() (Sec-Fetch-Site, then Origin against Host; 403)",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "express-session 1.19 with connect-pg-simple 10 (the documented session middleware with its PostgreSQL store), on /form, /login and /me only",
+      "source": "documented"
+    },
+    "write_csrf": null
+  },
+  "env": {
+    "SESSION_SECRET": "22f8ac011589e0f89464699dd11177a7384d321dbfe689d27099f48abf4bcb97"
+  },
   "startup_timeout_s": 120,
-  "notes": "Nest's documentation recommends the NodeAdapter since v12.3; Nest still uses Express when no adapter is passed."
+  "notes": "Nest's documentation recommends the NodeAdapter since v12.3; Nest still uses Express when no adapter is passed.",
+  "jit": true
 }

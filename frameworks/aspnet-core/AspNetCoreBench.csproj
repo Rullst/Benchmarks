@@ -16,6 +16,9 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- POST /login checks users.password_bcrypt: ASP.NET Core Identity's
+         PasswordHasher reads only its own PBKDF2 format. -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.2.1" />
   </ItemGroup>
 
 </Project>

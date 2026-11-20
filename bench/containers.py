@@ -120,6 +120,7 @@ def start_database(config: dict, cpus: list[int]) -> dict:
         db["image"],
         "-c", "listen_addresses=127.0.0.1", "-c", f"port={db['port']}",
         "-c", f"max_connections={db['max_connections']}", "-c", "shared_buffers=256MB",
+        *(arg for key, value in db.get("settings", {}).items() for arg in ("-c", f"{key}={value}")),
     ], timeout=600)
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
@@ -133,9 +134,78 @@ def start_database(config: dict, cpus: list[int]) -> dict:
     rows = psql(config, "SELECT count(*) FROM world")
     if rows != str(db["rows"]):
         raise BenchError(f"world table has {rows} rows, expected {db['rows']}")
+    fortunes = psql(config, "SELECT count(*) FROM fortune")
+    if fortunes != str(db.get("fortune_rows", 12)):
+        raise BenchError(f"fortune table has {fortunes} rows, expected {db.get('fortune_rows', 12)}")
+    users = psql(config, "SELECT count(*) FROM users")
+    if users != str(db.get("users", 1000)):
+        raise BenchError(f"users table has {users} rows, expected {db.get('users', 1000)} (bench/db/phase2.sql)")
     version = psql(config, "SHOW server_version")
     log(f"PostgreSQL {version} ready on CPUs {format_cpu_list(cpus)}")
-    return {"image": db["image"], "digest": repo_digest(db["image"]), "version": version}
+    return {"image": db["image"], "digest": repo_digest(db["image"]), "version": version,
+            "cpus": cpus, "settings": dict(db.get("settings", {}))}
+
+
+def set_statement_tracking(config: dict, enabled: bool) -> str:
+    """Turn pg_stat_statements on (conformance) or off (measurement) for every session.
+
+    The conformance check counts the queries each request runs; measurements
+    run without that bookkeeping. Returns the setting new sessions see.
+    """
+    value = "top" if enabled else "none"
+    psql(config, f"ALTER SYSTEM SET pg_stat_statements.track = '{value}'")
+    psql(config, "SELECT pg_reload_conf()")
+    return psql(config, "SHOW pg_stat_statements.track")
+
+
+def reset_tables(config: dict, framework_tables: list[str] | tuple = ()) -> None:
+    """Give every round the same `world` table: init.sql's values, rewritten without dead rows.
+
+    /updates and PUT /world/{id} leave dead row versions behind; VACUUM FULL
+    rewrites the 10,000-row table so that later rounds do not measure a
+    bloated table. The tables a framework's db_setup created (sessions,
+    tokens) are emptied.
+    """
+    psql(config, "UPDATE world SET randomnumber = 1 + (id * 7919) % 10000")
+    psql(config, "VACUUM (FULL, ANALYZE) world")
+    if framework_tables:
+        psql(config, f"TRUNCATE {', '.join(framework_tables)}")
+
+
+TABLES_SQL = ("SELECT quote_ident(schemaname) || '.' || quote_ident(tablename) FROM pg_tables "
+              "WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY 1")
+
+
+def tables(config: dict) -> set[str]:
+    """Every table outside PostgreSQL's own schemas, as quoted `schema.table` names."""
+    return {line for line in psql(config, TABLES_SQL).splitlines() if line}
+
+
+def run_sql_file(config: dict, sql: str, *, rollback: bool = False) -> None:
+    """Run a SQL script in one transaction, committed or (rollback=True: a dry run) rolled back."""
+    db = config["database"]
+    script = f"BEGIN;\n{sql}\n;ROLLBACK;\n" if rollback else sql
+    cmd = ["docker", "exec", "-i", DB_CONTAINER, "psql", "-p", str(db["port"]), "-U", db["user"],
+           "-d", db["name"], "-v", "ON_ERROR_STOP=1", "-q", "-X"]
+    cmd += ["-f", "-"] if rollback else ["--single-transaction", "-f", "-"]
+    run(cmd, input_text=script, timeout=120)
+
+
+def apply_db_setup(config: dict, manifest: dict) -> dict | None:
+    """Apply a folder's `db_setup` file (bench.json) and return it with the tables it created."""
+    setup = manifest.get("db_setup")
+    if not setup:
+        return None
+    before = tables(config)
+    run_sql_file(config, (FRAMEWORKS / manifest["slug"] / setup).read_text())
+    created = sorted(tables(config) - before)
+    log(f"{manifest['slug']}: applied {setup}, created {', '.join(created) or 'no tables'}")
+    return {"file": setup, "tables": created}
+
+
+def database_handle(config: dict) -> "Server":
+    """The PostgreSQL container, for its cgroup CPU counter."""
+    return Server(DB_CONTAINER, config["database"]["port"])
 
 
 def psql(config: dict, sql: str) -> str:
@@ -175,15 +245,16 @@ def start_server(manifest: dict, config: dict, cpus: list[int], *, keep_logs: bo
         cmd += ["-e", f"{key}={value}"]
     cmd.append(image_tag(slug))
     run(cmd, timeout=120)
-    return Server(name, server["port"])
+    return Server(name, server["port"], cpus=len(cpus))
 
 
 class Server:
     """A running server container and its cgroup v2 counters."""
 
-    def __init__(self, name: str, port: int):
+    def __init__(self, name: str, port: int, cpus: int | None = None):
         self.name = name
         self.port = port
+        self.cpus = cpus
         self._cgroup: Path | None = None
 
     @property

@@ -1,0 +1,26 @@
+[package]
+name = "axum-bench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "net"] }
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
+askama = "0.16"
+rand = "0.10"
+# Phase 2 (docs/v3-spec.md): CSRF for the browser form, sessions in
+# PostgreSQL, Argon2id password verification for the login.
+axum_csrf = "0.12"
+tower-sessions = { version = "0.15", default-features = false, features = ["axum-core"] }
+tower-sessions-sqlx-store = { version = "0.16", features = ["postgres"] }
+argon2 = "0.6"
+
+# The same release profile for every Rust implementation (the one
+# `cargo rullst new` generates), so compiler settings are not a variable.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

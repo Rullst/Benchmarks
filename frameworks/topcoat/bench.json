@@ -8,9 +8,38 @@
   "runtime": "Rust 1.99.1 (release build, thin LTO)",
   "server": "topcoat::start (Hyper)",
   "workers": "Tokio multi-threaded runtime, one worker per available CPU (2)",
-  "database_layer": "Toasty 0.11 (World::get_by_id), max_pool_size = DB_POOL_SIZE",
+  "database_layer": "Toasty 0.11 (get_by_id, update(), all()), max_pool_size = DB_POOL_SIZE",
   "template_engine": "view! macro",
   "logging": "none (Topcoat logs nothing per request by default)",
+  "endpoints": [
+    "text",
+    "json",
+    "db-single",
+    "html",
+    "queries",
+    "updates",
+    "fortunes",
+    "world",
+    "worlds",
+    "world-update",
+    "form",
+    "me"
+  ],
+  "db_setup": "db.sql",
+  "phase2": {
+    "validation": "path_param!(id: i32 else not_found) (404), #[query_params(error = bad_request)], content::Json and content::Form (400); ranges checked by hand (400)",
+    "csrf": {
+      "design": "fetch-metadata",
+      "mechanism": "built-in OriginPolicy (Sec-Fetch-Site, then Origin against Host; 403), on by default for every unsafe request",
+      "source": "built-in"
+    },
+    "session": {
+      "store": "postgresql",
+      "mechanism": "built-in session feature (token in a __Host- cookie via CookieLayer); token hash, user id and expiry in user_sessions, read with Toasty",
+      "source": "built-in"
+    },
+    "write_csrf": null
+  },
   "startup_timeout_s": 120,
   "maturity_note": "early 0.x framework, measured with its documented defaults",
   "notes": "Topcoat describes itself as early-stage and experimental, with breaking changes expected."

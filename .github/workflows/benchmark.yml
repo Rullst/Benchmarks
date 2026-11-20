@@ -4,10 +4,19 @@ name: Benchmark
 # a time while Rullst/Rullst is quiet and 3 while it is busy (the organization
 # shares 20 runners with Rullst/Rullst's CI).
 # - schedule: every night, measure the newest `rullst` release on crates.io if
-#   it has not been measured yet, then publish the results to main;
-# - workflow_dispatch: a manual run (publishing only when asked, from main);
-# - a pull request labelled `benchmark-trial`: a one-round trial of the
-#   frameworks the pull request changes; nothing is published.
+#   it has not been measured yet (5 rounds on 3 runners per implementation),
+#   then publish the results to main if the publication gate passes;
+# - workflow_dispatch: a manual run (publishing only when asked, from main,
+#   with at least 5 rounds and 3 jobs per implementation, and only if the
+#   publication gate passes);
+# - a pull request labelled `benchmark-trial`: a one-round, one-job trial of
+#   the frameworks the pull request changes; nothing is published.
+# The publication gate (bench/aggregate.py publication_gate) refuses results
+# with errors above the limit, a failed stability check, runners that
+# disagree (harness, configuration, vCPUs, load generator version, source
+# and compiler, PostgreSQL), A/A
+# noise above the limit, too few rounds or jobs, or Rullst not built from
+# its crates.io release.
 # Scheduled and manual runs first check that Rullst/Rullst is not running a
 # release, its admission checks or long verification workflows ("Shared
 # runners" in CONTRIBUTING.md); `force` skips that check.
@@ -21,8 +30,11 @@ on:
         description: Comma-separated framework folders, or "all"
         default: all
       rounds:
-        description: Rounds per implementation (alternating with the Axum baseline)
+        description: Rounds per job (ABBA with the Axum baseline); publishing needs at least 5
         default: "5"
+      jobs_per_framework:
+        description: Jobs (runners) per implementation, pooled in the results; publishing needs at least 3
+        default: "3"
       rullst_version:
         description: Published rullst version to measure (empty = the version pinned in frameworks/rullst)
         default: ""
@@ -58,6 +70,7 @@ jobs:
       matrix: ${{ steps.decide.outputs.matrix }}
       frameworks: ${{ steps.decide.outputs.frameworks }}
       rounds: ${{ steps.decide.outputs.rounds }}
+      jobs: ${{ steps.decide.outputs.jobs }}
       rullst_version: ${{ steps.decide.outputs.rullst_version }}
       publish: ${{ steps.decide.outputs.publish }}
       max_parallel: ${{ steps.decide.outputs.max_parallel }}
@@ -72,6 +85,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           IN_FRAMEWORKS: ${{ inputs.frameworks }}
           IN_ROUNDS: ${{ inputs.rounds }}
+          IN_JOBS: ${{ inputs.jobs_per_framework }}
           IN_VERSION: ${{ inputs.rullst_version }}
           IN_PUBLISH: ${{ inputs.publish }}
           IN_FORCE: ${{ inputs.force }}
@@ -82,7 +96,10 @@ jobs:
         run: |
           set -euo pipefail
           pinned="$(sed -nE 's/^rullst = \{ version = "=([^"]+)".*/\1/p' frameworks/rullst/Cargo.toml)"
-          run=true; publish=false; frameworks=all; rounds=5; version="$pinned"
+          # The publication gate's minimums (bench/config.json publication) are the official run's defaults.
+          min_rounds="$(python3 -c 'import json; print(json.load(open("bench/config.json"))["publication"]["min_rounds"])')"
+          min_jobs="$(python3 -c 'import json; print(json.load(open("bench/config.json"))["publication"]["min_jobs"])')"
+          run=true; publish=false; frameworks=all; rounds="$min_rounds"; jobs="$min_jobs"; version="$pinned"
           case "$EVENT" in
             schedule)
               python3 bench/release_check.py > release.txt
@@ -95,7 +112,7 @@ jobs:
               publish=true
               ;;
             workflow_dispatch)
-              frameworks="${IN_FRAMEWORKS:-all}"; rounds="${IN_ROUNDS:-5}"
+              frameworks="${IN_FRAMEWORKS:-all}"; rounds="${IN_ROUNDS:-$min_rounds}"; jobs="${IN_JOBS:-$min_jobs}"
               version="${IN_VERSION:-$pinned}"
               if [ "$IN_PUBLISH" = true ]; then
                 if [ "$REF" != refs/heads/main ] || [ "$frameworks" != all ]; then
@@ -105,13 +122,17 @@ jobs:
               fi
               ;;
             pull_request)
-              rounds=1
+              rounds=1; jobs=1
               changed="$(git diff --name-only "$BASE_SHA"...HEAD -- frameworks | cut -d/ -f2 | sort -u \
                 | while read -r slug; do [ -f "frameworks/$slug/bench.json" ] && echo "$slug"; done | paste -sd, -)"
               frameworks="${changed:-rullst,rullst-minimal,actix}"
               ;;
           esac
           case "$rounds" in ''|*[!0-9]*) echo "::error::rounds must be a number"; exit 1;; esac
+          case "$jobs" in [1-3]) ;; *) echo "::error::jobs_per_framework must be 1-3"; exit 1;; esac
+          if [ "$publish" = true ] && { [ "$rounds" -lt "$min_rounds" ] || [ "$jobs" -lt "$min_jobs" ]; }; then
+            echo "::error::publishing needs at least $min_rounds rounds and $min_jobs jobs per implementation"; exit 1
+          fi
           case "$version" in *[!0-9A-Za-z.+-]*) echo "::error::invalid rullst version"; exit 1;; esac
           auto_parallel=3
           if [ "$run" = true ] && [ "$EVENT" != pull_request ]; then
@@ -128,13 +149,13 @@ jobs:
             [1-8]) max_parallel="$IN_MAX_PARALLEL" ;;
             *) echo "::error::max_parallel must be 1-8 or auto"; exit 1 ;;
           esac
-          matrix="$(python3 bench/harness.py plan --frameworks "$frameworks")"
+          matrix="$(python3 bench/harness.py plan --frameworks "$frameworks" --jobs "$jobs")"
           {
             echo "run=$run"; echo "publish=$publish"; echo "frameworks=$frameworks"
-            echo "rounds=$rounds"; echo "rullst_version=$version"; echo "matrix=$matrix"
+            echo "rounds=$rounds"; echo "jobs=$jobs"; echo "rullst_version=$version"; echo "matrix=$matrix"
             echo "max_parallel=$max_parallel"
           } >> "$GITHUB_OUTPUT"
-          echo "run=$run frameworks=$matrix rounds=$rounds rullst=$version publish=$publish max_parallel=$max_parallel"
+          echo "run=$run frameworks=$frameworks jobs=$jobs rounds=$rounds rullst=$version publish=$publish max_parallel=$max_parallel"
 
   measure:
     needs: plan
@@ -145,24 +166,30 @@ jobs:
       fail-fast: false
       max-parallel: ${{ fromJSON(needs.plan.outputs.max_parallel) }}
       matrix:
-        framework: ${{ fromJson(needs.plan.outputs.matrix) }}
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the load generator
-        run: echo "BOMBARDIER=$(bench/install-bombardier.sh "$RUNNER_TEMP/bin")" >> "$GITHUB_ENV"
-      - name: Measure ${{ matrix.framework }} against the baseline
+      - name: Build the load generator
+        # wrk publishes no binaries: the pinned source tarball (SHA-256 in
+        # bench/config.json) is built on the runner; the results record the
+        # binary's SHA-256 and the compiler.
+        run: echo "WRK=$(bench/install-loadgen.sh "$RUNNER_TEMP/bin")" >> "$GITHUB_ENV"
+      - name: Measure ${{ matrix.framework }} (job ${{ matrix.job }}) against the baseline
         env:
           RULLST_VERSION: ${{ needs.plan.outputs.rullst_version }}
           ROUNDS: ${{ needs.plan.outputs.rounds }}
           FRAMEWORK: ${{ matrix.framework }}
-        run: python3 bench/harness.py run --framework "$FRAMEWORK" --rounds "$ROUNDS" --out "job-results/$FRAMEWORK.json"
+          JOB: ${{ matrix.job }}
+        run: >-
+          python3 bench/harness.py run --framework "$FRAMEWORK" --job "$JOB" --rounds "$ROUNDS"
+          --out "job-results/$FRAMEWORK-job$JOB.json"
       - name: Upload the job result
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: job-${{ matrix.framework }}
+          name: job-${{ matrix.framework }}-${{ matrix.job }}
           path: job-results/
           if-no-files-found: warn
           retention-days: 90
@@ -207,11 +234,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           status=0
-          python3 bench/aggregate.py --input job-results --frameworks "$FRAMEWORKS" --write --require-rullst || status=$?
+          python3 bench/aggregate.py --input job-results --frameworks "$FRAMEWORKS" --write --require-rullst --gate \
+            || status=$?
           if [ "$status" = 0 ]; then
             message="chore(results): publish measurements for Rullst $RULLST_VERSION"
           elif [ "$status" = 2 ]; then
             message="chore(results): record failed measurement of Rullst $RULLST_VERSION"
+          elif [ "$status" = 4 ]; then
+            echo "::error::the publication gate failed; nothing was published (see the summary)"; exit 1
           else
             exit "$status"
           fi
