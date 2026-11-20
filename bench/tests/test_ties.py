@@ -198,6 +198,19 @@ class TieMarginTests(unittest.TestCase):
         self.assertIn("(CPU A); ", results)
         self.assertIn("vs Actix", results)
 
+    def test_the_pool_note_reads_the_no_ping_diagnostic(self):
+        jobs = [fake_job("actix", 1.0), fake_job("axum-no-ping", 1.2)]
+        jobs[1]["implementations"]["axum-no-ping"]["manifest"].update(role="diagnostic", role_note="no ping")
+        combined = aggregate.combine(jobs, ["actix", "axum-no-ping"])
+        readme = report.render_readme_table(combined)
+        self.assertIn("**Connection-pool defaults.**", readme)
+        self.assertIn("`test_before_acquire`, on by default", readme)
+        self.assertIn("in these results Axum scored 1.20 in Database and 1.20 in Application", readme)
+        self.assertIn("Every implementation runs its framework's documented defaults.", readme)
+        self.assertNotIn("Experimental", readme)
+        without = report.render_readme_table(aggregate.combine(jobs[:1], ["actix"]))
+        self.assertIn("it has no Database and Application scores in these results", without)
+
 
 if __name__ == "__main__":
     unittest.main()

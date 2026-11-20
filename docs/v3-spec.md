@@ -1163,9 +1163,17 @@ JSON: `tie_rule` per category, overall and weighting, and `spread`,
 `tie_check` and `reference_margin` per entry (README, "Machine-readable
 results").
 
+**Connection-pool note.** The generated README section also says, with the
+numbers of the run, that the Database and Application rankings partly
+measure connection-pool defaults: SQLx (Axum, Actix Web, Loco, Rullst) tests
+each connection with a round trip before handing it out
+(`test_before_acquire`, on by default), and the unranked `axum-no-ping`
+diagnostic shows that cost (Database about 1.25 and Application about 1.15
+in the validation trial).
+
 **Tests.** `bench/tests/test_ties.py`: the spread and the floor; the three
 terms of the margin; a gap just inside and just outside the margin; the A/A
 margin alone being too small; jobs all on one CPU model; a single job; no
 implementation with two jobs; equal scores with different spreads; the "≈"
 check; every category, the overall score and the weightings; the aggregate
-and the rendered tables.
+and the rendered tables; the connection-pool note.

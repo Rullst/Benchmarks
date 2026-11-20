@@ -318,6 +318,28 @@ def _margins_line(rankings: dict) -> str:
     return TIE_RULE + " A/A margin and pooled floor per category: " + "; ".join(parts) + "."
 
 
+POOL_NOTE = ("**Connection-pool defaults.** The Database and Application rankings partly measure connection-pool "
+             "defaults. SQLx, used by the Axum, Actix Web, Loco and Rullst implementations, tests each connection "
+             "with a round trip before handing it out (`test_before_acquire`, on by default). The unranked "
+             "`axum-no-ping` diagnostic shows the size of that cost: {measured}. Every implementation runs its "
+             "framework's documented defaults.")
+
+
+def pool_note(data: dict) -> str:
+    """The connection-pool note, with the no-ping diagnostic's scores from these results."""
+    scores = {}
+    for category in (data.get("rankings") or {}).get("categories", []):
+        entry = next((e for e in category["entries"] if e["slug"] == "axum-no-ping"), None)
+        if category["key"] in ("database", "application") and entry and entry.get("score"):
+            scores[category["key"]] = entry["score"]
+    if len(scores) == 2:
+        measured = (f"in these results Axum scored {scores['database']:.2f} in Database and "
+                    f"{scores['application']:.2f} in Application with it switched off")
+    else:
+        measured = "it has no Database and Application scores in these results"
+    return POOL_NOTE.format(measured=measured)
+
+
 def rankings_section(data: dict, level: str = "###", review: bool = False) -> list[str]:
     """The per-category positions (and the overall ranking when it is published or for review)."""
     rankings = data.get("rankings")
@@ -649,6 +671,7 @@ def render_results(data: dict, review: bool = False) -> str:
                   f"{env.get('runner_image') or 'unknown'}, PostgreSQL {env.get('postgres')}, "
                   f"{(env.get('load_generator') or {}).get('name')} {(env.get('load_generator') or {}).get('version')}"
                   ". Full details per job are in `results/raw/`.", ""]
+    parts += [pool_note(data), ""]
     parts += ["## Summary", "", summary_table(rows), "", SUMMARY_NOTE, ""]
     if any(_served(r, ep) for r in _measured(rows) for ep in PHASE2_ENDPOINTS):
         parts += ["### Application endpoints", "", application_table(rows), "", APPLICATION_NOTE, ""]
@@ -769,7 +792,7 @@ def render_readme_table(data: dict) -> str:
     ref = f"[workflow run {run['id']}]({run['url']})" if run.get("url") else "the latest run"
     lines = [notice(data), "",
              f"Source: {ref}. Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); "
-             "dashboard: <https://rullst.win/Benchmarks/>.", "",
+             "dashboard: <https://rullst.win/Benchmarks/>.", "", pool_note(data), "",
              summary_table(data["implementations"]), "", SUMMARY_NOTE]
     if _corrections(data["implementations"]):
         lines += ["", "Corrections (left-out results are shown as –):", "", _corrections(data["implementations"])]
