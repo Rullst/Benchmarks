@@ -569,6 +569,13 @@ class AggregateTests(unittest.TestCase):
         noisy[3]["implementations"]["axum-control"]["manifest"].update(role="control", role_note="A/A copy")
         self.assertTrue(any("A/A noise too large in hello" in p for p in gate(noisy, ["actix", "axum-control"])[
             "problems"]))
+        rebuilt = copy.deepcopy(jobs)  # the same wrk source and compiler, another binary: consistent
+        for number, job in enumerate(rebuilt):
+            job["environment"]["load_generator"] = {"version": "4.2.0", "source_sha256": "e2", "compiler": "cc 15",
+                                                    "sha256": f"bin{number}"}
+        self.assertFalse(any("load generator" in p for p in gate(rebuilt, ["actix", "axum-control"])["problems"]))
+        rebuilt[1]["environment"]["load_generator"]["compiler"] = "cc 16"
+        self.assertTrue(any("load generator" in p for p in gate(rebuilt, ["actix", "axum-control"])["problems"]))
         mixed = copy.deepcopy(jobs)
         mixed[1]["environment"]["cpu_count"] = 8
         self.assertTrue(any("vCPUs differs" in p for p in gate(mixed, ["actix", "axum-control"])["problems"]))

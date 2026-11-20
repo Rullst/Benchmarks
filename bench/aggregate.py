@@ -367,7 +367,11 @@ CONSISTENT = {
     "harness commit": lambda job: job.get("environment", {}).get("runner", {}).get("github_sha", ""),
     "configuration": lambda job: json.dumps(job.get("config", {}), sort_keys=True),
     "vCPUs": lambda job: job.get("environment", {}).get("cpu_count"),
-    "load generator binary": lambda job: (job.get("environment", {}).get("load_generator") or {}).get("sha256"),
+    # wrk is built on every runner and its binary is not byte-for-byte reproducible there (same source and
+    # compiler, different SHA-256), so the version, the source tarball and the compiler are compared.
+    "load generator (version, source, compiler)": lambda job: tuple(
+        (job.get("environment", {}).get("load_generator") or {}).get(k) for k in ("version", "source_sha256",
+                                                                                    "compiler")),
     "PostgreSQL version": lambda job: job.get("database", {}).get("version"),
     "rounds": lambda job: job.get("rounds_requested"),
 }
@@ -378,7 +382,8 @@ def publication_gate(combined: dict, jobs: list[dict]) -> dict:
 
     Checked: every implementation measured, on at least `min_jobs` jobs of
     at least `min_rounds` rounds; every job ran the same harness,
-    configuration, vCPU count, load generator, PostgreSQL version and rounds;
+    configuration, vCPU count, load generator (version, source and compiler),
+    PostgreSQL version and rounds;
     no scored run above the error limit and no failed stability check; the
     A/A control measured, with every tie margin at most `max_aa_margin`; and
     Rullst built from its crates.io release.

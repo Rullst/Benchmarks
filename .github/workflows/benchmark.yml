@@ -13,7 +13,8 @@ name: Benchmark
 #   the frameworks the pull request changes; nothing is published.
 # The publication gate (bench/aggregate.py publication_gate) refuses results
 # with errors above the limit, a failed stability check, runners that
-# disagree (harness, configuration, vCPUs, load generator, PostgreSQL), A/A
+# disagree (harness, configuration, vCPUs, load generator version, source
+# and compiler, PostgreSQL), A/A
 # noise above the limit, too few rounds or jobs, or Rullst not built from
 # its crates.io release.
 # Scheduled and manual runs first check that Rullst/Rullst is not running a

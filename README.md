@@ -638,7 +638,9 @@ publishes nothing, when (`publication_gate` in
 - an implementation was not measured, or was measured on fewer than 2 jobs
   or fewer than 5 rounds per job;
 - the jobs disagree on the harness commit, the configuration, the vCPU
-  count, the load generator binary, the PostgreSQL version or the rounds;
+  count, the load generator (its version, source tarball and compiler: the
+  binary built on each runner is not byte-for-byte reproducible), the
+  PostgreSQL version or the rounds;
 - a scored run is above the 1% error limit, or an implementation fails the
   Stability check;
 - the A/A control is missing, or its tie margin is above 5% in any
