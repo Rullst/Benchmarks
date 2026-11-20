@@ -15,7 +15,7 @@ revision.
 
 | | |
 | --- | --- |
-| Version | `rullst = "=13.0.0-alpha.6"` (exact pin and `Cargo.lock`); the `RULLST_VERSION` build argument measures another published release. **Temporary:** until 13.0.0-alpha.6 is on crates.io, a `[patch.crates-io]` section in `Cargo.toml` builds the release candidate from git (Rullst/Rullst `58438b6`); remove it and regenerate `Cargo.lock` (the Dockerfile's `lockfile` stage, which CI exports) once the release is published |
+| Version | `rullst = "=13.0.0-alpha.6"` (exact pin and `Cargo.lock`); the `RULLST_VERSION` build argument measures another published release. Built from crates.io (13.0.0-alpha.6 was published on 2026-11-20 from tag `v13.0.0-alpha.6`, commit `58438b6`) |
 | Features | `orm`, `strict-postgres`, `auth-session-registry-postgres` |
 | Build | `cargo build --release --locked` with Rust 1.99.1 and the same release profile as every Rust implementation |
 | Server | `axum::serve(listener, router().into_axum())` on a Tokio multi-threaded runtime (2 workers) |

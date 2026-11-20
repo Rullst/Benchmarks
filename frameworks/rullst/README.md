@@ -7,7 +7,7 @@ endpoints in place of the starter page. Compare it with
 
 | | |
 | --- | --- |
-| Version | `rullst = "=13.0.0-alpha.6"` (exact pin and `Cargo.lock`); the `RULLST_VERSION` build argument measures another published release. **Temporary:** until 13.0.0-alpha.6 is on crates.io, a `[patch.crates-io]` section in `Cargo.toml` builds the release candidate from git (Rullst/Rullst `58438b6`, the commit the release is cut from); remove it and regenerate `Cargo.lock` (the Dockerfile's `lockfile` stage, which CI exports) once the release is published |
+| Version | `rullst = "=13.0.0-alpha.6"` (exact pin and `Cargo.lock`); the `RULLST_VERSION` build argument measures another published release. Built from crates.io (13.0.0-alpha.6 was published on 2026-11-20 from tag `v13.0.0-alpha.6`, commit `58438b6`) |
 | Features | `orm`, `strict-postgres`, `studio`, as `cargo rullst new` generates them (Studio only starts in debug builds), and `auth-session-registry-postgres`, which `cargo rullst auth` adds |
 | Build | `cargo build --release --locked` with Rust 1.99.1 and the generated release profile (`lto = "thin"`, `codegen-units = 1`, `strip = "symbols"`) |
 | Server | `Server::new(router()).run(port)` with `RULLST_ENV=production` and `HOST=0.0.0.0`, as in the generated Dockerfile; Tokio starts one worker per CPU the process may use (2) |

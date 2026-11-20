@@ -25,15 +25,3 @@ codegen-units = 1
 strip = "symbols"
 
 [workspace]
-
-# TEMPORARY, until 13.0.0-alpha.6 is published on crates.io (expected on
-# 2026-11-20): the release candidate (Rullst/Rullst main, 58438b6), so that
-# CI can check this folder before the release. Remove this section and
-# regenerate Cargo.lock once the release is published.
-[patch.crates-io]
-rullst = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
-rullst-auth = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
-rullst-core = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
-rullst-macros = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
-rullst-orm = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
-rullst-orm-macros = { git = "https://github.com/Rullst/Rullst", rev = "58438b64caa847ef7ffdcc08653ce26cb5a8a8a0" }
