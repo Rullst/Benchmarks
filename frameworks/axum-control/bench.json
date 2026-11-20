@@ -45,5 +45,5 @@
   "variant": "A/A control",
   "role": "control",
   "control_of": "axum",
-  "role_note": "An identical copy of the Axum baseline (every file but bench.json and README.md is byte-identical; `harness.py validate` checks it), measured like every other implementation against Axum on the same runner. Its scores should be 1.00; their largest deviation is each category's tie margin. Unranked."
+  "role_note": "An identical copy of the Axum baseline (every file but bench.json and README.md is byte-identical; `harness.py validate` checks it), measured like every other implementation against Axum on the same runner. Its scores should be 1.00; their largest deviation is each category's A/A margin, one term of the tie margin (docs/v3-spec.md section 12). Unranked."
 }
