@@ -4,10 +4,10 @@ name: Benchmark
 # a time while Rullst/Rullst is quiet and 3 while it is busy (the organization
 # shares 20 runners with Rullst/Rullst's CI).
 # - schedule: every night, measure the newest `rullst` release on crates.io if
-#   it has not been measured yet (5 rounds on 2 runners per implementation),
+#   it has not been measured yet (5 rounds on 3 runners per implementation),
 #   then publish the results to main if the publication gate passes;
 # - workflow_dispatch: a manual run (publishing only when asked, from main,
-#   with at least 5 rounds and 2 jobs per implementation, and only if the
+#   with at least 5 rounds and 3 jobs per implementation, and only if the
 #   publication gate passes);
 # - a pull request labelled `benchmark-trial`: a one-round, one-job trial of
 #   the frameworks the pull request changes; nothing is published.
@@ -33,8 +33,8 @@ on:
         description: Rounds per job (ABBA with the Axum baseline); publishing needs at least 5
         default: "5"
       jobs_per_framework:
-        description: Jobs (runners) per implementation, pooled in the results; publishing needs at least 2
-        default: "2"
+        description: Jobs (runners) per implementation, pooled in the results; publishing needs at least 3
+        default: "3"
       rullst_version:
         description: Published rullst version to measure (empty = the version pinned in frameworks/rullst)
         default: ""
@@ -96,7 +96,10 @@ jobs:
         run: |
           set -euo pipefail
           pinned="$(sed -nE 's/^rullst = \{ version = "=([^"]+)".*/\1/p' frameworks/rullst/Cargo.toml)"
-          run=true; publish=false; frameworks=all; rounds=5; jobs=2; version="$pinned"
+          # The publication gate's minimums (bench/config.json publication) are the official run's defaults.
+          min_rounds="$(python3 -c 'import json; print(json.load(open("bench/config.json"))["publication"]["min_rounds"])')"
+          min_jobs="$(python3 -c 'import json; print(json.load(open("bench/config.json"))["publication"]["min_jobs"])')"
+          run=true; publish=false; frameworks=all; rounds="$min_rounds"; jobs="$min_jobs"; version="$pinned"
           case "$EVENT" in
             schedule)
               python3 bench/release_check.py > release.txt
@@ -109,7 +112,7 @@ jobs:
               publish=true
               ;;
             workflow_dispatch)
-              frameworks="${IN_FRAMEWORKS:-all}"; rounds="${IN_ROUNDS:-5}"; jobs="${IN_JOBS:-2}"
+              frameworks="${IN_FRAMEWORKS:-all}"; rounds="${IN_ROUNDS:-$min_rounds}"; jobs="${IN_JOBS:-$min_jobs}"
               version="${IN_VERSION:-$pinned}"
               if [ "$IN_PUBLISH" = true ]; then
                 if [ "$REF" != refs/heads/main ] || [ "$frameworks" != all ]; then
@@ -127,8 +130,8 @@ jobs:
           esac
           case "$rounds" in ''|*[!0-9]*) echo "::error::rounds must be a number"; exit 1;; esac
           case "$jobs" in [1-3]) ;; *) echo "::error::jobs_per_framework must be 1-3"; exit 1;; esac
-          if [ "$publish" = true ] && { [ "$rounds" -lt 5 ] || [ "$jobs" -lt 2 ]; }; then
-            echo "::error::publishing needs at least 5 rounds and 2 jobs per implementation"; exit 1
+          if [ "$publish" = true ] && { [ "$rounds" -lt "$min_rounds" ] || [ "$jobs" -lt "$min_jobs" ]; }; then
+            echo "::error::publishing needs at least $min_rounds rounds and $min_jobs jobs per implementation"; exit 1
           fi
           case "$version" in *[!0-9A-Za-z.+-]*) echo "::error::invalid rullst version"; exit 1;; esac
           auto_parallel=3

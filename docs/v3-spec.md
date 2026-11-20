@@ -24,15 +24,17 @@ about them: client-bound runs are scored by requests per CPU-second of the
 server and PostgreSQL together; a load-generator-bound run whose server used
 less than 75% of its vCPUs is not comparable; the 1% error rule applies to
 every scored run (not only Application); ties come from an A/A control
-(`frameworks/axum-control`); the categories are Hello world (`/text`,
+(`frameworks/axum-control`) and, since 2026-11-20, also from each
+implementation's spread between its jobs and a pooled floor (section 12);
+the categories are Hello world (`/text`,
 `/json`, `/html`), Database (`/db-single` and the three TechEmpower
 endpoints), Application, Memory and Startup (with floors), plus a Stability
 check (Tiers 2 and 4, pass or fail); Rullst's minimal configuration is an
 unranked diagnostic; the overall ranking is optional (off by default); each
 endpoint is warmed up immediately before its run, for 15 s on JIT runtimes;
-rounds run in ABBA order on 2 jobs per implementation; conformance adds a
-concurrent step (125 connections, 3 s, no error allowed). The endpoint
-contracts below are unchanged.
+rounds run in ABBA order on 3 jobs per implementation (2 until 2026-11-20,
+section 12); conformance adds a concurrent step (125 connections, 3 s, no
+error allowed). The endpoint contracts below are unchanged.
 
 Phase 1 adds the TechEmpower-style `/queries`, `/updates` and `/fortunes`, a
 requests-per-server-CPU-second efficiency metric and the CPU split
@@ -1069,3 +1071,101 @@ by the integration of the 16 folders).
     overall score, which since the 2026-11-19 revision is computed for review
     and published only when `scoring.publish_overall` is true.
 11. **wrk is built on the runner** (`bench/install-loadgen.sh`), as in 6.
+
+## 12. Tie margins and three jobs (2026-11-20)
+
+**Why.** A light validation trial (fork run 44673073257, one job and two
+rounds per implementation) passed every gate, and its review found that the
+tie margins understated the noise. They came from the A/A control alone,
+one identical copy of Axum per job, compared with Axum on the same runner:
+±0.03-0.33% per category. The ratios of the same implementations to Axum
+differed much more between trials on different CPU models (NestJS's `/json`:
+0.45× on a Xeon 6975P-C, 0.31× on an EPYC 7763), so a 10-20% gap between two
+implementations measured on different CPUs could be ranked as a difference.
+The A/A control cannot show that noise: its two sides are identical, so a
+CPU model that favours one framework over Axum moves nothing in it.
+
+**Three jobs.** The official run measures every implementation on 3 jobs
+(runners) of 5 rounds: `publication.min_jobs` is 3 in `bench/config.json`,
+`benchmark.yml` takes its defaults for the scheduled and manual runs from
+`publication`, and the publication gate refuses fewer jobs, also for job
+files recorded with an older, lower minimum (`aggregate.MIN_JOBS`).
+`max_parallel` stays at most 8, so a full run takes about 1.5 times as long
+as with 2 jobs.
+
+**The rule** (`bench/rankings.py`: `job_spread`, `pooled_floor`,
+`effective_spread`, `pair_margin`, `rank_entries`). In each category:
+
+1. Every implementation has one score per job, computed like its pooled score
+   from that job's rounds and the Axum rounds paired with them (the median
+   of the per-round ratios, then the category's geometric mean or cost
+   ratio). A job without a score in the category (not comparable, errors,
+   corrected out) does not count.
+2. Its **own spread** `s` is the half-range of the logarithms of its per-job
+   scores, `(max ln - min ln) / 2`, with at least two scored jobs.
+3. The **pooled floor** `f` is the median of `s` over the ranked
+   implementations with at least two scored jobs.
+4. Its **effective spread** `e` is `s`, except: `max(s, f)` when its scored
+   jobs all ran on one CPU model or on one the runner did not report (the
+   spread then cannot include the difference between CPU models), and `f`
+   with a single scored job.
+5. Two scores `A` and `B` tie when `|ln A - ln B| <= max(a, sqrt(e_A^2 +
+   e_B^2), f)`, with `a` the A/A margin (the largest `|ln|` of the control's
+   scores, per job and pooled, as before).
+6. Positions keep the existing procedure: scores in order, each compared with
+   the best score of the current group. In that comparison the lower score
+   counts with the largest effective spread among itself and the group's
+   other members. Without that, a precise score could be separated from a
+   group that a noisy score with the same value had joined, and equal scores
+   would get different positions (the recompute of the two trials did that in
+   Startup: FastAPI and Phoenix, both 0.93, at 1 and 11).
+7. A score is marked "≈ Axum" when `|ln score| <= max(a, e, f)`: Axum's ratio
+   to itself is 1.00 in every job, so it adds no spread.
+8. The overall score and the other weightings use the same rule with the
+   per-job weighted geometric means of the category scores. Startup keeps its
+   0.25 s readiness-interval rule as well.
+
+The rule is at least as conservative as the one asked for (the largest of
+the A/A margin, the root of the sum of squares of the two spreads, and the
+floor): steps 4 and 6 can only raise a margin. Why these choices:
+
+- **Half-range, not the standard deviation.** With two or three jobs a
+  standard deviation is unstable and with two it is the half-range times
+  √2; the half-range is what the maintainer's rule named and needs no
+  distribution. As a rough guide: for normally distributed per-job log
+  scores with standard deviation σ, the expected half-range of three is
+  about 0.85σ; a pooled score, the median over three jobs' rounds, varies by
+  about 0.67σ with the CPU models it drew, and the difference of two pooled
+  scores by about 0.95σ. The margin `sqrt(e_A^2 + e_B^2)` is then about
+  1.2σ, about 1.3 standard deviations of that difference: a modest margin
+  for one pair, which the floor and steps 4 and 6 raise where three jobs
+  are likely to underestimate the noise. It is not a significance test.
+- **The floor is the median, not the mean or the maximum**, so one
+  implementation whose jobs differed for another reason (a crash in one
+  round, an outlier runner) does not set every margin, while every
+  implementation still gets at least the typical spread between runners.
+- **A single job falls back to the floor instead of refusing to rank.** The
+  publication gate already refuses fewer than three jobs, so a single-job
+  score only appears in a review report (a light trial or a job that lost its
+  scores in one category); there the floor is the best available estimate of
+  the noise it carries, and the report says "floor (one job)" next to it.
+  With no implementation measured on two jobs there is no floor and the
+  margin is the A/A margin alone, as before; the gate then also refuses
+  ("no between-job spread").
+
+**Shown.** Above the rankings: the rule, and each category's A/A margin and
+floor. In each ranked cell: "±" with the margin of the comparison that set
+its position (the first position has none). In `benchmarks_results.md`, per
+category: each job's score with its CPU model, the spread used (and why it
+is the floor), the comparison that set the position, and the "≈ Axum"
+margin; the "Runner CPUs" column names the CPU model of every job. In the
+JSON: `tie_rule` per category, overall and weighting, and `spread`,
+`tie_check` and `reference_margin` per entry (README, "Machine-readable
+results").
+
+**Tests.** `bench/tests/test_ties.py`: the spread and the floor; the three
+terms of the margin; a gap just inside and just outside the margin; the A/A
+margin alone being too small; jobs all on one CPU model; a single job; no
+implementation with two jobs; equal scores with different spreads; the "≈"
+check; every category, the overall score and the weightings; the aggregate
+and the rendered tables.

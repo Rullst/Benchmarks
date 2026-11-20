@@ -196,7 +196,9 @@ throughput scores are efficiency-aware: a run counts with its requests/s
 ratio when neither server was client-bound, and with its ratio of requests
 per CPU-second of the server and PostgreSQL together when either was. A
 run with more than 1% errors has no score in its category. Ties come from
-an A/A control (an identical copy of Axum, measured like everything else).
+an A/A control (an identical copy of Axum, measured like everything else)
+and from how much each implementation's scores differ between its jobs
+([How the scores are computed](#how-the-scores-are-computed)).
 An overall ranking (the geometric mean of the five scores) is computed for
 review with a table of the positions under other weightings; it is
 published only when `scoring.publish_overall` in
@@ -207,9 +209,12 @@ always shown.
 ## Method
 
 Each framework is measured by its own jobs, each on a GitHub-hosted
-`ubuntu-latest` runner (4 vCPUs, 16 GiB of RAM): 2 jobs per implementation
-by default (the `jobs_per_framework` input), so every implementation is
-measured on at least two machines, often with different CPU models. Each job
+`ubuntu-latest` runner (4 vCPUs, 16 GiB of RAM): 3 jobs per implementation
+by default (the `jobs_per_framework` input; `publication.min_jobs` in
+[bench/config.json](bench/config.json) is the minimum for publishing), so
+every implementation is measured on three machines, often with different
+CPU models. Ratios to Axum cancel most, not all, of the difference between
+runners; the tie margins below are derived from what remains. Each job
 records `lscpu`, the CPU model, the kernel, the memory, the Docker version,
 image digests and tool versions with the results, and every results row
 names the CPU model of each of its jobs.
@@ -296,8 +301,9 @@ names the CPU model of each of its jobs.
 6. **A/A control.** `frameworks/axum-control` is a byte-identical copy of
    the Axum baseline (`harness.py validate` checks it), measured in its own
    jobs exactly like every other implementation. Its ratios should all be
-   1.00, so how far they land from 1.00 is the noise of a ratio; it sets the
-   tie margins (below) and is listed, unranked, with the results.
+   1.00, so how far they land from 1.00 is the noise of a ratio on one
+   runner; it is one of the three terms of the tie margins (below) and is
+   listed, unranked, with the results.
 
 Fixed settings, the same for every implementation:
 
@@ -415,13 +421,37 @@ matters in production (11 MiB against 14 MiB, 0.01 s against 0.4 s) do not
 move a score. Stability is a check, not a score: Tiers 2 and 4 pass, warn
 (RAM still growing) or fail (a stop, or a round with more than 1% errors).
 
-**Ties and the A/A margin.** Each category's tie margin is the largest
-deviation from 1.00 of the A/A control's scores in that category (per job,
-and pooled over its jobs): the noise a score carries under the same
-procedure. Scores within the margin of the best score of their group share a
-position ("(tie)"), and a score within it of 1.00 is marked "≈": not
-distinguishable from Axum. Start-up times within the 0.25 s readiness check
-interval also share a position. The margins are printed above the rankings.
+**Ties.** Every implementation has one score per job (runner) in each
+category, computed from that job's rounds; its **between-job spread** is the
+half-range of the logarithms of those scores. Two scores tie when the gap
+between them, in natural-log units, is at most the largest of:
+
+- **(a) the A/A margin:** the largest deviation from 1.00 of the A/A
+  control's scores in that category (per job, and pooled over its jobs);
+- **(b) their combined spread:** the root of the sum of squares of the two
+  implementations' between-job spreads;
+- **(c) the pooled floor:** the median between-job spread of the ranked
+  implementations measured on at least two jobs in that category.
+
+An implementation whose jobs all ran on one CPU model (or on a model the
+runner did not report) counts with at least the pooled floor as its spread,
+because its own spread cannot include the difference between CPU models; an
+implementation with a score from a single job counts with the floor. The A/A
+control alone is not enough: each of its jobs compares two identical servers
+on the same runner, so it cannot show how the ratio between two different
+frameworks changes from one CPU model to another. Scores within the margin
+of the best score of their group share a position ("(tie)"); each score is
+compared with that best score and, when the group's other members have a
+wider spread than its own, counts with the widest of them, so that equal
+scores always share a position. A score within the largest of (a), its own
+spread and (c) of 1.00 is marked "≈": not distinguishable from Axum.
+Start-up times within the 0.25 s readiness check interval also share a
+position. The overall score and the other weightings use the same rule with
+the per-job geometric means. The A/A margin and the floor of each category
+are printed above the rankings; "±" after a score is the margin of the
+comparison that set its position, and the detailed tables in
+[benchmarks_results.md](benchmarks_results.md) list each job's score and CPU
+model, the spread used and that comparison.
 
 **Unranked rows.** Axum is the reference (1.00). Rullst's minimal
 configuration, the A/A control and the Axum variant without SQLx's
@@ -554,7 +584,7 @@ choice can be checked and challenged.
   the measured Rullst came from crates.io or from a git revision.
 - **The method treats every implementation the same way**: the same
   harness, CPU split, rounds in ABBA order against Axum on the same runner,
-  warm-up rule by runtime class, error gate and A/A tie margins. That does
+  warm-up rule by runtime class, error gate and tie margins. That does
   not remove what 2 vCPUs, one shared machine and a closed-loop load
   generator favour ([What this benchmark does not
   measure](#what-this-benchmark-does-not-measure)).
@@ -581,9 +611,12 @@ numbers; see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Shared, virtual runners.** GitHub-hosted runners are virtual machines on
   shared hosts, with different CPU models from job to job. Absolute numbers
   differ between runs and between jobs of the same run; the per-round ratio
-  to Axum and the two jobs per implementation reduce this but do not remove
-  it. The A/A control measures what is left: differences smaller than its
-  margin are within the noise.
+  to Axum and the three jobs per implementation reduce this but do not
+  remove it. The tie margins take what is left from the A/A control and from
+  how much each implementation's scores differ between its jobs: differences
+  smaller than the margin are within the noise. Three jobs give a rough
+  estimate of that spread, and an implementation whose three jobs happen to
+  run on one CPU model gets the pooled floor instead of its own.
 - **The load generator limits the top.** With 2 vCPUs, the load generator
   (and PostgreSQL on the database endpoints) cannot saturate the fastest
   servers. Those results are flagged, and the rankings compare them by CPU
@@ -620,7 +653,7 @@ numbers; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 A nightly check (01:00 UTC-3) reads the newest `rullst` version on crates.io,
 prereleases included. When that version has not been measured yet, the
-workflow measures every implementation with it (5 rounds on each of 2 jobs
+workflow measures every implementation with it (5 rounds on each of 3 jobs
 per implementation) and commits the results to `main`: this README's table,
 [benchmarks_results.md](benchmarks_results.md) and the JSON files under
 [results/](results/). The dashboard is then rebuilt. Each measured Rullst
@@ -635,8 +668,9 @@ publishes nothing, when (`publication_gate` in
 [bench/aggregate.py](bench/aggregate.py), limits in `publication` in
 [bench/config.json](bench/config.json)):
 
-- an implementation was not measured, or was measured on fewer than 2 jobs
-  or fewer than 5 rounds per job;
+- an implementation was not measured, or was measured on fewer than 3 jobs
+  or fewer than 5 rounds per job (a run recorded with a lower minimum is
+  still held to 3);
 - the jobs disagree on the harness commit, the configuration, the vCPU
   count, the load generator (its version, source tarball and compiler: the
   binary built on each runner is not byte-for-byte reproducible), the
@@ -645,6 +679,9 @@ publishes nothing, when (`publication_gate` in
   Stability check;
 - the A/A control is missing, or its tie margin is above 5% in any
   category (the run was too noisy to rank);
+- a category has no between-job spread (no ranked implementation has scores
+  from two jobs), so its tie margins could not include the difference
+  between runners;
 - Rullst was not built from its crates.io release.
 
 The workflow summary then lists the reasons; the results of the run stay
@@ -739,9 +776,10 @@ Fields are only ever added to it:
   "rankings": {                                per-category positions (bench/rankings.py)
     "reference": "axum",                       listed with score 1.0 and no position
     "tie_margins": { "<category>": { "margin", "percent", "scores" }, "overall": ... },
-                                               from the A/A control: margin in natural-log units
-                                               (scores within it tie), percent, the control's scores
-    "tie_tolerance": 0.012,                    the overall tie margin (null without A/A data)
+                                               from the A/A control: term (a) of the tie margins,
+                                               in natural-log units, as a percentage, and the
+                                               control's scores
+    "tie_tolerance": 0.012,                    the overall A/A margin (null without A/A data)
     "startup_resolution_s": 0.25,              readiness check interval: start-up times this close
                                                share a position
     "settings": { "publish_overall", "max_error_rate", "memory_floor_mib", "startup_floor_s" },
@@ -752,7 +790,11 @@ Fields are only ever added to it:
         "key": "hello", "title": "Hello world", "tier": "Tier 1", "kind": "throughput",
         "description": "...", "runs": ["tier1.text", ...], "metrics": ["tier1.text.rps", ...],
         "lower_is_better": false,              true for memory and startup (costs)
-        "tie_margin": { "margin", "percent", "scores" },
+        "tie_margin": { "margin", "percent", "scores" },   the A/A margin, as in tie_margins
+        "tie_rule": { "aa_margin", "aa_percent", "floor", "floor_percent", "floor_from", "ranked" },
+                                               the A/A margin and the pooled floor (natural-log
+                                               units and percentages), how many ranked rows the
+                                               floor comes from, and how many rows are ranked
         "entries": [                           scored rows by score, then the others
           {
             "slug", "framework",               "framework" as in results[]
@@ -766,7 +808,19 @@ Fields are only ever added to it:
                                                from the capacity ratios
             "ratio": 0.99,                     the requests/s ratio (throughput), or the RAM or
                                                start-up time ratio
-            "within_reference_margin": true,   the score is within the A/A margin of 1.00
+            "within_reference_margin": true,   the score is within reference_margin of 1.00
+            "reference_margin": { "margin", "percent" },   the largest of the A/A margin, the
+                                               effective spread and the floor
+            "spread": { "jobs", "scores", "cpu_models", "own", "own_percent", "same_cpu",
+                        "effective", "effective_percent", "basis" },   the score of each scored job
+                                               with its CPU model, the half-range of their
+                                               logarithms ("own"), and the spread the margins use
+                                               ("effective": own, or the floor; "basis" says which)
+            "tie_check": { "against", "margin", "percent", "gap_percent", "tied", "group_spread_of" },
+                                               the comparison that set the position: with the best
+                                               score of the group above (absent for the first
+                                               position); group_spread_of names the member whose
+                                               wider spread it used, if any
             "efficiency_runs": ["tier1.json", ...],   runs scored by CPU efficiency
             "limited_runs": { "<run>": { "postgresql": n, "load-generator": n } },
             "client_bound", "client_bound_runs",   kept for older readers
@@ -786,10 +840,11 @@ Fields are only ever added to it:
                                   "detail": { "tier2": {...}, "tier4": {...}, "crashed_rounds",
                                               "ram_growing_rounds", "rounds" } } ] },
     "publish_overall": false,                  when true, "overall" and "sensitivity" are included:
-    "overall": { "weights": {...}, "entries": [ { "slug", "framework", "position", "status", "tie",
-                 "tied_with", "score", "categories", "missing", "stability", "reason" } ] },
-    "sensitivity": [ { "key", "title", "weights", "entries": [ ... ] } ]   positions under other
-                                               weightings
+    "overall": { "weights": {...}, "tie_rule": {...}, "entries": [ { "slug", "framework", "position",
+                 "status", "tie", "tied_with", "score", "categories", "missing", "stability", "reason",
+                 "spread", "tie_check" } ] },
+    "sensitivity": [ { "key", "title", "weights", "tie_rule", "entries": [ ... ] } ]   positions
+                                               under other weightings
   },
   "results_schema": 1
 }
@@ -903,6 +958,17 @@ run (longer for JIT runtimes), rounds run in ABBA order, every
 implementation runs on 2 jobs by default, and conformance gained a
 concurrent step. Rankings from before the revision are not comparable with
 later ones.
+
+**Tie margins from the spread between jobs (20 November 2026).** A
+validation trial gave A/A margins of 0.03-0.33%, while the same
+implementations' ratios to Axum differed much more between trials on
+different CPU models (NestJS's `/json`: 0.45× on a Xeon 6975P-C, 0.31× on an
+EPYC 7763), so a 10-20% gap between two implementations measured on
+different CPUs could be ranked as a difference. Ties now also use each
+implementation's spread between its jobs and a pooled floor
+([How the scores are computed](#how-the-scores-are-computed)), and the
+official run measures every implementation on 3 jobs instead of 2. Positions
+from before this change are not comparable with later ones.
 
 ## License
 

@@ -232,7 +232,8 @@ control, with `control_of` naming the folder it copies).
 The A/A control, `frameworks/axum-control`, is a byte-identical copy of
 `frameworks/axum` except for `bench.json` and `README.md`; `harness.py
 validate` fails otherwise. A change to Axum's folder copies every changed file
-there in the same commit. Its scores set the tie margins of the rankings.
+there in the same commit. Its scores give the A/A term of the tie margins of
+the rankings (the README's "Ties" explains the other two).
 
 ### Checking your folder
 

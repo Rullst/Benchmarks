@@ -28,11 +28,28 @@ generator while its server used less than 75% of its vCPUs is not comparable.
 A run whose median error rate is above 1% has no score (every request the
 load sends is valid).
 
-Ties come from the A/A control: an identical copy of Axum measured like every
-other implementation, whose scores should be 1.00. Its largest deviation from
-1.00 in a category (per job, and pooled) is that category's tie margin: two
-scores closer than it share a position, and a score within it of 1.00 is not
-distinguishable from Axum's.
+Ties (docs/v3-spec.md, "Tie margins"). Every implementation has one score
+per job (runner) in each category, from that job's rounds; its between-job
+spread is the half-range of their logarithms. In natural-log units, two
+scores tie when the gap between them is at most the largest of:
+
+  (a) the A/A margin: the largest deviation from 1.00 of the A/A control's
+      scores (an identical copy of Axum; per job, and pooled);
+  (b) the root of the sum of squares of the two implementations' spreads;
+  (c) the pooled floor: the median spread of the ranked implementations
+      measured on at least two jobs in that category.
+
+An implementation whose jobs all ran on one CPU model (or on an unknown one)
+counts with at least the pooled floor as its spread, because its own spread
+cannot include the difference between CPU models; one measured on a single
+job counts with the pooled floor. Without any implementation measured on two
+jobs there is no floor and the margin is the A/A margin alone (the
+publication gate refuses such results). Positions compare each score with the
+best score of the group above it; the score counts with the widest spread of
+that group's other members when it is wider than its own, so that equal
+scores always share a position. A score within max(a, its own spread, c) of
+1.00 is not distinguishable from Axum's. The same rule applies to the overall
+score and the other weightings, from the per-job geometric means.
 
 The overall score (the geometric mean of the five category scores) is
 computed for the maintainer's review and the sensitivity table, and published
@@ -114,10 +131,16 @@ METHOD = {
               "load-generator-bound otherwise",
     "floors": "Memory counts every high-water mark as at least 64 MiB and Startup every time as at least 1 s, "
               "so that differences far below what matters in production do not move the scores",
-    "ties": "the tie margin of a category is the largest deviation from 1.00 of the A/A control's scores (an "
-            "identical copy of Axum, per job and pooled); scores within it of the best score of their group "
-            "share a position, and a score within it of 1.00 is marked as indistinguishable from Axum; in "
-            "Startup, times within the readiness poll interval also share a position",
+    "ties": "two scores tie when their gap in natural-log units is at most the largest of (a) the A/A margin "
+            "(the largest deviation from 1.00 of the A/A control's scores, per job and pooled), (b) the root of "
+            "the sum of squares of the two implementations' between-job spreads (the half-range of the "
+            "logarithms of their per-job scores) and (c) the pooled floor (the median spread of the ranked "
+            "implementations measured on at least two jobs); an implementation whose jobs all ran on one CPU "
+            "model counts with at least the floor as its spread, one measured on a single job with the floor; "
+            "scores within the margin of the best score of their group share a position (a score counts with the "
+            "widest spread of the group's other members when it is wider than its own, so equal scores share a "
+            "position), and a score within max(a, its spread, c) of 1.00 is marked as indistinguishable from "
+            "Axum; in Startup, times within the readiness poll interval also share a position",
     "not comparable": "a run whose round pairs were mostly not comparable (see ratios) has no score in its "
                       "category",
     "errors": "a run whose median error rate is above 1% (any response that is not 2xx, any transport error or "
@@ -328,11 +351,97 @@ def stability_entry(row: dict, name, settings: dict) -> dict:
     return dict(entry, result=result, reasons=reasons)
 
 
+def _percent(margin: float | None) -> float | None:
+    """A margin in natural-log units as a percentage (0.0953 is ±10%)."""
+    return round((math.exp(margin) - 1) * 100, 2) if margin is not None else None
+
+
+def _gap(a: float | None, b: float | None) -> float | None:
+    return abs(math.log(a / b)) if a and b else None
+
+
+def job_spread(scores: list, cpu_models: list) -> dict:
+    """An implementation's per-job scores in one category and their between-job spread.
+
+    `own` is the half-range of the logarithms of the scored jobs' scores (None
+    with fewer than two); `same_cpu` is true when those jobs ran on one CPU
+    model, or on one the runner did not report, so that `own` cannot include
+    the difference between CPU models.
+    """
+    pairs = [(score, model or "unknown") for score, model in zip(scores, cpu_models) if score]
+    logs = [math.log(score) for score, _ in pairs]
+    models = [model for _, model in pairs]
+    own = (max(logs) - min(logs)) / 2 if len(logs) >= 2 else None
+    return {"jobs": len(pairs), "scores": [round(score, 4) for score, _ in pairs], "cpu_models": models,
+            "own": round(own, 6) if own is not None else None, "own_percent": _percent(own),
+            "same_cpu": len(set(models)) < 2 or "unknown" in models}
+
+
+def pooled_floor(spreads: list[dict]) -> float | None:
+    """The median between-job spread of the given implementations that have one (two or more jobs)."""
+    values = sorted(s["own"] for s in spreads if s.get("own") is not None)
+    if not values:
+        return None
+    middle = len(values) // 2
+    return round(values[middle] if len(values) % 2 else (values[middle - 1] + values[middle]) / 2, 6)
+
+
+def effective_spread(spread: dict, floor: float | None) -> dict:
+    """The spread an implementation counts with: its own, or at least the pooled floor.
+
+    One job: the floor (there is no spread of its own). Jobs all on one CPU
+    model: the larger of its own spread and the floor. Otherwise its own.
+    """
+    own = spread["own"]
+    if own is None:
+        jobs = "one job" if spread["jobs"] == 1 else "no per-job score"
+        value, basis = floor, f"floor ({jobs})" if floor is not None else f"none ({jobs}, no floor)"
+    elif spread["same_cpu"] and floor is not None and floor > own:
+        value, basis = floor, "floor (one CPU model)"
+    else:
+        value, basis = own, "own"
+    return dict(spread, effective=value, effective_percent=_percent(value), basis=basis)
+
+
+def pair_margin(aa: float | None, floor: float | None, *spreads: float | None) -> float | None:
+    """The tie margin (natural-log units) between scores with these effective spreads.
+
+    The largest of the A/A margin, the pooled floor and the root of the sum
+    of squares of the spreads; None when none of them is known (exact ties
+    only). With one spread it is the margin of a score against Axum's 1.00,
+    whose ratio to itself has no spread.
+    """
+    parts = [m for m in (aa, floor) if m is not None]
+    known = [s for s in spreads if s is not None]
+    if known:
+        parts.append(math.sqrt(sum(s * s for s in known)))
+    return max(parts) if parts else None
+
+
+def tie_rule(entries: list[dict], job_scores: dict, job_cpus: dict, aa: float | None) -> dict:
+    """Attach each entry's between-job spread (`spread`) and return the group's rule.
+
+    job_scores and job_cpus map a slug to its per-job scores and CPU models,
+    in job order. The floor is the median own spread of the ranked entries.
+    """
+    for entry in entries:
+        entry["spread"] = job_spread(job_scores.get(entry["slug"]) or [], job_cpus.get(entry["slug"]) or [])
+    ranked = [e for e in entries if e["status"] == "ranked" and e["score"] is not None]
+    floor = pooled_floor([e["spread"] for e in ranked])
+    for entry in entries:
+        entry["spread"] = effective_spread(entry["spread"], floor)
+        if entry["status"] == "reference":  # Axum's ratio to itself is 1.00 in every job
+            entry["spread"].update(effective=None, effective_percent=None, basis="reference")
+    return {"aa_margin": aa, "aa_percent": _percent(aa), "floor": floor, "floor_percent": _percent(floor),
+            "floor_from": sum(1 for e in ranked if e["spread"]["own"] is not None),
+            "ranked": len(ranked)}
+
+
 def _same_group(category: dict, margin: float | None, leader: dict, entry: dict) -> bool:
     if leader["score"] == entry["score"]:
         return True
-    if margin is not None and leader["score"] and entry["score"] \
-            and abs(math.log(leader["score"] / entry["score"])) <= margin + 1e-12:
+    gap = _gap(leader["score"], entry["score"])
+    if margin is not None and gap is not None and gap <= margin + 1e-12:
         return True
     if category.get("key") == "startup":
         lead, own = leader["detail"].get("startup_s"), entry["detail"].get("startup_s")
@@ -340,12 +449,25 @@ def _same_group(category: dict, margin: float | None, leader: dict, entry: dict)
     return False
 
 
-def _assign_positions(entries: list[dict], same_group) -> None:
-    """Standard competition positions (1, 1, 3) for ranked entries in score order."""
+def _assign_positions(entries: list[dict], same_group, margin_of=None) -> None:
+    """Standard competition positions (1, 1, 3) for ranked entries in score order.
+
+    Each entry is compared with the best score of the current group
+    (same_group(group, entry), the group's best first); with margin_of,
+    every entry after the first records that check (`tie_check`).
+    """
     ranked = [e for e in entries if e["status"] == "ranked" and e["score"] is not None]
     groups: list[list[dict]] = []
     for entry in ranked:
-        if groups and same_group(groups[-1][0], entry):
+        joined = bool(groups) and same_group(groups[-1], entry)
+        if groups and margin_of is not None:
+            leader = groups[-1][0]
+            margin, widest = margin_of(groups[-1], entry)
+            entry["tie_check"] = {"against": leader["slug"], "margin": round(margin, 6) if margin is not None
+                                  else None, "percent": _percent(margin),
+                                  "gap_percent": _percent(_gap(leader["score"], entry["score"])), "tied": joined,
+                                  "group_spread_of": widest}
+        if joined:
             groups[-1].append(entry)
         else:
             groups.append([entry])
@@ -355,6 +477,38 @@ def _assign_positions(entries: list[dict], same_group) -> None:
             others = [e["slug"] for e in group if e is not entry]
             entry.update(position=position, tie=bool(others), tied_with=others)
         position += len(group)
+
+
+def rank_entries(category: dict, entries: list[dict], rule: dict, reference: bool = True) -> None:
+    """Positions with the pairwise margins of `rule`, and (reference=True) the "≈ Axum" check.
+
+    A score is compared with the best score of the current group; on the
+    other side of that comparison it counts with the largest effective
+    spread among itself and the group's other members. That is at least the
+    pairwise margin, and it keeps equal or nearly equal scores together: a
+    precise score just below a noisy one that tied with the group's best
+    cannot get a lower position than it.
+    """
+    aa, floor = rule["aa_margin"], rule["floor"]
+
+    def margin_of(group: list[dict], entry: dict) -> tuple[float | None, str | None]:
+        widest, source = entry["spread"]["effective"], None
+        for member in group[1:]:
+            spread = member["spread"]["effective"]
+            if spread is not None and (widest is None or spread > widest):
+                widest, source = spread, member["slug"]
+        return pair_margin(aa, floor, group[0]["spread"]["effective"], widest), source
+
+    if reference:
+        for entry in entries:
+            if entry["score"] and entry["status"] != "reference":
+                margin = pair_margin(aa, floor, entry["spread"]["effective"])
+                entry["reference_margin"] = {"margin": round(margin, 6) if margin is not None else None,
+                                             "percent": _percent(margin)}
+                if margin is not None:
+                    entry["within_reference_margin"] = abs(math.log(entry["score"])) <= margin + 1e-12
+    _assign_positions(entries, lambda group, entry: _same_group(category, margin_of(group, entry)[0], group[0], entry),
+                      margin_of)
 
 
 ORDER = {"ranked": 0, "reference": 0, "diagnostic": 0, "A/A control": 0, "not comparable": 1, "errors": 1,
@@ -404,31 +558,57 @@ def _weighted(scores: dict, weights: dict) -> float | None:
     return geometric_mean([scores[k] for k in keys], [weights[k] for k in keys])
 
 
+def _job_scores(category: dict, job_rows: list[dict], base: dict | None, name, settings: dict) -> list:
+    """One category's score in each of an implementation's jobs (None where a job has none)."""
+    return [_category_entry(category, row, base, name, settings)["score"] for row in job_rows]
+
+
+def _combined_job_scores(per_category: dict[str, list], weights: dict) -> list:
+    """Per-job weighted geometric means of the category scores (None where a job lacks one)."""
+    keys = [k for k in weights if weights[k]]
+    count = max((len(per_category.get(k) or []) for k in keys), default=0)
+    out = []
+    for job in range(count):
+        values = [(per_category.get(k) or [])[job] if job < len(per_category.get(k) or []) else None for k in keys]
+        out.append(geometric_mean(values, [weights[k] for k in keys]) if all(values) else None)
+    return out
+
+
 def compute(rows: list[dict], baseline: str, name=lambda row: row.get("name", row["slug"]),
-            settings: dict | None = None, control_rows: list[dict] | None = None) -> dict:
+            settings: dict | None = None, control_rows: list[dict] | None = None,
+            job_rows: dict[str, list[dict]] | None = None) -> dict:
     """The `rankings` field of the published results.
 
     control_rows: the A/A control's row per job (the pooled one is found in
-    rows by its role); without any, ties are exact and the margins are None.
+    rows by its role); without any, the A/A margins are None. job_rows maps a
+    slug to its row per job, in job order, each with the job's `cpu_model`:
+    the source of the between-job spreads; without them only the A/A margin
+    counts.
     """
     settings = DEFAULTS | (settings or {})
+    job_rows = job_rows or {}
     base = next((r for r in rows if r.get("is_baseline") or r["slug"] == baseline), None)
     pooled_controls = [r for r in rows if r.get("role") == "control" and _measured(r)]
-    margins = aa_margins([*(control_rows or []), *pooled_controls], base, settings)
+    if control_rows is None:
+        control_rows = [r for per_job in job_rows.values() for r in per_job if r.get("role") == "control"]
+    margins = aa_margins([*control_rows, *pooled_controls], base, settings)
+    job_cpus = {slug: [r.get("cpu_model") for r in per_job] for slug, per_job in job_rows.items()}
+    job_scores: dict[str, dict[str, list]] = {r["slug"]: {} for r in rows}
     categories = []
     by_slug: dict[str, dict[str, dict]] = {r["slug"]: {} for r in rows}
     for category in CATEGORIES:
-        margin = margins[category["key"]]["margin"]
+        key = category["key"]
         entries = _order([_category_entry(category, row, base, name, settings) for row in rows])
+        for row in rows:
+            job_scores[row["slug"]][key] = _job_scores(category, job_rows.get(row["slug"], []), base, name, settings)
+        rule = tie_rule(entries, {slug: s[key] for slug, s in job_scores.items()}, job_cpus,
+                        margins[key]["margin"])
+        rank_entries(category, entries, rule)
         for entry in entries:
-            if entry["score"] is not None and entry["status"] != "reference" and margin is not None:
-                entry["within_reference_margin"] = abs(math.log(entry["score"])) <= margin + 1e-12
-        _assign_positions(entries, lambda leader, entry, c=category, m=margin: _same_group(c, m, leader, entry))
-        for entry in entries:
-            by_slug[entry["slug"]][category["key"]] = entry
+            by_slug[entry["slug"]][key] = entry
         categories.append({k: category[k] for k in ("key", "title", "tier", "description", "metrics", "runs",
                                                     "lower_is_better", "kind")}
-                          | {"entries": entries, "tie_margin": margins[category["key"]]})
+                          | {"entries": entries, "tie_margin": margins[key], "tie_rule": rule})
     stability = [stability_entry(row, name, settings) for row in rows]
 
     overall = []
@@ -455,7 +635,10 @@ def compute(rows: list[dict], baseline: str, name=lambda row: row.get("name", ro
         overall.append(entry)
     overall = _order(overall)
     margin = margins["overall"]["margin"]
-    _assign_positions(overall, lambda leader, entry: _same_group({}, margin, leader, entry))
+    equal = {key: 1 for key in CATEGORY_KEYS}
+    overall_rule = tie_rule(overall, {slug: _combined_job_scores(s, equal) for slug, s in job_scores.items()},
+                            job_cpus, margin)
+    rank_entries({}, overall, overall_rule, reference=False)
 
     sensitivity = []
     for weighting in WEIGHTINGS:
@@ -467,8 +650,10 @@ def compute(rows: list[dict], baseline: str, name=lambda row: row.get("name", ro
                            "score": round(value, 4) if value is not None else None, "position": None,
                            "tie": False, "tied_with": [], "detail": {}})
         scored = _order(scored)
-        _assign_positions(scored, lambda leader, entry: _same_group({}, margin, leader, entry))
-        sensitivity.append({**weighting, "entries": scored})
+        rule = tie_rule(scored, {slug: _combined_job_scores(s, weighting["weights"]) for slug, s in job_scores.items()},
+                        job_cpus, margin)
+        rank_entries({}, scored, rule, reference=False)
+        sensitivity.append({**weighting, "entries": scored, "tie_rule": rule})
     return {
         "reference": baseline,
         "tie_margins": margins,
@@ -480,7 +665,7 @@ def compute(rows: list[dict], baseline: str, name=lambda row: row.get("name", ro
         "stability": {**STABILITY, "entries": stability},
         "publish_overall": bool(settings["publish_overall"]),
         "overall": {"weights": {key: round(1 / len(CATEGORY_KEYS), 4) for key in CATEGORY_KEYS},
-                    "entries": overall},
+                    "entries": overall, "tie_rule": overall_rule},
         "sensitivity": sensitivity,
     }
 

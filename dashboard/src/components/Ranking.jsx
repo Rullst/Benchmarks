@@ -41,7 +41,11 @@ function notes(entry, names) {
   if (['not measured', 'incomplete', 'not comparable', 'errors', 'unstable'].includes(entry.status)) return entry.reason;
   const out = [];
   if (entry.role_note && ['diagnostic', 'A/A control'].includes(entry.status)) out.push(entry.role_note);
-  if (entry.within_reference_margin) out.push('within the A/A margin of Axum');
+  if (entry.within_reference_margin) out.push('within the tie margin of Axum');
+  if (entry.status !== 'reference' && entry.spread?.effective_percent !== null && entry.spread?.effective_percent !== undefined) {
+    const cpus = entry.spread.cpu_models?.length ? ` over ${entry.spread.cpu_models.join(', ')}` : '';
+    out.push(`spread between jobs ±${entry.spread.effective_percent.toFixed(1)}%${cpus}`);
+  }
   if (entry.tie && entry.tied_with?.length) out.push(`tie with ${entry.tied_with.map(names).join(', ')}`);
   const limited = Object.entries(entry.limited_runs ?? {}).map(
     ([run, counts]) =>
@@ -203,10 +207,11 @@ function RankTable({ caption, title, entries, extra, value, cells, score, names 
 }
 
 const margin = (category) => {
-  const percent = category.tie_margin?.percent;
-  return percent === null || percent === undefined
-    ? ' No A/A tie margin (exact ties only).'
-    : ` Tie margin from the A/A control: ±${percent.toFixed(1)}%; "≈" rows are within it of Axum.`;
+  const percent = category.tie_rule?.aa_percent ?? category.tie_margin?.percent;
+  const floor = category.tie_rule?.floor_percent;
+  const aa = percent === null || percent === undefined ? 'no A/A margin' : `A/A margin ±${percent.toFixed(1)}%`;
+  const pooled = floor === null || floor === undefined ? '' : `, pooled floor ±${floor.toFixed(1)}%`;
+  return ` Two scores tie when their gap is within the largest of the A/A margin, the root of the sum of squares of their spreads between jobs and the pooled floor (${aa}${pooled}); "≈" rows are within it of Axum.`;
 };
 
 export function Ranking({ rankings, rows }) {

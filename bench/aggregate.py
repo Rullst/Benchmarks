@@ -234,7 +234,7 @@ PRESENTATION = ("role", "role_note", "structure_note", "database_note")
 
 
 def framework_row(slug: str, jobs: list[dict]) -> tuple[dict, list[dict]]:
-    """A framework's row pooled over its jobs, and (for the A/A control) its row per job."""
+    """A framework's row pooled over its jobs, and its row per job (each with the job's CPU model)."""
     measured = [job for job in jobs if (job["implementations"].get(slug) or {}).get("rounds")]
     first = next((job["implementations"].get(slug) for job in jobs if job["implementations"].get(slug)), None)
     manifest = (first or {}).get("manifest") or _manifest(slug)
@@ -255,7 +255,8 @@ def framework_row(slug: str, jobs: list[dict]) -> tuple[dict, list[dict]]:
         single = dict(entry, rounds=own, summary=summarize(own),
                       status="crashed" if any(r.get("crashed") for r in own) else "measured")
         job_row = _row(slug, manifest, single)
-        job_row.update(ratios=round_ratios(own, ref), paired_baseline=paired_values(ref), job=job.get("job", 1))
+        job_row.update(ratios=round_ratios(own, ref), paired_baseline=paired_values(ref), job=job.get("job", 1),
+                       cpu_model=job.get("environment", {}).get("cpu_model") or "unknown")
         per_job.append(job_row)
     pooled = dict(measured[0]["implementations"][slug], rounds=own_all, summary=summarize(own_all),
                   status="crashed" if any(r.get("crashed") for r in own_all) else "measured")
@@ -282,13 +283,14 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
     grouped = group_jobs(jobs)
     baseline = jobs[0]["baseline"] if jobs else "axum"
     slugs = requested or sorted(set(framework_slugs()) | set(grouped))
-    rows, control_rows = [], []
+    rows, control_rows, job_rows = [], [], {}
     for slug in slugs:
         if slug == baseline:
             continue
         row, per_job = framework_row(slug, grouped.get(slug, []))
         if row.get("role") == "control":
             control_rows += per_job
+        job_rows[slug] = per_job
         rows.append(row)
 
     # The baseline row pools the baseline rounds of every job (each job
@@ -327,6 +329,7 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
             rullst_source = row.get("dependency_source")
             break
     apply_corrections(rullst_version, rows)
+    apply_corrections(rullst_version, [r for per_job in job_rows.values() for r in per_job])
     note = version_note(rullst_version, rows)
     note_pt_br = version_note(rullst_version, rows, lang="pt_br")
     started = sorted(j.get("started_at", "") for j in jobs if j.get("started_at"))
@@ -356,13 +359,15 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
         "runners": runner_summary(jobs),
         "implementations": rows,
         "rankings": rankings.compute(rows, baseline, display_name, settings=config.get("scoring"),
-                                     control_rows=control_rows),
+                                     control_rows=control_rows, job_rows=job_rows),
     }
     combined["publication_gate"] = publication_gate(combined, jobs)
     return combined
 
 
 MEASURED = ("measured", "crashed")
+# The official run measures every implementation on 3 jobs (runners); config.json publication.min_jobs.
+MIN_JOBS = 3
 CONSISTENT = {
     "harness commit": lambda job: job.get("environment", {}).get("runner", {}).get("github_sha", ""),
     "configuration": lambda job: json.dumps(job.get("config", {}), sort_keys=True),
@@ -385,11 +390,13 @@ def publication_gate(combined: dict, jobs: list[dict]) -> dict:
     configuration, vCPU count, load generator (version, source and compiler),
     PostgreSQL version and rounds;
     no scored run above the error limit and no failed stability check; the
-    A/A control measured, with every tie margin at most `max_aa_margin`; and
-    Rullst built from its crates.io release.
+    A/A control measured, with every tie margin at most `max_aa_margin`; a
+    between-job spread (the pooled floor of the tie margins) in every
+    category; and Rullst built from its crates.io release.
     """
     settings = combined.get("config", {}).get("publication", {})
-    min_rounds, min_jobs = settings.get("min_rounds", 5), settings.get("min_jobs", 2)
+    # A run recorded with a lower minimum (an older configuration) is still held to the official one.
+    min_rounds, min_jobs = settings.get("min_rounds", 5), max(int(settings.get("min_jobs", MIN_JOBS)), MIN_JOBS)
     max_margin = settings.get("max_aa_margin", 0.05)
     problems = []
     for row in combined["implementations"]:
@@ -424,6 +431,11 @@ def publication_gate(combined: dict, jobs: list[dict]) -> dict:
             problems.append(f"no A/A control result for {key}: tie margins cannot be derived")
         elif margin["percent"] > max_margin * 100:
             problems.append(f"A/A noise too large in {key}: {margin['percent']:.1f}% (limit {max_margin:.0%})")
+    for category in rankings_data["categories"]:
+        rule = category.get("tie_rule") or {}
+        if rule.get("ranked") and rule.get("floor") is None:
+            problems.append(f"no between-job spread for {category['key']}: no ranked implementation has scores "
+                            "from two jobs, so the tie margins cannot include the difference between runners")
     source = combined.get("rullst_source") or {}
     if source.get("kind") != "crates.io":
         problems.append(f"Rullst was built from {source.get('label', 'an unknown source')}, not its crates.io "

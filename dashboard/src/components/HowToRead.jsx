@@ -46,8 +46,10 @@ export function HowToRead() {
         </li>
         <li>
           <strong>Ties and incomplete rows.</strong> Scores within the tie margin of their category share a
-          position, written &quot;1=&quot;; the margin is the largest deviation from 1.00 of the A/A control (an
-          identical copy of Axum measured like the others), so smaller differences are noise. Start-up times within
+          position, written &quot;1=&quot;. The margin is the largest of the A/A control&apos;s deviation from 1.00
+          (an identical copy of Axum measured like the others), the root of the sum of squares of the two
+          implementations&apos; spreads between their jobs (runners, often with different CPU models) and the
+          median of those spreads, so smaller differences are noise. Start-up times within
           0.25 s also share a position. A framework with a missing or left-out result, or one that does not serve
           an endpoint yet, is listed as incomplete, without a position in that category, rather than ranked on
           fewer metrics.

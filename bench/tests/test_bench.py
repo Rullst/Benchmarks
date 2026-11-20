@@ -548,25 +548,35 @@ class AggregateTests(unittest.TestCase):
     def test_publication_gate(self):
         def gate(jobs, names):
             return aggregate.combine(jobs, names)["publication_gate"]
-        jobs = [fake_job("actix", 1.1, rounds=5), fake_job("actix", 1.1, rounds=5),
-                fake_job("axum-control", 1.01, rounds=5), fake_job("axum-control", 0.99, rounds=5)]
-        for job, number in zip(jobs, (1, 2, 1, 2)):
+        jobs = [fake_job("actix", 1.1, rounds=5), fake_job("actix", 1.1, rounds=5), fake_job("actix", 1.1, rounds=5),
+                fake_job("axum-control", 1.01, rounds=5), fake_job("axum-control", 0.99, rounds=5),
+                fake_job("axum-control", 1.0, rounds=5)]
+        for job, number in zip(jobs, (1, 2, 3, 1, 2, 3)):
             job["job"] = number
         for job in jobs:
             job["implementations"][job["framework"]]["build"]["versions"] += (
                 "actix-source registry+https://github.com/rust-lang/crates.io-index\n")
-        for job in jobs[2:]:
+        for job in jobs[3:]:
             job["implementations"]["axum-control"]["manifest"].update(role="control", role_note="A/A copy")
         result = gate(jobs, ["actix", "axum-control"])
         self.assertEqual([p for p in result["problems"] if "Rullst" not in p], [])
         self.assertTrue(any("Rullst was built from" in p for p in result["problems"]))
         self.assertFalse(result["passed"])
-        one = gate(jobs[:1] + jobs[2:], ["actix", "axum-control"])["problems"]
-        self.assertTrue(any("actix: measured on 1 job(s), at least 2 required" in p for p in one))
+        self.assertEqual(load_config()["publication"]["min_jobs"], 3)  # the official run: 3 jobs per implementation
+        two = gate(jobs[:2] + jobs[3:], ["actix", "axum-control"])["problems"]
+        self.assertTrue(any("actix: measured on 2 job(s), at least 3 required" in p for p in two))
+        one = gate(jobs[:1] + jobs[3:4], ["actix", "axum-control"])["problems"]
+        self.assertTrue(any("actix: measured on 1 job(s), at least 3 required" in p for p in one))
+        self.assertTrue(any("no between-job spread for hello" in p for p in one))
+        older = copy.deepcopy(jobs[:2] + jobs[3:])  # recorded with the former minimum of 2 jobs
+        for job in older:
+            job["config"] = dict(job["config"], publication=dict(job["config"]["publication"], min_jobs=2))
+        self.assertTrue(any("actix: measured on 2 job(s), at least 3 required" in p
+                            for p in gate(older, ["actix", "axum-control"])["problems"]))
         noisy = copy.deepcopy(jobs)
-        noisy[3] = fake_job("axum-control", 0.8, rounds=5)
-        noisy[3].update(job=2)
-        noisy[3]["implementations"]["axum-control"]["manifest"].update(role="control", role_note="A/A copy")
+        noisy[4] = fake_job("axum-control", 0.8, rounds=5)
+        noisy[4].update(job=2)
+        noisy[4]["implementations"]["axum-control"]["manifest"].update(role="control", role_note="A/A copy")
         self.assertTrue(any("A/A noise too large in hello" in p for p in gate(noisy, ["actix", "axum-control"])[
             "problems"]))
         rebuilt = copy.deepcopy(jobs)  # the same wrk source and compiler, another binary: consistent
@@ -584,7 +594,7 @@ class AggregateTests(unittest.TestCase):
             r["tier1"]["json"]["error_rate"] = 0.05
         self.assertTrue(any("actix: Hello world: error rate above the limit" in p
                             for p in gate(errors, ["actix", "axum-control"])["problems"]))
-        self.assertFalse(gate(jobs[:2], ["actix"])["passed"])  # no A/A control
+        self.assertFalse(gate(jobs[:3], ["actix"])["passed"])  # no A/A control
 
 
 def rank_row(slug: str, hello=(1.0, 1.0, 1.0), database=(1.0, 1.0, 1.0, 1.0), application=(1.0,) * 5,
@@ -745,7 +755,7 @@ class RankingTests(unittest.TestCase):
         self.assertEqual(hello["a"]["tied_with"], ["b"])
         self.assertTrue(hello["d"]["within_reference_margin"])
         self.assertFalse(hello["c"]["within_reference_margin"])
-        self.assertTrue(report._category_cell("hello", hello["d"]).endswith("≈"))
+        self.assertIn("1.02× ≈", report._category_cell("hello", hello["d"]))
         # Without A/A data only equal scores tie.
         result, cats, _ = self.rank(rows)
         self.assertIsNone(result["tie_margins"]["hello"]["margin"])

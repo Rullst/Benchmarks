@@ -112,7 +112,8 @@ TEXT_COLUMNS = {"Implementation", "Version", "Language", "Notes", "Status", "Rea
                 "Server", "Workers", "Database layer", "Templates", "Overall", "Hello world", "Database",
                 "Application", "Memory (high-water mark)", "Startup", "Stability", "CSRF", "Session store",
                 "Validation", "Runner CPUs", "Position", "Result", "Limits", "Structure", "Check", "Weighting",
-                "Warm-up errors", "Category", "A/A scores"}
+                "Warm-up errors", "Category", "A/A scores", "Job scores", "Spread", "Position check",
+                "vs Axum margin"}
 # Tier 1 endpoints in the summary table, as ratios to Axum.
 SUMMARY_ENDPOINTS = ("json", "html", "db-single", "queries", "updates", "fortunes")
 DB_ENDPOINTS = ("db-single", "queries", "updates", "fortunes", "world", "worlds", "world-update", "me")
@@ -263,13 +264,23 @@ def _category_cell(key: str, entry: dict) -> str:
         value += f" ({entry['detail']['startup_s']:.2f} s)"
     if key == "memory" and entry["detail"].get("peak_ram_mib") is not None:
         value += f" ({entry['detail']['peak_ram_mib']:.0f} MiB)"
-    return f"{_rank_text(entry)}: {value}"
+    return f"{_rank_text(entry)}: {value}{_check_suffix(entry)}"
+
+
+def _pct(percent: float | None) -> str:
+    return "–" if percent is None else f"±{percent:.1f}%"
+
+
+def _check_suffix(entry: dict) -> str:
+    """The margin of the check that set a ranked entry's position (none for the first position)."""
+    check = entry.get("tie_check") or {}
+    return f" {_pct(check['percent'])}" if check.get("percent") is not None else ""
 
 
 def _overall_cell(entry: dict) -> str:
     if entry["score"] is None:
         return entry["status"]
-    return f"{_rank_text(entry)}: {_times(entry['score'])}"
+    return f"{_rank_text(entry)}: {_times(entry['score'])}{_check_suffix(entry)}"
 
 
 def _stability_cell(entry: dict | None) -> str:
@@ -279,15 +290,32 @@ def _stability_cell(entry: dict | None) -> str:
     return result + (f" ({'; '.join(entry['reasons'])})" if entry["reasons"] and result != "pass" else "")
 
 
+TIE_RULE = ("Tie margins: each implementation has one score per job (runner) in each category; its between-job "
+            "spread is the half-range of their logarithms. Two scores tie when their gap is at most the largest of "
+            "(a) the A/A margin (the largest deviation from 1.00 of the A/A control, an identical copy of Axum, "
+            "per job and pooled), (b) the root of the sum of squares of their two spreads and (c) the pooled "
+            "floor (the median spread of the ranked implementations measured on at least two jobs). An "
+            "implementation whose jobs all ran on one CPU model counts with at least the floor as its spread, one "
+            "measured on a single job with the floor. A score is compared with the best score of the group above "
+            "it, counting with the widest spread of that group's other members when it is wider than its own, so "
+            "that equal scores share a position. \"±\" after a score: the margin of that comparison (the first "
+            "position has none).")
+
+
+def _rule_text(rule: dict | None, margin: dict | None = None) -> str:
+    """A category's A/A margin and pooled floor, for example "A/A ±0.3%, floor ±8.2% (14 implementations)"."""
+    rule = rule or {}
+    aa = rule.get("aa_percent", (margin or {}).get("percent"))
+    text = f"A/A {_pct(aa)}" if aa is not None else "no A/A data"
+    if rule.get("floor") is None:
+        return text + ", no floor (no implementation measured on two jobs)"
+    return text + f", floor {_pct(rule.get('floor_percent'))} ({_plural(rule.get('floor_from'), 'implementation')})"
+
+
 def _margins_line(rankings: dict) -> str:
     margins = rankings.get("tie_margins") or {}
-    titles = {c["key"]: c["title"] for c in rankings["categories"]}
-    parts = []
-    for key, title in titles.items():
-        margin = (margins.get(key) or {}).get("percent")
-        parts.append(f"{title} ±{margin:.1f}%" if margin is not None else f"{title}: no A/A data")
-    return ("Tie margins from the A/A control (an identical copy of Axum, measured like every other "
-            "implementation; its largest deviation from 1.00 per job and pooled): " + ", ".join(parts) + ".")
+    parts = [f"{c['title']}: {_rule_text(c.get('tie_rule'), margins.get(c['key']))}" for c in rankings["categories"]]
+    return TIE_RULE + " A/A margin and pooled floor per category: " + "; ".join(parts) + "."
 
 
 def rankings_section(data: dict, level: str = "###", review: bool = False) -> list[str]:
@@ -346,9 +374,10 @@ def rankings_section(data: dict, level: str = "###", review: bool = False) -> li
         "ratio of requests per CPU-second of the server and PostgreSQL together (\"*\"), so a framework is "
         "charged for the PostgreSQL work its queries cause. A run limited by the load generator while a server "
         "used less than 75% of its vCPUs is not comparable. A run with more than 1% errors has no score "
-        "(\"errors\"). \"≈\": within the A/A tie margin of Axum, so not distinguishable from 1.00. \"(tie)\": "
-        "within the tie margin of the best score of its group. Axum, diagnostics and the A/A control have no "
-        "position. \"incomplete\": a result is missing or left out.",
+        "(\"errors\"). \"≈\": within the tie margin of Axum's 1.00 (the largest of the A/A margin, the score's "
+        "own spread and the pooled floor), so not distinguishable from Axum. \"(tie)\": within the tie margin of "
+        "the best score of its group. Axum, diagnostics and the A/A control have no position. \"incomplete\": a "
+        "result is missing or left out.",
         "",
         _margins_line(rankings),
         "",
@@ -428,6 +457,41 @@ def _db_cell(entry: dict, endpoint: str) -> str:
     return f"{own:,.0f}" + (f" ({rel:.2f}×)" if rel is not None else "")
 
 
+def _job_scores_cell(entry: dict) -> str:
+    spread = entry.get("spread") or {}
+    pairs = zip(spread.get("scores") or [], spread.get("cpu_models") or [])
+    return "; ".join(f"{_times(score)} ({short_cpu(model)})" for score, model in pairs) or "–"
+
+
+def _spread_cell(entry: dict) -> str:
+    spread = entry.get("spread") or {}
+    if not spread or entry.get("status") == "reference":
+        return "–"
+    text = _pct(spread.get("effective_percent"))
+    if spread.get("basis", "own") != "own":
+        own = f", own {_pct(spread['own_percent'])}" if spread.get("own_percent") is not None else ""
+        text += f" ({spread['basis']}{own})"
+    return text
+
+
+def _check_cell(entry: dict, labels: dict) -> str:
+    check = entry.get("tie_check")
+    if not check:
+        return "–"
+    verdict = "tie" if check["tied"] else "separate"
+    widest = check.get("group_spread_of")
+    using = f" (with the spread of {labels.get(widest, widest)}, in its group)" if widest else ""
+    return (f"{_pct(check['percent'])} vs {labels.get(check['against'], check['against'])}{using}, gap "
+            f"{_pct(check['gap_percent']).lstrip('±')}: {verdict}")
+
+
+def _reference_cell(entry: dict) -> str:
+    margin = (entry.get("reference_margin") or {}).get("percent")
+    if margin is None:
+        return "–"
+    return _pct(margin) + (" ≈" if entry.get("within_reference_margin") else "")
+
+
 def category_tables(data: dict) -> list[str]:
     """One detail table per scored category and one for the stability check (benchmarks_results.md)."""
     rankings = data.get("rankings")
@@ -440,13 +504,21 @@ def category_tables(data: dict) -> list[str]:
            "CPU-second of the server and PostgreSQL together because a side was client-bound; in brackets: the "
            "requests/s ratio of a run with no score), what limited the runs, and the CPU model of each runner. "
            "In the database tables, \"PG µs/req\" is PostgreSQL's CPU time per request in microseconds, with its "
-           "ratio to Axum's on the same runners in brackets: how much database work each request causes.", ""]
+           "ratio to Axum's on the same runners in brackets: how much database work each request causes. "
+           "\"Job scores\" is the score of each job (runner) with its CPU model, \"Spread\" the between-job "
+           "spread the tie margins use (its own, or the pooled floor), \"Position check\" the comparison that set "
+           "the position (a score counts with the widest spread of the group it is compared with, so that equal "
+           "scores share a position) and \"vs Axum margin\" the margin of the \"≈\" check against 1.00.", ""]
+    labels = {r["slug"]: _label(r) for r in data["implementations"]}
+    tie_columns = ["Job scores", "Spread", "Position check", "vs Axum margin"]
     for category in rankings["categories"]:
         key = category["key"]
-        margin = (margins.get(key) or {}).get("percent")
         out += [f"### {category['title']}", "",
-                f"{category['description'][0].upper()}{category['description'][1:]}. Tie margin from the A/A "
-                f"control: " + (f"±{margin:.1f}%." if margin is not None else "no A/A data (exact ties only)."), ""]
+                f"{category['description'][0].upper()}{category['description'][1:]}. Tie margins: "
+                f"{_rule_text(category.get('tie_rule'), margins.get(key))}.", ""]
+
+        def tie_cells(entry: dict) -> list[str]:
+            return [_job_scores_cell(entry), _spread_cell(entry), _check_cell(entry, labels), _reference_cell(entry)]
         lines = []
         if category["kind"] == "throughput":
             endpoints = [run.split(".", 1)[1] for run in category["runs"]]
@@ -454,7 +526,7 @@ def category_tables(data: dict) -> list[str]:
             header = ["Implementation", "Position", "Score", *(endpoint_label(data.get("config", {}), ep)
                                                                for ep in endpoints),
                       *(f"PG µs/req {endpoint_label(data.get('config', {}), ep)}" for ep in database),
-                      "Limits", "Runner CPUs"]
+                      "Limits", *tie_columns, "Runner CPUs"]
             for entry in category["entries"]:
                 row = by_slug.get(entry["slug"], {})
                 limits = "; ".join(f"/{run.split('.', 1)[1]}: {_bound(row, run)}" for run in category["runs"]
@@ -465,11 +537,12 @@ def category_tables(data: dict) -> list[str]:
                               _times(entry["score"]) + ("≈" if entry.get("within_reference_margin") else "")
                               if entry["score"] is not None else (entry.get("reason") or entry["status"]),
                               *(_capacity_cell(entry, ep) for ep in endpoints),
-                              *(_db_cell(entry, ep) for ep in database), limits or "–", _runners(row)])
+                              *(_db_cell(entry, ep) for ep in database), limits or "–", *tie_cells(entry),
+                              _runners(row)])
         else:
             unit = "MiB" if key == "memory" else "s"
             header = ["Implementation", "Position", "Score", f"Value ({unit})", f"Axum, same runners ({unit})",
-                      "Runner CPUs"]
+                      *tie_columns, "Runner CPUs"]
             for entry in category["entries"]:
                 row = by_slug.get(entry["slug"], {})
                 detail = entry.get("detail", {})
@@ -477,7 +550,7 @@ def category_tables(data: dict) -> list[str]:
                 lines.append([_label(row) if row else entry["framework"], _rank_text(entry),
                               _times(entry["score"]) if entry["score"] is not None else entry["status"],
                               _num(detail.get("value"), digits), _num(detail.get("reference"), digits),
-                              _runners(row)])
+                              *tie_cells(entry), _runners(row)])
         out += [_table(header, lines), ""]
     stability = rankings.get("stability")
     if stability:

@@ -98,8 +98,9 @@ export default function App() {
             <p className="note">
               One ranking per category: Hello world, Database and Application (Tier 1), Memory (Tier 3) and
               Startup, plus the Stability check (Tiers 2 and 4: pass, warn or fail). &quot;3=&quot; is a shared
-              position: scores within the A/A control&apos;s tie margin. Axum is the reference; diagnostics (Rullst
-              minimal, an Axum variant) and the A/A control have scores but no position. A run with more than 1%
+              position: scores within the tie margin (from the A/A control and the spread between jobs). Axum is
+              the reference; diagnostics (Rullst minimal, an Axum variant) and the A/A control have scores but no
+              position. A run with more than 1%
               errors gets no score; an implementation with a missing or left-out result is incomplete. An overall
               ranking is shown only when the results publish one. &quot;How to read these results&quot; above
               explains the scores.
