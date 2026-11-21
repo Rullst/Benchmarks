@@ -908,6 +908,7 @@ instead). Labelled pull request trials use 3.
 | URL | Content |
 | --- | --- |
 | <https://rullst.win/Benchmarks/data/latest.json> | the newest published results |
+| <https://rullst.win/Benchmarks/data/site.json> | a compact summary of the newest results, which the Rullst website renders |
 | <https://rullst.win/Benchmarks/data/versions.json> | index of every measured Rullst version, with the headline numbers of the Rullst variants and Axum |
 | `https://rullst.win/Benchmarks/data/rullst/<version>.json` | the results for one Rullst version (same shape as `latest.json`) |
 
@@ -915,9 +916,8 @@ The same files are in this repository under `results/`, with each job's full
 output (every round) under `results/raw/<version>/<framework>-job<N>.json`.
 
 `latest.json` and the per-version files use the shape
-`rullst.benchmarks.latest.v1`, which the Rullst website reads at build time
-([website-maintenance.md](https://github.com/Rullst/Rullst/blob/main/docs/src/website-maintenance.md)).
-Fields are only ever added to it:
+`rullst.benchmarks.latest.v1`, which the Rullst website read until
+`site.json` replaced it there (see below). Fields are only ever added to it:
 
 ```text
 {
@@ -1070,6 +1070,65 @@ Fields are only ever added to it:
 `versions.json` (`rullst.benchmarks.versions.v1`) lists every measured Rullst
 version with its date, run, file name and the headline medians and ratios of
 the Rullst variants and Axum.
+
+`site.json` (`rullst.benchmarks.site.v2`, written by `bench/site_summary.py`
+with every publication) is what the comparison page of the Rullst website
+renders at build time
+([website-maintenance.md](https://github.com/Rullst/Rullst/blob/main/docs/src/website-maintenance.md));
+its numbers are the ones in `latest.json`, and it stays far below the
+website's 1 MiB download limit:
+
+```text
+{
+  "schema": "rullst.benchmarks.site.v2",
+  "measured_on": "2026-11-20",                 date the measurement started (UTC)
+  "measured_from", "measured_to", "generated_at",   ISO 8601 UTC
+  "rullst_version": "13.0.0-alpha.6",
+  "rullst_source": { "kind": "crates.io", "label": "crates.io" },   or null
+  "run": { "id", "url" },                      the workflow run that measured these results
+  "results_url": "https://rullst.win/Benchmarks/",
+  "reference": { "slug": "axum", "framework": "Axum", "version": "0.8.9" },
+  "ranked": 14,                                implementations with a position
+  "overall_published": true,                   scoring.publish_overall
+  "weights": { "hello": 2, "database": 2, "application": 2, "memory": 1, "startup": 1 },
+                                               the overall weights ({} when it is not published)
+  "categories": [ { "key": "hello", "title": "Hello world" }, ... ],   in this order
+  "flags": { "cpu_cost": "*", "database_note": "†", "put_not_written": "‡",
+             "within_reference_margin": "≈" },  the flags a score can carry and their signs
+  "logins": 125,                               phase-2 logins before the RAM after the logins
+  "rows": [                                    Rullst (as generated), Loco, Topcoat, Actix Web, Gin and
+                                               Rullst (minimal), when measured
+    {
+      "slug": "rullst", "framework": "Rullst", "label": "Rullst (as generated)",
+      "version": "13.0.0-alpha.6", "role": "ranked", "status": "measured",
+      "overall": { "status": "ranked", "score": 0.7489, "position": [4, 5],
+                   "margin_percent": 5.48, "flags": ["put_not_written"] },   null when not published
+      "categories": { "<key>": { same fields as "overall" } },
+                                               position: [first, last] of a tie range, or null
+                                               (diagnostics, errors); margin_percent: the "±" of
+                                               the README tables, null for the first position;
+                                               status: ranked, diagnostic, errors, incomplete,
+                                               not comparable, not measured or unstable
+      "stability": "pass",                     pass, warn or fail
+      "memory": { "peak_ram_mib", "axum_peak_ram_mib",   the Memory category's high-water mark
+                  "after_logins_peak_ram_mib", "axum_after_logins_peak_ram_mib" },
+                                               and the peak after the logins (no score includes
+                                               it), with Axum's on the same runners
+      "startup_s": 0.02
+    }
+  ],
+  "reading": { "en": "...", "pt_br": "..." },  "What this means for Rullst" (bench/reading.py), in
+                                               English and Brazilian Portuguese
+  "note": "...", "note_pt_br": "..."           the version note, or ""
+}
+```
+
+The overall score carries `put_not_written` when the Application score it
+includes does. The `schema` string changes whenever the website would need a
+change to show the file correctly (a new flag, category, status, stability
+result or field it must show, or a field removed or redefined): the website
+discards a file it does not fully understand and shows no numbers instead
+of older or partial ones.
 
 Metric names: `tier1.<endpoint>.rps`, `tier1.<endpoint>.latency_ms.mean`, `tier1.<endpoint>.latency_ms.p50`,
 `tier1.<endpoint>.latency_ms.p99`, `tier1.<endpoint>.error_rate`,

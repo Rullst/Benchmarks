@@ -461,6 +461,76 @@ class AggregateTests(unittest.TestCase):
         self.assertIn("avg_latency_ms", rullst)
         self.assertNotIn("implementations", doc)
 
+    def test_site_summary_is_the_compact_bilingual_site_file(self):
+        import json
+        import site_summary
+        jobs = [fake_job(slug, scale) for slug, scale in
+                (("rullst", 0.5), ("rullst-minimal", 1.0), ("loco", 0.51), ("actix", 1.1), ("fastapi", 0.1))]
+        jobs[0]["implementations"]["rullst"]["manifest"].update(variant="as generated", default_variant=True)
+        jobs[1]["implementations"]["rullst-minimal"]["manifest"].update(name="Rullst", variant="minimal",
+                                                                         role="diagnostic")
+        combined = aggregate.combine(jobs, ["rullst", "rullst-minimal", "loco", "actix", "fastapi"])
+        doc = site_summary.site_summary(combined)
+        self.assertEqual(doc["schema"], "rullst.benchmarks.site.v2")
+        self.assertLess(len(json.dumps(doc).encode()), 64 * 1024)
+        self.assertEqual(doc["rullst_version"], "13.0.0-alpha.5")
+        self.assertEqual(doc["reference"]["slug"], "axum")
+        self.assertEqual([c["key"] for c in doc["categories"]], ["hello", "database", "application", "memory",
+                                                                 "startup"])
+        self.assertEqual(doc["weights"], {"hello": 2, "database": 2, "application": 2, "memory": 1, "startup": 1})
+        # Only the implementations the comparison page shows, in a fixed order (the page sorts them).
+        self.assertEqual([r["slug"] for r in doc["rows"]], ["rullst", "loco", "actix", "rullst-minimal"])
+        rows = {r["slug"]: r for r in doc["rows"]}
+        self.assertEqual(rows["rullst"]["framework"], "Rullst")
+        self.assertEqual(rows["rullst-minimal"]["framework"], "Rullst (minimal)")
+        self.assertEqual(rows["rullst-minimal"]["role"], "diagnostic")
+        self.assertIsNone(rows["rullst-minimal"]["overall"]["position"])
+        for row in doc["rows"]:
+            for cell in [row["overall"], *row["categories"].values()]:
+                self.assertTrue(set(cell["flags"]) <= set(site_summary.FLAGS))
+                position = cell["position"]
+                self.assertTrue(position is None or 1 <= position[0] <= position[1] <= doc["ranked"])
+        self.assertIsNotNone(rows["rullst"]["memory"]["peak_ram_mib"])
+        self.assertTrue(doc["reading"]["en"].startswith("Rullst as `cargo rullst new` generates it"))
+        self.assertTrue(doc["reading"]["pt_br"].startswith("O Rullst como o `cargo rullst new` o gera"))
+        self.assertTrue(doc["reading"]["pt_br"].endswith("projetou o método."))
+        self.assertIn("0,", doc["reading"]["pt_br"])
+        # A PUT that did not write marks the Application and overall scores of that row.
+        for job in jobs:
+            for r in job["implementations"][job["framework"]]["rounds"] + job["implementations"]["axum"]["rounds"]:
+                for key in ("rows_updated", "rows_updated_per_request"):
+                    r["tier1"]["world-update"].pop(key)
+                r["tier1"]["world"]["db_us_per_request"] = 100.0
+                r["tier1"]["world-update"]["db_us_per_request"] = 100.0 if job["framework"] == "rullst" else 140.0
+        flagged = site_summary.site_summary(aggregate.combine(jobs, ["rullst", "rullst-minimal", "loco", "actix"]))
+        rullst = next(r for r in flagged["rows"] if r["slug"] == "rullst")
+        self.assertIn("put_not_written", rullst["categories"]["application"]["flags"])
+        self.assertIn("put_not_written", rullst["overall"]["flags"])
+        self.assertNotIn("put_not_written", rullst["categories"]["hello"]["flags"])
+        self.assertIn("(‡)", flagged["reading"]["en"])
+        self.assertIn("(‡)", flagged["reading"]["pt_br"])
+        # Without scores for Rullst the reading still says so, in both languages.
+        empty = site_summary.site_summary(aggregate.combine([fake_job("loco", 1.0)], ["loco"]))
+        self.assertEqual(empty["reading"]["en"], "Rullst as generated has no scores in these results.")
+        self.assertTrue(empty["reading"]["pt_br"])
+
+    def test_the_portuguese_reading_says_what_the_english_one_says(self):
+        import re
+        import reading
+        jobs = [fake_job("rullst", 0.5), fake_job("actix", 1.1), fake_job("loco", 0.51)]
+        combined = aggregate.combine(jobs, ["rullst", "actix", "loco"])
+        english, portuguese = reading.reading_text(combined), reading.reading_text(combined, "pt_br")
+        # The same scores, position ranges and RAM figures, in the same order (pt_br writes a decimal comma).
+        scores, places, ram = (re.compile(r"([0-9]+[.,][0-9]+)×"), re.compile(r"[0-9]+–[0-9]+| [0-9]+ de [0-9]+"),
+                               re.compile(r"([0-9][0-9.,]*) MiB"))
+        self.assertEqual([s.replace(",", ".") for s in scores.findall(portuguese)], scores.findall(english))
+        self.assertTrue(scores.findall(english))
+        self.assertEqual([p for p in places.findall(portuguese) if "–" in p], [p for p in places.findall(english)])
+        self.assertEqual([r.replace(".", "") for r in ram.findall(portuguese)],
+                         [r.replace(",", "") for r in ram.findall(english)])
+        self.assertEqual(len(reading.rullst_reading(combined)), len(reading.rullst_reading(combined, "pt_br")))
+        self.assertTrue(portuguese.endswith(reading.WORDS["pt_br"]["disclosure"]))
+
     def test_corrections_leave_out_metrics(self):
         combined = aggregate.combine([fake_job("fastapi", 1.0)], ["fastapi"])
         row = next(r for r in combined["implementations"] if r["slug"] == "fastapi")
@@ -520,6 +590,10 @@ class AggregateTests(unittest.TestCase):
             latest = aggregate.json.loads((root / "results" / "latest.json").read_text())
             self.assertIn("Rullst as `cargo rullst new` generates it", latest["reading_rullst"])
             self.assertIn("put_world", latest["labels"])
+            self.assertEqual(latest["schema"], "rullst.benchmarks.latest.v1")
+            site = aggregate.json.loads((root / "results" / "site.json").read_text())
+            self.assertEqual(site["schema"], "rullst.benchmarks.site.v2")
+            self.assertEqual(site["rullst_version"], "13.0.0-alpha.5")
 
     def test_the_rullst_reading_states_positions_memory_and_the_disclosure(self):
         import reading
