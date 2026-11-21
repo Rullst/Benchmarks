@@ -79,6 +79,47 @@ jobs:
           echo "frameworks=$changed" >> "$GITHUB_OUTPUT"
           echo "changed: $changed"
 
+  site:
+    # The results website (site/): format, lint, render the checked-in fixture
+    # and check every page (structure, escaping, footer, internal links and the
+    # "results pending" page of each fail-closed rule), then render the
+    # published results as of the day they were measured, so that a change to
+    # their shape that the website does not read fails here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable
+        with:
+          toolchain: 1.100.0
+          components: clippy, rustfmt
+      - name: Cache the Cargo registry and the build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            site/target
+          key: site-ci-${{ runner.os }}-1.100.0-${{ hashFiles('site/Cargo.lock') }}
+          restore-keys: |
+            site-ci-${{ runner.os }}-1.100.0-
+      - name: Format
+        run: cargo fmt --check
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Render the fixture and check the pages
+        run: cargo test --locked
+      - name: Render the published results
+        run: |
+          measured="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["measured_on"])' ../results/latest.json)"
+          cargo run --locked -- --results ../results --out "$RUNNER_TEMP/site" --today "$measured" --require-results
+
   conformance:
     needs: harness
     if: (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && needs.harness.outputs.changed != '[]'

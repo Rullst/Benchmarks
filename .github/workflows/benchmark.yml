@@ -39,7 +39,7 @@ on:
         description: Published rullst version to measure (empty = the version pinned in frameworks/rullst)
         default: ""
       publish:
-        description: Commit the results to main and redeploy the dashboard (main only)
+        description: Commit the results to main and redeploy the results website (main only)
         type: boolean
         default: false
       force:
@@ -201,7 +201,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write # commit the results to main (publishing runs only)
-      actions: write # start the dashboard deployment after publishing
+      actions: write # start the results website deployment after publishing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
