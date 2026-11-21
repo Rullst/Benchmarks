@@ -4,7 +4,7 @@
 # Resolves requirements.txt for the pull request check, which exports the
 # `lockfile` stage (see CONTRIBUTING.md), with the command at the top of
 # requirements.txt. The image below does not use it.
-FROM python:3.15.2-slim-trixie AS resolve
+FROM python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS resolve
 RUN pip install --no-cache-dir --root-user-action=ignore uv==0.13.9
 WORKDIR /app
 COPY requirements.in ./
@@ -15,7 +15,7 @@ RUN uv pip compile requirements.in --python-version 3.15 \
 FROM scratch AS lockfile
 COPY --from=resolve /app/requirements.txt /
 
-FROM python:3.15.2-slim-trixie AS build
+FROM python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS build
 # psycopg's C extension is compiled against the system libpq.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
@@ -30,7 +30,7 @@ RUN mkdir /out \
        > /out/versions.txt \
     && cat /out/versions.txt
 
-FROM python:3.15.2-slim-trixie
+FROM python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 \
     && rm -rf /var/lib/apt/lists/*

@@ -17,7 +17,7 @@
 
 # Benchmark: resolves mix.lock for the pull request check, which exports the
 # `lockfile` stage (see CONTRIBUTING.md). The image below does not use it.
-FROM docker.io/hexpm/elixir:1.20.5-erlang-29.1.2-debian-trixie-20261104-slim AS resolve
+FROM docker.io/hexpm/elixir:1.20.5-erlang-29.1.2-debian-trixie-20261104-slim@sha256:2930e7f6bf86f6b2465924cf4c03311bf14065ac25e71006fe323d6823605d99 AS resolve
 WORKDIR /app
 RUN mix local.hex --force \
   && mix local.rebar --force
@@ -27,7 +27,7 @@ RUN mix deps.get
 FROM scratch AS lockfile
 COPY --from=resolve /app/mix.lock /
 
-FROM docker.io/hexpm/elixir:1.20.5-erlang-29.1.2-debian-trixie-20261104-slim AS builder
+FROM docker.io/hexpm/elixir:1.20.5-erlang-29.1.2-debian-trixie-20261104-slim@sha256:2930e7f6bf86f6b2465924cf4c03311bf14065ac25e71006fe323d6823605d99 AS builder
 
 # install build dependencies
 RUN apt-get update \
@@ -79,7 +79,7 @@ RUN mkdir /out \
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
-FROM docker.io/debian:trixie-20261104-slim AS final
+FROM docker.io/debian:trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS final
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates \

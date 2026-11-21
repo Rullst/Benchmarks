@@ -7,7 +7,7 @@
 
 # Benchmark: resolves Gemfile.lock for the pull request check, which exports
 # the `lockfile` stage (see CONTRIBUTING.md). The image below does not use it.
-FROM docker.io/library/ruby:4.0.9-slim-trixie AS resolve
+FROM docker.io/library/ruby:4.0.9-slim-trixie@sha256:d8cb2c0714bdaba0f318af897a01d2dbde3cfa8e62d47e99cea55feb13c0e90d AS resolve
 WORKDIR /rails
 COPY Gemfile ./
 RUN bundle lock --add-platform=x86_64-linux
@@ -17,7 +17,7 @@ COPY --from=resolve /rails/Gemfile.lock /
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
 # Benchmark: the image tag is written out (generated: ruby:$RUBY_VERSION-slim).
-FROM docker.io/library/ruby:4.0.9-slim-trixie AS base
+FROM docker.io/library/ruby:4.0.9-slim-trixie@sha256:d8cb2c0714bdaba0f318af897a01d2dbde3cfa8e62d47e99cea55feb13c0e90d AS base
 
 # Rails app lives here
 WORKDIR /rails

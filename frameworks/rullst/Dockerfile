@@ -1,4 +1,4 @@
-FROM rust:1.99.1-slim-bookworm AS build
+FROM rust:1.99.1-slim-bookworm@sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd AS build
 # Empty: build the version pinned in Cargo.toml and Cargo.lock. Otherwise the
 # exact pins are rewritten to this published version and Cargo re-resolves
 # only what that change requires.
@@ -25,7 +25,7 @@ RUN mkdir /out && cp target/release/rullst-bench /out/server \
 # for Cargo.toml (Rust is not needed locally; CI uploads it): only what a
 # change to Cargo.toml requires is re-resolved, for example after the Rullst
 # pin moves to a new release. The image itself uses the committed file.
-FROM rust:1.99.1-slim-bookworm AS resolve
+FROM rust:1.99.1-slim-bookworm@sha256:f2c004e3d2d8b547e8cf7ffbc29205385f4e71d23e53e4e383065db5e9f822cd AS resolve
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src

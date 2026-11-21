@@ -6,8 +6,8 @@
 
 # Resolves composer.lock for the pull request check, which exports the
 # `lockfile` stage (see CONTRIBUTING.md). The image below does not use it.
-FROM php:8.5.12-cli-trixie AS resolve
-COPY --from=composer:2.11.2 /usr/bin/composer /usr/bin/composer
+FROM php:8.5.12-cli-trixie@sha256:50956f094e90a716d43bea28087d447555ad80510e386ab8c9c10d8c70d781a9 AS resolve
+COPY --from=composer:2.11.2@sha256:919efe8e62179c71dfd31fad035fd671fe7454211c6b2aa30a10af0ab4acedba /usr/bin/composer /usr/bin/composer
 ENV COMPOSER_ALLOW_SUPERUSER=1
 WORKDIR /app
 COPY composer.json ./
@@ -16,11 +16,11 @@ RUN composer update --no-install --no-interaction --no-scripts --no-plugins
 FROM scratch AS lockfile
 COPY --from=resolve /app/composer.lock /
 
-FROM php:8.5.12-cli-trixie AS build
+FROM php:8.5.12-cli-trixie@sha256:50956f094e90a716d43bea28087d447555ad80510e386ab8c9c10d8c70d781a9 AS build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git unzip \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=composer:2.11.2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.11.2@sha256:919efe8e62179c71dfd31fad035fd671fe7454211c6b2aa30a10af0ab4acedba /usr/bin/composer /usr/bin/composer
 ENV COMPOSER_ALLOW_SUPERUSER=1
 WORKDIR /app
 COPY composer.json composer.lock ./
@@ -37,7 +37,7 @@ RUN mkdir /out \
        > /out/versions.txt \
     && cat /out/versions.txt
 
-FROM php:8.5.12-fpm-trixie
+FROM php:8.5.12-fpm-trixie@sha256:baf3ea13a8207fa18e1011bad1016e8b5e59fc974c6966d0efa6f36a16f875f0
 # The pdo_pgsql extension and Debian's Nginx package.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq-dev nginx \
