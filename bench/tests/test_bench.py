@@ -26,10 +26,13 @@ def fake_round(scale: float, number: int = 1, endpoints=ENDPOINTS) -> dict:
     run = {"rps": 1000 * scale, "latency_ms": {"mean": 1.2 / scale, "p50": 1.0 / scale, "p99": 4.0 / scale},
            "error_rate": 0.0, "server_cpu_cores": 1.9, "rps_per_cpu": round(1000 * scale / 1.9, 1),
            "db_cpu_cores": 0.5, "client_bound": scale > 1, "timeouts": 0, "transport_errors": 0}
+    tier1 = {ep: copy.deepcopy(run) for ep in endpoints}
+    if "world-update" in tier1:  # every PUT wrote its row (measure.WRITE_CHECKS)
+        tier1["world-update"].update(rows_updated=round(10000 * scale), rows_updated_per_request=1.0)
     return {
         "round": number, "crashed": None, "startup_s": 0.5,
         "idle": {"ram_mib": 10 * scale, "cpu_cores": 0.001, "tasks": 4},
-        "tier1": {ep: copy.deepcopy(run) for ep in endpoints},
+        "tier1": tier1,
         **({"hot_rows": dict(copy.deepcopy(run), ids=10)} if "world-update" in endpoints else {}),
         "tier2": copy.deepcopy(run),
         "tier3": {"idle_ram_mib": 10 * scale, "idle_cpu_cores": 0.001, "load_ram_peak_mib": 20 * scale,
@@ -348,6 +351,16 @@ class EfficiencyTests(unittest.TestCase):
         self.assertEqual(stat["load_generator_rounds"], 2)
         self.assertEqual(result["tier1.text.capacity"]["not_comparable_rounds"], 0)
 
+    def test_ratios_count_mixed_limit_pairs(self):
+        # One side PostgreSQL-bound, the other limited by its own server: measured at different loads.
+        server = fake_round(1.0, 1)
+        pg = copy.deepcopy(server)
+        pg["tier1"]["queries"].update(client_bound=True, limited_by="postgresql")
+        result = ratios([pg, pg, server], [server, pg, server])
+        self.assertEqual(result["tier1.queries.capacity"]["mixed_limit_rounds"], 1)
+        self.assertEqual(result["tier1.queries.capacity"]["postgresql_rounds"], 2)
+        self.assertEqual(result["tier1.json.capacity"]["mixed_limit_rounds"], 0)
+
     def test_ratios_include_capacity(self):
         fw = [fake_round(2.0, n) for n in (1, 2)]  # client-bound
         base = [fake_round(1.0, n) for n in (1, 2)]
@@ -487,7 +500,8 @@ class AggregateTests(unittest.TestCase):
     def test_write_outputs_keeps_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "README.md").write_text("x\n<!-- results:start -->\n<!-- results:end -->\n")
+            (root / "README.md").write_text("x\n<!-- reading:start -->\n<!-- reading:end -->\n"
+                                            "<!-- results:start -->\n<!-- results:end -->\n")
             old_root, old_results = aggregate.ROOT, aggregate.RESULTS
             aggregate.ROOT, aggregate.RESULTS = root, root / "results"
             try:
@@ -501,6 +515,41 @@ class AggregateTests(unittest.TestCase):
             self.assertEqual([e["version"] for e in index["versions"]], ["13.0.0-alpha.5", "13.0.0-alpha.6"])
             self.assertTrue((root / "results" / "rullst" / "13.0.0-alpha.6.json").is_file())
             self.assertTrue((root / "results" / "raw" / "13.0.0-alpha.5" / "rullst-job1.json").is_file())
+            readme = (root / "README.md").read_text()
+            self.assertIn("This benchmark is maintained by Rullst's maintainer", readme.split("<!-- reading:end")[0])
+            latest = aggregate.json.loads((root / "results" / "latest.json").read_text())
+            self.assertIn("Rullst as `cargo rullst new` generates it", latest["reading_rullst"])
+            self.assertIn("put_world", latest["labels"])
+
+    def test_the_rullst_reading_states_positions_memory_and_the_disclosure(self):
+        import reading
+        jobs = [fake_job("rullst", 0.5), fake_job("actix", 1.1), fake_job("loco", 0.51)]
+        for job in jobs:
+            for r in job["implementations"][job["framework"]]["rounds"] + job["implementations"]["axum"]["rounds"]:
+                r["sessions"] = {"login_sessions": 125}
+            for r in job["implementations"][job["framework"]]["rounds"]:
+                r["tier1"]["me"]["server_ram_peak_mib"] = 470.0 if job["framework"] == "rullst" else 1000.0
+            for r in job["implementations"]["axum"]["rounds"]:
+                r["tier1"]["me"]["server_ram_peak_mib"] = 900.0
+        combined = aggregate.combine(jobs, ["rullst", "actix", "loco"])
+        text = reading.reading_text(combined)
+        self.assertIn("in the overall score, at 0.", text)
+        self.assertIn("Hello world position", text)
+        self.assertIn("after the 125 logins of the application endpoints its peak was 470 MiB (Axum: 900 MiB)", text)
+        self.assertTrue(text.endswith(reading.DISCLOSURE))
+        self.assertIn("the closest score is Loco (0.60×, higher)", text)
+        for word in ("excellent", "impressive", "only", "fast"):
+            self.assertNotIn(f" {word} ", text.lower())
+        self.assertIn("([Authorship](#authorship)).", reading.reading_markdown(combined))
+        # While the PUT label applies to Rullst, the reading says that its Application figure is affected.
+        for job in jobs:
+            for r in job["implementations"][job["framework"]]["rounds"] + job["implementations"]["axum"]["rounds"]:
+                for key in ("rows_updated", "rows_updated_per_request"):
+                    r["tier1"]["world-update"].pop(key)
+                r["tier1"]["world"]["db_us_per_request"] = 100.0
+                r["tier1"]["world-update"]["db_us_per_request"] = 100.0 if job["framework"] == "rullst" else 140.0
+        flagged = reading.reading_text(aggregate.combine(jobs, ["rullst", "actix", "loco"]))
+        self.assertIn("Its Application figure, and through it the overall score, is affected", flagged)
 
     def test_jobs_of_one_framework_are_pooled(self):
         first, second = fake_job("actix", 1.1, rounds=2), fake_job("actix", 0.9, rounds=3)
@@ -518,6 +567,79 @@ class AggregateTests(unittest.TestCase):
                                                {"cpu_model": "Test CPU", "jobs": 1}])
         self.assertIn("Other CPU ×1", report.notice(combined))
         self.assertIn("| Test CPU, Other CPU |", report.render_readme_table(combined))
+        by_model = actix["ratios_by_cpu_model"]["tier1.json.capacity"]
+        self.assertEqual(set(by_model["models"]), {"Test CPU", "Other CPU"})
+        self.assertAlmostEqual(by_model["value"], (by_model["models"]["Test CPU"] * by_model["models"]["Other CPU"])
+                               ** 0.5, places=5)
+
+    def test_the_report_names_the_cpu_effect_and_the_server_core(self):
+        jobs = []
+        for number, (scale, cpu) in enumerate(((1.0, "CPU A"), (1.3, "CPU B")), start=1):
+            for slug in ("actix", "django"):
+                job = fake_job(slug, scale * (0.1 if slug == "django" else 1.0))
+                job["implementations"][slug]["manifest"]["language"] = "Python" if slug == "django" else "Rust"
+                job.update(job=number)
+                job["environment"] = dict(job["environment"], cpu_model=cpu,
+                                          cpu_split={"server": [0, 1], "core_groups": [[0, 1], [2, 3]]})
+                jobs.append(job)
+        combined = aggregate.combine(jobs, ["actix", "django"])
+        self.assertEqual(combined["server_cores"], {"jobs": 4, "smt_threads_of_one_core": 4})
+        text = report.notice(combined)
+        self.assertIn("2 vCPUs, the two SMT threads of one physical core on every runner,", text)
+        self.assertIn("by up to 30% for the Rust and Go implementations (Actix's Hello world score: 1.00 on CPU A, "
+                      "1.30 on CPU B)", text)
+        self.assertIn("by up to 30% for the others", text)
+        self.assertNotIn("cancel most of the difference", text)
+
+    def test_put_runs_that_did_not_write_are_labelled(self):
+        jobs = [fake_job("rails", 0.5), fake_job("actix", 1.1)]
+        for job in jobs:  # measured before the write count: PUT costs PostgreSQL as much as GET for both
+            for r in job["implementations"][job["framework"]]["rounds"] + job["implementations"]["axum"]["rounds"]:
+                for key in ("rows_updated", "rows_updated_per_request"):
+                    r["tier1"]["world-update"].pop(key)
+                r["tier1"]["world"]["db_us_per_request"] = 100.0
+                r["tier1"]["world-update"]["db_us_per_request"] = 105.0 if job["framework"] == "rails" else 140.0
+        combined = aggregate.combine(jobs, ["rails", "actix"])
+        flags = report.put_flags(combined["implementations"])
+        self.assertTrue(flags["unchecked"])
+        self.assertEqual(set(flags["flagged"]), {"rails"})  # Axum's and Actix's PUT cost 1.40x their GET
+        readme = report.render_readme_table(combined)
+        self.assertIn("PUT /world/{id} vs Axum ‡", readme)
+        self.assertIn("| Application ‡ |", readme)
+        self.assertIn("Fixed in the next run", readme)
+        rails = next(line for line in readme.splitlines() if line.startswith("| Rails |") and "×" in line)
+        self.assertIn("‡", rails)
+        self.assertTrue(any("has no count of the rows it updated" in p for p in combined["publication_gate"]["problems"]))
+        # With a count: a run that updated too few rows is flagged and refused, and the label explains it.
+        fresh = [fake_job("rails", 0.5), fake_job("actix", 1.1)]
+        for r in fresh[0]["implementations"]["rails"]["rounds"]:
+            r["tier1"]["world-update"]["rows_updated_per_request"] = 0.1
+        combined = aggregate.combine(fresh, ["rails", "actix"])
+        self.assertEqual(set(report.put_flags(combined["implementations"])["flagged"]), {"rails"})
+        self.assertTrue(any(p.startswith("rails: /world-update updated 0.10 rows of world per request")
+                            for p in combined["publication_gate"]["problems"]))
+        self.assertIn("the publication gate refuses these results", report.render_readme_table(combined))
+        self.assertFalse(report.put_flags(aggregate.combine(fresh[1:], ["actix"])["implementations"])["flagged"])
+
+    def test_diagnostics_listed_apart_and_ram_after_logins(self):
+        jobs = [fake_job("actix", 1.1), fake_job("rullst-minimal", 0.9)]
+        jobs[1]["implementations"]["rullst-minimal"]["manifest"].update(
+            role="diagnostic", role_note="minimal", listing="diagnostics", listing_note="bypasses rullst::Server")
+        for job in jobs:
+            for r in job["implementations"][job["framework"]]["rounds"] + job["implementations"]["axum"]["rounds"]:
+                r["sessions"] = {"login_sessions": 125}
+                r["tier1"]["me"]["server_ram_peak_mib"] = 900.0 if job["framework"] == "actix" else 400.0
+        combined = aggregate.combine(jobs, ["actix", "rullst-minimal"])
+        readme = report.render_readme_table(combined)
+        head, _, diagnostics = readme.partition("### Diagnostics")
+        self.assertNotIn("Rullst-Minimal", head)
+        self.assertIn("bypasses rullst::Server", diagnostics)
+        self.assertIn("Rullst-Minimal", diagnostics)
+        self.assertIn("Peak RAM after the 125 logins (MiB)", head)
+        actix = next(line for line in head.splitlines() if line.startswith("| Actix | 1.10 |"))
+        self.assertIn("| 900 (900) |", actix)
+        results = report.render_results(combined)
+        self.assertIn("## Diagnostics", results)
 
     def test_the_control_gives_the_tie_margins(self):
         jobs = [fake_job("axum-control", 1.02), fake_job("axum-control", 0.99), fake_job("actix", 1.2)]
@@ -573,6 +695,16 @@ class AggregateTests(unittest.TestCase):
             job["config"] = dict(job["config"], publication=dict(job["config"]["publication"], min_jobs=2))
         self.assertTrue(any("actix: measured on 2 job(s), at least 3 required" in p
                             for p in gate(older, ["actix", "axum-control"])["problems"]))
+        spread = copy.deepcopy(jobs)  # the runners differ too much: the pooled floor is above the limit
+        spread[1] = fake_job("actix", 1.6, rounds=5)
+        spread[1].update(job=2)
+        spread[1]["implementations"]["actix"]["build"]["versions"] += (
+            "actix-source registry+https://github.com/rust-lang/crates.io-index\n")
+        for number, job in enumerate(spread[:3]):
+            job["environment"] = dict(job["environment"], cpu_model=f"CPU {number}")
+        self.assertTrue(any(p.startswith("runners too different in hello: the pooled floor")
+                            for p in gate(spread, ["actix", "axum-control"])["problems"]))
+        self.assertEqual(load_config()["publication"]["max_floor"], 0.15)
         noisy = copy.deepcopy(jobs)
         noisy[4] = fake_job("axum-control", 0.8, rounds=5)
         noisy[4].update(job=2)
@@ -654,8 +786,14 @@ class RankingTests(unittest.TestCase):
         self.assertAlmostEqual(a["memory"]["ratio"], 20.0)
         # 2 s against Axum's 0.01 s, which counts as the 1 s floor.
         self.assertAlmostEqual(a["startup"]["score"], 0.5)
-        expected = (1.0 * 0.5 * 1.0 * (64 / 200) * 0.5) ** (1 / 5)
+        # The published weighting: the throughput categories twice, Memory and Startup once (2:2:2:1:1).
+        expected = (1.0 ** 2 * 0.5 ** 2 * 1.0 ** 2 * (64 / 200) * 0.5) ** (1 / 8)
         self.assertAlmostEqual(overall["a"]["score"], round(expected, 4), places=3)
+        _, _, equal = self.rank([rank_row("a", hello=(2.0, 0.5, 1.0), database=(0.5,) * 4, ram=200.0,
+                                          startup_s=2.0)], settings={"overall_weights": {k: 1 for k in
+                                                                                         rankings.CATEGORY_KEYS}})
+        self.assertAlmostEqual(equal["a"]["score"], round((1.0 * 0.5 * 1.0 * (64 / 200) * 0.5) ** (1 / 5), 4),
+                               places=3)
         self.assertEqual(overall["a"]["position"], 1)
 
     def test_memory_and_startup_floors(self):
@@ -762,10 +900,15 @@ class RankingTests(unittest.TestCase):
         self.assertEqual([cats["hello"][s]["position"] for s in "abcd"], [1, 2, 3, 4])
 
     def test_startup_ties_within_the_poll_interval(self):
+        # Neighbours 0.2 s apart share a group (a-b, b-c), so a, b and c form one group, 1-3.
         rows = [rank_row("a", startup_s=1.1), rank_row("b", startup_s=1.3), rank_row("c", startup_s=1.5),
                 rank_row("d", startup_s=4.0)]
         _, cats, _ = self.rank(rows)
-        self.assertEqual([cats["startup"][s]["position"] for s in "abcd"], [1, 1, 3, 4])
+        self.assertEqual([cats["startup"][s]["position"] for s in "abcd"], [1, 1, 1, 4])
+        self.assertEqual([cats["startup"][s]["position_label"] for s in "abcd"], ["1–3", "1–3", "1–3", "4"])
+        rows[1] = rank_row("b", startup_s=1.4)  # 0.3 s from a: a new group
+        _, cats, _ = self.rank(rows)
+        self.assertEqual([cats["startup"][s]["position_label"] for s in "abcd"], ["1", "2–3", "2–3", "4"])
 
     def test_stability_is_a_check(self):
         rows = [rank_row("ok"), rank_row("leaky", ram_growing=2), rank_row("errors", tier_errors=(0.0, 0.02)),
@@ -812,13 +955,17 @@ class RankingTests(unittest.TestCase):
         doc = aggregate.site_document(combined)
         self.assertEqual(doc["schema"], "rullst.benchmarks.latest.v1")
         self.assertEqual([c["key"] for c in doc["rankings"]["categories"]], rankings.CATEGORY_KEYS)
-        self.assertNotIn("overall", doc["rankings"])
+        self.assertTrue(load_config()["scoring"]["publish_overall"])  # the maintainer publishes the overall score
+        self.assertEqual(doc["rankings"]["overall"]["weight_ratio"], rankings.OVERALL_WEIGHTS)
+        self.assertIn("sensitivity", doc["rankings"])
         hello = {e["slug"]: e for e in doc["rankings"]["categories"][0]["entries"]}
         self.assertEqual(hello["actix"]["position"], 1)
         readme = report.render_readme_table(combined)
         self.assertIn("### Rankings", readme)
-        self.assertNotIn("| Overall |", readme)
-        self.assertIn("| Actix | 1: 1.10×* |", readme)  # client-bound (scale > 1): scored by CPU efficiency
+        self.assertIn("| Overall |", readme)
+        self.assertIn("Positions under other weightings", readme)
+        actix = next(line for line in readme.splitlines() if line.startswith("| Actix | 1: "))
+        self.assertIn("| 1: 1.10×*", actix)  # client-bound (scale > 1): scored by CPU cost
         self.assertIn("| Gin | 1.2.3 | Rust | 0.80 | 0.80 | 0.80 | n/i | n/i | n/i | 800 (1,000) |", readme)
         self.assertIn("Test CPU", readme)
         results = report.render_results(combined)
@@ -828,7 +975,6 @@ class RankingTests(unittest.TestCase):
         self.assertIn("PG µs/req", results)
         self.assertIn("not implemented yet", results)
         review = report.render_results(combined, review=True)
-        self.assertIn("computed for review, not published", review)
         self.assertIn("## Publication gate", review)
 
 

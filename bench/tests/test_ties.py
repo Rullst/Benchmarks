@@ -132,18 +132,63 @@ class TieMarginTests(unittest.TestCase):
 
     def test_equal_scores_share_a_position_whatever_their_spread(self):
         # "noisy" ties with "a" through its own spread; "precise" has the same score but almost no spread,
-        # and alone would be separated from "a". The group's widest spread keeps it with "noisy".
+        # and alone would be separated from "a". Compared with its neighbour "noisy" (gap 0), it joins the group.
         cpus = ["CPU A", "CPU B", "CPU C"]
         per_job = {"a": jobs_of("a", [1.0, 1.0, 1.0], cpus), "noisy": jobs_of("noisy", spread_of(0.25), cpus),
                    "precise": jobs_of("precise", spread_of(0.001), cpus)}
         hello, cats, _ = self.rank({"a": 1.0, "noisy": 0.9, "precise": 0.9}, per_job)
         self.assertEqual([cats[s]["position"] for s in ("a", "noisy", "precise")], [1, 1, 1])
-        self.assertEqual(cats["precise"]["tie_check"]["group_spread_of"], "noisy")
-        self.assertIsNone(cats["noisy"]["tie_check"]["group_spread_of"])
+        self.assertEqual({cats[s]["position_label"] for s in ("a", "noisy", "precise")}, {"1–3"})
+        self.assertIsNone(cats["precise"]["tie_check"]["group_spread_of"])  # kept for older readers
         # Pairwise, "precise" would be separated from "a": the gap is above both spreads and the floor.
         self.assertGreater(abs(math.log(0.9)), rankings.pair_margin(None, hello["tie_rule"]["floor"],
                                                                     cats["a"]["spread"]["effective"],
                                                                     cats["precise"]["spread"]["effective"]))
+
+    def test_groups_chain_neighbours_and_show_their_range(self):
+        # Each neighbour within its margin of the one above: one group, although its ends are further apart.
+        cpus = ["CPU A", "CPU B", "CPU C"]
+        scores = {"a": 1.0, "b": 0.90, "c": 0.81, "d": 0.50}
+        per_job = {slug: jobs_of(slug, spread_of(LN10), cpus) for slug in scores}
+        _, cats, _ = self.rank(scores, per_job)
+        self.assertEqual([cats[s]["position_label"] for s in "abcd"], ["1–3", "1–3", "1–3", "4"])
+        self.assertEqual(cats["c"]["position_range"], [1, 3])
+        self.assertEqual(cats["c"]["tie_check"]["against"], "b")  # the neighbour above, not the group's best
+        self.assertFalse(cats["d"]["tie_check"]["tied"])
+        self.assertGreater(abs(math.log(0.81)), cats["c"]["tie_check"]["margin"])  # a to c: beyond one margin
+
+    def test_mixed_limit_runs_widen_the_spread(self):
+        # /queries scored by CPU cost while one side was PostgreSQL-bound and the other not, in most pairs.
+        cpus = ["CPU A", "CPU B", "CPU C"]
+        per_job = {slug: [rank_row(slug, database=(score,) * 4, cpu_model=cpu)
+                          for score, cpu in zip(spread_of(LN10), cpus)] for slug in "ab"}
+        base = rank_row("axum", is_baseline=True, ratios={})
+        capacity = {f"tier1.{ep}": 1.0 for ep in rankings.DATABASE_ENDPOINTS}
+        mixed = rank_row("a", capacity=capacity, cpu_runs=("tier1.queries",))
+        mixed["ratios"]["tier1.queries.capacity"]["mixed_limit_rounds"] = 5
+        result = rankings.compute([base, mixed, rank_row("b", capacity=capacity)], "axum", control_rows=[],
+                                  job_rows=per_job)
+        database = {e["slug"]: e for e in result["categories"][1]["entries"]}
+        widening = math.log(1.34) / len(rankings.DATABASE_ENDPOINTS)
+        self.assertEqual(database["a"]["mixed_limit_runs"], ["tier1.queries"])
+        self.assertAlmostEqual(database["a"]["mixed_limit_widening"], widening, places=5)
+        self.assertAlmostEqual(database["a"]["spread"]["effective"], math.hypot(LN10, widening), places=5)
+        self.assertEqual(database["a"]["spread"]["basis"], "own + mixed limits")
+        self.assertEqual(database["b"]["spread"]["basis"], "own")
+
+    def test_per_cpu_model_weighting_is_optional(self):
+        capacity = {f"tier1.{ep}": 0.8 for ep in rankings.HELLO_ENDPOINTS}
+        row = rank_row("a", hello=(0.8,) * 3, capacity=capacity,
+                       ratios_by_cpu_model={f"tier1.{ep}.capacity": {"models": {"A": 0.6, "B": 1.0}, "value": 0.7746}
+                                            for ep in rankings.HELLO_ENDPOINTS})
+        base = rank_row("axum", is_baseline=True, ratios={})
+        pooled = rankings.compute([base, row], "axum", control_rows=[])
+        per_model = rankings.compute([base, row], "axum", control_rows=[],
+                                     settings={"cpu_model_weighting": "per-model"})
+        self.assertAlmostEqual({e["slug"]: e for e in pooled["categories"][0]["entries"]}["a"]["score"], 0.8)
+        entry = {e["slug"]: e for e in per_model["categories"][0]["entries"]}["a"]
+        self.assertAlmostEqual(entry["score"], 0.7746, places=4)
+        self.assertAlmostEqual(entry["detail"]["score_per_cpu_model"], 0.7746, places=4)
 
     def test_reference_margin_uses_the_spread(self):
         cpus = ["CPU A", "CPU B", "CPU C"]
@@ -190,7 +235,7 @@ class TieMarginTests(unittest.TestCase):
         self.assertTrue(hello["gin"]["tie"])  # a 10% gap within the spread of runners
         readme = report.render_readme_table(combined)
         self.assertIn("A/A margin and pooled floor per category", readme)
-        self.assertIn("1 (tie): ", readme)
+        self.assertIn("| 1–2: ", readme)
         self.assertIn(f"±{hello['gin']['tie_check']['percent']:.1f}%", readme)
         self.assertIn("CPU A, CPU B, CPU C", readme)
         results = report.render_results(combined)
@@ -203,10 +248,14 @@ class TieMarginTests(unittest.TestCase):
         jobs[1]["implementations"]["axum-no-ping"]["manifest"].update(role="diagnostic", role_note="no ping")
         combined = aggregate.combine(jobs, ["actix", "axum-no-ping"])
         readme = report.render_readme_table(combined)
-        self.assertIn("**Connection-pool defaults.**", readme)
+        self.assertIn("**Database-layer defaults.**", readme)
         self.assertIn("`test_before_acquire`, on by default", readme)
         self.assertIn("in these results Axum scored 1.20 in Database and 1.20 in Application", readme)
-        self.assertIn("Every implementation runs its framework's documented defaults.", readme)
+        for default in ("node-postgres (Fastify, NestJS) sends unprepared statements",
+                        "Laravel on PHP-FPM opens a new PostgreSQL connection for every request",
+                        "GORM (Gin) wraps each write in a transaction by default"):
+            self.assertIn(default, readme)
+        self.assertNotIn("documented defaults", readme)
         self.assertNotIn("Experimental", readme)
         without = report.render_readme_table(aggregate.combine(jobs[:1], ["actix"]))
         self.assertIn("it has no Database and Application scores in these results", without)
