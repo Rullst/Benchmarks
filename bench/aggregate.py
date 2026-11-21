@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -29,11 +30,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import ENDPOINTS, GROUPS, ROOT, declared_endpoints, framework_slugs, load_manifest, write_json  # noqa: E402
+from common import (ENDPOINTS, GROUPS, ROOT, declared_endpoints, framework_slugs, load_config,  # noqa: E402
+                    load_manifest, write_json)
 import rankings  # noqa: E402
-from measure import ratios as round_ratios, summarize  # noqa: E402
+from measure import (CAPACITY_RUNS, MIN_ROWS_UPDATED, WRITE_CHECKS, ratios as round_ratios,  # noqa: E402
+                     summarize, write_check)
 from release_check import semver_key  # noqa: E402
-from report import render_readme_table, render_results, replace_between_markers  # noqa: E402
+from reading import reading_markdown, reading_text  # noqa: E402
+from report import (READING_END, READING_START, put_flags, put_note, render_readme_table,  # noqa: E402
+                    render_results, replace_between_markers)
 
 SCHEMA = 1
 # The published files follow the shape the Rullst site reads
@@ -57,7 +62,8 @@ HISTORY_METRICS = ("tier1.json.rps", "tier1.db-single.rps", "tier1.html.rps", "t
                    "tier2.latency_ms.p99", "tier3.idle_ram_mib", "tier3.load_ram_peak_mib", "tier4.error_rate")
 # Absolute numbers shown next to the Axum value measured on the same runner.
 PAIRED_METRICS = tuple(f"tier1.{ep}.rps" for ep in ENDPOINTS) + ("tier2.rps", "tier4.rps",
-                                                                  "tier3.load_ram_peak_mib", "startup_s")
+                                                                  "tier3.load_ram_peak_mib", "startup_s",
+                                                                  "application.ram_peak_mib")
 
 
 def load_jobs(folder: Path) -> list[dict]:
@@ -90,6 +96,10 @@ def _row(slug: str, manifest: dict, entry: dict | None) -> dict:
         "variant": manifest.get("variant", ""),
         "role": manifest.get("role", "ranked"),
         "role_note": manifest.get("role_note", ""),
+        # bench.json "listing": "diagnostics" shows a row only in the results' Diagnostics section, with its
+        # "listing_note", not in the headline tables.
+        "listing": manifest.get("listing", ""),
+        "listing_note": manifest.get("listing_note", ""),
         "structure_note": manifest.get("structure_note", ""),
         "database_note": manifest.get("database_note", ""),
         "jit": bool(manifest.get("jit")),
@@ -230,7 +240,7 @@ def _job_brief(slug: str, job: dict) -> dict:
             "round_orders": job.get("round_orders", [])}
 
 
-PRESENTATION = ("role", "role_note", "structure_note", "database_note")
+PRESENTATION = ("role", "role_note", "structure_note", "database_note", "listing", "listing_note")
 
 
 def framework_row(slug: str, jobs: list[dict]) -> tuple[dict, list[dict]]:
@@ -246,11 +256,12 @@ def framework_row(slug: str, jobs: list[dict]) -> tuple[dict, list[dict]]:
         row = _row(slug, manifest, first)
         row["jobs"] = [_job_brief(slug, job) for job in jobs]
         return row, []
-    own_all, ref_all, per_job = [], [], []
+    own_all, ref_all, per_job, by_model = [], [], [], []
     for job in measured:
         own, ref = paired_rounds(slug, job)
         own_all += own
         ref_all += ref
+        by_model.append((job.get("environment", {}).get("cpu_model") or "unknown", own, ref))
         entry = job["implementations"][slug]
         single = dict(entry, rounds=own, summary=summarize(own),
                       status="crashed" if any(r.get("crashed") for r in own) else "measured")
@@ -263,11 +274,50 @@ def framework_row(slug: str, jobs: list[dict]) -> tuple[dict, list[dict]]:
     row = _row(slug, manifest, pooled)
     row["jobs"] = [_job_brief(slug, job) for job in jobs]
     row["ratios"] = round_ratios(own_all, ref_all)
+    row["ratios_by_cpu_model"] = per_cpu_model(by_model)
     row["environment"] = _env_brief(measured[0])
     row["runners"] = [job.get("environment", {}).get("cpu_model") or "unknown" for job in measured]
     row["paired_baseline"] = paired_values(ref_all)
     row["paired_baseline_flags"] = paired_flags(ref_all)
     return row, per_job
+
+
+def per_cpu_model(paired: list[tuple[str, list[dict], list[dict]]]) -> dict:
+    """Each capacity run's median per CPU model, and their geometric mean (`value`).
+
+    paired holds (CPU model, framework rounds, baseline rounds) per job. The
+    pooled ratio is the median over every round pair, so a CPU model that
+    ran two of an implementation's three jobs sets it; giving each model one
+    vote is the alternative that config.json scoring.cpu_model_weighting =
+    "per-model" selects (rankings.DEFAULTS).
+    """
+    by_model: dict[str, tuple[list[dict], list[dict]]] = {}
+    for model, own, ref in paired:
+        rounds = by_model.setdefault(model or "unknown", ([], []))
+        rounds[0].extend(own)
+        rounds[1].extend(ref)
+    stats = {model: round_ratios(own, ref) for model, (own, ref) in by_model.items() if own}
+    out = {}
+    for run in CAPACITY_RUNS:
+        key = f"{run}.capacity"
+        medians = {model: round(stat[key]["median"], 6) for model, stat in stats.items()
+                   if stat.get(key) and stat[key].get("median")}
+        if medians:
+            value = math.exp(sum(math.log(v) for v in medians.values()) / len(medians))
+            out[key] = {"models": medians, "value": round(value, 6)}
+    return out
+
+
+def server_cores(jobs: list[dict]) -> dict:
+    """How many jobs gave the server the two SMT threads of one physical core (cpu_split.core_groups)."""
+    one_core = 0
+    for job in jobs:
+        split = job.get("environment", {}).get("cpu_split") or {}
+        groups = [sorted(g) for g in split.get("core_groups") or []]
+        server = sorted(split.get("server") or [])
+        if len(server) > 1 and server in groups:
+            one_core += 1
+    return {"jobs": len(jobs), "smt_threads_of_one_core": one_core}
 
 
 def runner_summary(jobs: list[dict]) -> list[dict]:
@@ -334,7 +384,10 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
     note_pt_br = version_note(rullst_version, rows, lang="pt_br")
     started = sorted(j.get("started_at", "") for j in jobs if j.get("started_at"))
     finished = sorted(j.get("finished_at", "") for j in jobs if j.get("finished_at"))
-    config = first.get("config", {})
+    # The scoring settings come from the current configuration: they decide how the results are ranked and
+    # presented, not how they were measured, so results re-aggregated after a change follow it.
+    scoring = {**(first.get("config", {}).get("scoring") or {}), **load_config().get("scoring", {})}
+    config = dict(first.get("config", {}), scoring=scoring)
     combined = {
         "schema": SCHEMA,
         "rullst_version": rullst_version,
@@ -357,8 +410,9 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
         "config": config,
         "environment": _env_brief(first) if first else {},
         "runners": runner_summary(jobs),
+        "server_cores": server_cores(jobs),
         "implementations": rows,
-        "rankings": rankings.compute(rows, baseline, display_name, settings=config.get("scoring"),
+        "rankings": rankings.compute(rows, baseline, display_name, settings=scoring,
                                      control_rows=control_rows, job_rows=job_rows),
     }
     combined["publication_gate"] = publication_gate(combined, jobs)
@@ -368,6 +422,11 @@ def combine(jobs: list[dict], requested: list[str] | None = None) -> dict:
 MEASURED = ("measured", "crashed")
 # The official run measures every implementation on 3 jobs (runners); config.json publication.min_jobs.
 MIN_JOBS = 3
+# The A/A control compares two identical servers on one runner, so its margin stays far below the
+# between-job spreads (0.2-1.3% against 6-9% in the first official run) and a limit on it alone could not
+# refuse a run whose runners differed too much. The gate also refuses a pooled floor (the median between-job
+# spread, term (c) of the tie margins) above this (config.json publication.max_floor).
+MAX_FLOOR = 0.15
 CONSISTENT = {
     "harness commit": lambda job: job.get("environment", {}).get("runner", {}).get("github_sha", ""),
     "configuration": lambda job: json.dumps(job.get("config", {}), sort_keys=True),
@@ -392,13 +451,16 @@ def publication_gate(combined: dict, jobs: list[dict]) -> dict:
     no scored run above the error limit and no failed stability check; the
     A/A control measured, with every tie margin at most `max_aa_margin`; a
     between-job spread (the pooled floor of the tie margins) in every
-    category; and Rullst built from its crates.io release.
+    category, at most `max_floor`; every PUT /world/{id} run writing about one
+    row per request (write_problems); and Rullst built from its crates.io
+    release.
     """
     settings = combined.get("config", {}).get("publication", {})
     # A run recorded with a lower minimum (an older configuration) is still held to the official one.
     min_rounds, min_jobs = settings.get("min_rounds", 5), max(int(settings.get("min_jobs", MIN_JOBS)), MIN_JOBS)
     max_margin = settings.get("max_aa_margin", 0.05)
-    problems = []
+    max_floor = settings.get("max_floor", MAX_FLOOR)
+    problems = write_problems(combined["implementations"])
     for row in combined["implementations"]:
         if row.get("is_baseline"):
             continue
@@ -436,11 +498,29 @@ def publication_gate(combined: dict, jobs: list[dict]) -> dict:
         if rule.get("ranked") and rule.get("floor") is None:
             problems.append(f"no between-job spread for {category['key']}: no ranked implementation has scores "
                             "from two jobs, so the tie margins cannot include the difference between runners")
+        elif rule.get("floor_percent") is not None and rule["floor_percent"] > max_floor * 100:
+            problems.append(f"runners too different in {category['key']}: the pooled floor of the tie margins is "
+                            f"{rule['floor_percent']:.1f}% (limit {max_floor:.0%})")
     source = combined.get("rullst_source") or {}
     if source.get("kind") != "crates.io":
         problems.append(f"Rullst was built from {source.get('label', 'an unknown source')}, not its crates.io "
                         "release")
     return {"passed": not problems, "problems": problems}
+
+
+def write_problems(rows: list[dict]) -> list[str]:
+    """The publication gate's write check: every measured run of a writing endpoint wrote about one row."""
+    problems = []
+    for row in rows:
+        for endpoint, table in WRITE_CHECKS.items():
+            state, value = write_check(row, endpoint)
+            if state == "no write":
+                problems.append(f"{row['slug']}: /{endpoint} updated {value:.2f} rows of {table} per request "
+                                f"(median), at least {MIN_ROWS_UPDATED} required: its requests did not all write")
+            elif state == "unchecked":
+                problems.append(f"{row['slug']}: /{endpoint} has no count of the rows it updated (measured before "
+                                "the harness counted them)")
+    return problems
 
 
 NOTES = Path(__file__).resolve().parent / "notes.json"
@@ -556,6 +636,11 @@ def site_document(combined: dict) -> dict:
     }
     document.update({k: v for k, v in combined.items() if k not in ("schema", "implementations")})
     document["rankings"] = rankings.published(combined["rankings"])
+    # The plain-language reading for Rullst as generated (bench/reading.py) and the PUT label (report.put_flags).
+    document["reading_rullst"] = reading_text(combined)
+    flags = put_flags(combined["implementations"])
+    document["labels"] = {"put_world": {"flagged": sorted(flags["flagged"]), "unchecked": flags["unchecked"],
+                                        "note": put_note(combined["implementations"])}}
     document["results_schema"] = SCHEMA
     return document
 
@@ -586,7 +671,8 @@ def write_outputs(combined: dict, jobs: list[dict]) -> None:
 
     (ROOT / "benchmarks_results.md").write_text(render_results(combined))
     readme = ROOT / "README.md"
-    readme.write_text(replace_between_markers(readme.read_text(), render_readme_table(combined)))
+    text = replace_between_markers(readme.read_text(), render_readme_table(combined))
+    readme.write_text(replace_between_markers(text, reading_markdown(combined), READING_START, READING_END))
 
 
 def record_attempt(version: str, reason: str) -> None:

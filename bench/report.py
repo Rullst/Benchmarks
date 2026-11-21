@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from common import ENDPOINT_LABELS, GROUPS, PHASE2_ENDPOINTS, endpoint_label
+from measure import MIN_ROWS_UPDATED, write_check
 
 START = "<!-- results:start -->"
 END = "<!-- results:end -->"
@@ -108,6 +109,75 @@ def _measured(rows: list[dict]) -> list[dict]:
     return [r for r in rows if r["status"] in MEASURED]
 
 
+def _headline(rows: list[dict]) -> list[dict]:
+    """The rows of the headline tables: without those bench.json lists under diagnostics."""
+    return [r for r in rows if r.get("listing") != "diagnostics"]
+
+
+def _listed_apart(rows: list[dict]) -> list[dict]:
+    return [r for r in _measured(rows) if r.get("listing") == "diagnostics"]
+
+
+# PUT /world/{id} runs that did not write in most measured requests.
+PUT_SIGN = "‡"
+# Results measured before the harness counted the rows a PUT writes: a PUT whose PostgreSQL CPU per request
+# was at most this many times its GET /world/{id}'s read the row without writing it (a write costs more).
+UNWRITTEN_PG_RATIO = 1.10
+
+
+def put_flags(rows: list[dict]) -> dict:
+    """The rows whose PUT /world/{id} did not write in most measured requests.
+
+    {"flagged": {slug: evidence}, "unchecked": True when the results were
+    measured before the harness counted the rows written}. With a count
+    (measure.WRITE_CHECKS), a row is flagged below measure.MIN_ROWS_UPDATED;
+    without one, when its PostgreSQL CPU per PUT was at most
+    UNWRITTEN_PG_RATIO times its GET /world/{id}'s.
+    """
+    flagged, unchecked = {}, False
+    for row in rows:
+        state, value = write_check(row, "world-update")
+        if state == "no write":
+            flagged[row["slug"]] = f"{value:.2f}"
+        elif state == "unchecked":
+            unchecked = True
+            ratio = put_get_ratio(row)
+            if ratio is not None and ratio <= UNWRITTEN_PG_RATIO:
+                flagged[row["slug"]] = f"{ratio:.2f}"
+    return {"flagged": flagged, "unchecked": unchecked}
+
+
+def put_get_ratio(row: dict) -> float | None:
+    """PostgreSQL's CPU per PUT /world/{id} divided by its CPU per GET /world/{id} (medians)."""
+    put = (_stat(row, "tier1.world-update.db_us_per_request") or {}).get("median")
+    get = (_stat(row, "tier1.world.db_us_per_request") or {}).get("median")
+    return put / get if put and get else None
+
+
+def put_note(rows: list[dict]) -> str:
+    """The footnote of the PUT column and the Application ranking, or "" when every PUT wrote."""
+    flags = put_flags(rows)
+    if not flags["flagged"]:
+        return ""
+    labels = {r["slug"]: _label(r) for r in rows}
+    listed = ", ".join(f"{labels.get(slug, slug)} {why}" for slug, why in flags["flagged"].items())
+    if flags["unchecked"]:
+        others = [ratio for r in _measured(rows) if r["slug"] not in flags["flagged"]
+                  and (ratio := put_get_ratio(r)) is not None]
+        contrast = (f"; {min(others):.2f}-{max(others):.2f} for the other rows, whose PUTs wrote" if others else "")
+        return (f"{PUT_SIGN} PUT /world/{{id}} in this run: the load repeated 10,000 fixed (id, value) pairs that the "
+                "warm-up had already stored, so an ORM that writes only changed columns answered most measured "
+                f"requests without an UPDATE. The rows marked {PUT_SIGN} are those whose PostgreSQL CPU per PUT was at "
+                f"most {UNWRITTEN_PG_RATIO:.2f} times their CPU per GET /world/{{id}} ({listed}{contrast}): most of "
+                "their measured PUTs did not write, so their PUT ratio and their Application score (and through it "
+                "their overall score) are higher than they would be with a write. Fixed in the next run: every "
+                "request now carries a new value, and the harness counts the rows each PUT run writes.")
+    return (f"{PUT_SIGN} PUT /world/{{id}}: the rows marked {PUT_SIGN} updated fewer than {MIN_ROWS_UPDATED} rows of "
+            f"`world` per successful request in their measured runs ({listed} rows per request), so their PUT ratio "
+            "and their "
+            "Application score do not measure a write; the publication gate refuses these results.")
+
+
 TEXT_COLUMNS = {"Implementation", "Version", "Language", "Notes", "Status", "Reason", "Group", "Runtime",
                 "Server", "Workers", "Database layer", "Templates", "Overall", "Hello world", "Database",
                 "Application", "Memory (high-water mark)", "Startup", "Stability", "CSRF", "Session store",
@@ -120,7 +190,7 @@ DB_ENDPOINTS = ("db-single", "queries", "updates", "fortunes", "world", "worlds"
 
 
 def _table(header: list[str], lines: list[list[str]]) -> str:
-    align = ["---" if name in TEXT_COLUMNS else "---:" for name in header]
+    align = ["---" if name.removesuffix(f" {PUT_SIGN}") in TEXT_COLUMNS else "---:" for name in header]
     out = ["| " + " | ".join(header) + " |", "| " + " | ".join(align) + " |"]
     out += ["| " + " | ".join(cells) + " |" for cells in lines]
     return "\n".join(out)
@@ -146,6 +216,71 @@ def _source_text(data: dict) -> str:
     return ""
 
 
+# Languages compiled ahead of time to native code: their ratios to Axum moved least with the CPU model.
+NATIVE_LANGUAGES = ("Rust", "Go")
+
+
+def cpu_effect(data: dict) -> dict:
+    """The largest difference between one ranked implementation's per-job scores on two CPU models.
+
+    Per group (the Rust and Go implementations, and the others), over the
+    throughput categories: {"native": (percent, case), "others": (percent,
+    case)}, a case being (implementation, category, low score, its CPU,
+    high score, its CPU).
+    """
+    language = {r["slug"]: r.get("language", "") for r in data.get("implementations", [])}
+    labels = {r["slug"]: _label(r) for r in data.get("implementations", [])}
+    best: dict[str, tuple[float, tuple]] = {}
+    for category in (data.get("rankings") or {}).get("categories", []):
+        if category.get("kind") != "throughput":
+            continue
+        for entry in category["entries"]:
+            spread = entry.get("spread") or {}
+            if entry.get("status") != "ranked":
+                continue
+            jobs = list(zip(spread.get("scores") or [], spread.get("cpu_models") or []))
+            for low, low_cpu in jobs:
+                for high, high_cpu in jobs:
+                    if low_cpu == high_cpu or not low or high <= low:
+                        continue
+                    group = "native" if language.get(entry["slug"]) in NATIVE_LANGUAGES else "others"
+                    percent = (high / low - 1) * 100
+                    if percent > best.get(group, (-1.0, ()))[0]:
+                        best[group] = (percent, (labels.get(entry["slug"], entry["framework"]), category["title"],
+                                                 low, low_cpu, high, high_cpu))
+    return best
+
+
+def cpu_effect_text(data: dict) -> str:
+    """What the ratios to Axum cancel of the difference between runners, from these results."""
+    effect = cpu_effect(data)
+    if not effect:
+        return ("Ratios to Axum (1.00 = Axum) cancel part of the difference between runners, so the tables lead "
+                "with them.")
+
+    def case(group: str, who: str) -> str:
+        percent, (name, title, low, low_cpu, high, high_cpu) = effect[group]
+        return (f"by up to {percent:.0f}% for {who} ({name}'s {title} score: {_times(low)} on {short_cpu(low_cpu)}, "
+                f"{_times(high)} on {short_cpu(high_cpu)})")
+    parts = []
+    if "native" in effect:
+        parts.append(case("native", f"the {' and '.join(NATIVE_LANGUAGES)} implementations"))
+    if "others" in effect:
+        parts.append(case("others", "the others" if "native" in effect else "the implementations"))
+    return ("Ratios to Axum (1.00 = Axum) cancel much of the difference between runners, so the tables lead with "
+            "them, but not all of it: in these results one implementation's score in a category differed between "
+            f"jobs on two CPU models {' and '.join(parts)}. The tie margins include these differences.")
+
+
+def _server_cpus(data: dict) -> str:
+    cores = data.get("server_cores") or {}
+    jobs, smt = cores.get("jobs"), cores.get("smt_threads_of_one_core")
+    if not jobs or not smt:
+        return "2 vCPUs"
+    where = "on every runner" if smt == jobs else f"on {smt} of {jobs} runners"
+    return f"2 vCPUs, the two SMT threads of one physical core {where},"
+
+
 def notice(data: dict) -> str:
     """The context every results surface shows above the numbers."""
     run = data.get("run", {})
@@ -157,13 +292,12 @@ def notice(data: dict) -> str:
     jobs = run.get("jobs_per_framework") or 1
     rounds = run.get("rounds")
     return (f"> Measured on {measured} with **Rullst {data.get('rullst_version') or 'unknown'}**{_source_text(data)} "
-            f"on GitHub-hosted runners ({env.get('cpu_count')} vCPUs; each server limited to 2 vCPUs and 2 GiB). "
-            f"Each implementation ran {_plural(rounds, 'round')} on each of {_plural(jobs, 'runner')} (jobs), "
-            "alternating which side goes first with the Axum baseline measured on the same runner (ABBA); values "
-            "are medians over every round pair. Runner CPUs per job: "
-            f"{cpus}; each row names its own. Ratios to Axum (1.00 = Axum) cancel most of the difference between "
-            "runners, so the tables lead with them. These results update automatically when a new Rullst version "
-            f"is published on crates.io. Last update: {data['generated_at'][:10]}."
+            f"on GitHub-hosted runners ({env.get('cpu_count')} vCPUs; each server limited to {_server_cpus(data)} "
+            f"and 2 GiB). Each implementation ran {_plural(rounds, 'round')} on each of {_plural(jobs, 'runner')} "
+            "(jobs), alternating which side goes first with the Axum baseline measured on the same runner (ABBA); "
+            "values are medians over every round pair. Runner CPUs per job: "
+            f"{cpus}; each row names its own. {cpu_effect_text(data)} These results update automatically when a "
+            f"new Rullst version is published on crates.io. Last update: {data['generated_at'][:10]}."
             + (f"\n>\n> **Note:** {data['note']}" if data.get("note") else ""))
 
 
@@ -187,10 +321,17 @@ def _phase2_label(row: dict, kind: str) -> str:
     return f"{main} ({value.get('source')})" if main else "–"
 
 
-def _endpoint_notes(row: dict, endpoint: str, run: str) -> str:
+def _endpoint_notes(row: dict, endpoint: str, run: str, flagged: dict | None = None) -> str:
     if not _served(row, endpoint):
         return "not implemented yet"
     notes = [n for n in (_bound(row, run),) if n]
+    if endpoint == "world-update" and row["slug"] in (flagged or {}):
+        why = (f"PostgreSQL CPU per PUT {flagged[row['slug']]}× its GET /world/{{id}}'s"
+               if write_check(row, endpoint)[0] == "unchecked" else f"{flagged[row['slug']]} rows updated per request")
+        notes.insert(0, f"{PUT_SIGN} most measured requests did not write ({why})")
+    updated = _stat(row, f"{run}.rows_updated_per_request")
+    if updated and updated.get("median") is not None:
+        notes.append(f"{updated['median']:.2f} rows updated per request")
     if endpoint in DB_ENDPOINTS and row.get("database_note"):
         notes.insert(0, f"**{row['database_note']}**")
     warm = row.get("flags", {}).get("warmup_errors", {}).get(endpoint)
@@ -220,7 +361,8 @@ def summary_table(rows: list[dict]) -> str:
 SUMMARY_NOTE = ("Ratios are requests/s divided by Axum's on the same runners (higher is better); the scores in the "
                 "rankings use capacity ratios instead (see below). \"/json req/s (Axum)\" is the absolute number, "
                 "with Axum's on the same runners in brackets: compare absolute numbers only within a row. Peak RAM "
-                "is the Memory category's high-water mark. \"n/i\": not implemented yet. /queries and /updates use "
+                "is the Memory category's high-water mark, measured before the logins of the application endpoints "
+                "(the next table has the RAM after them). \"n/i\": not implemented yet. /queries and /updates use "
                 "queries=20. Runner CPUs: the CPU model of each job (runner) the row was measured on.")
 
 
@@ -233,6 +375,8 @@ def _rank_text(entry: dict) -> str:
         return "A/A"
     if entry["position"] is None:
         return entry["status"]
+    if entry.get("position_label"):
+        return entry["position_label"]
     return f"{entry['position']}" + (" (tie)" if entry["tie"] else "")
 
 
@@ -244,9 +388,9 @@ def _times(value: float) -> str:
 THROUGHPUT = ("hello", "database", "application")
 
 
-def _category_cell(key: str, entry: dict) -> str:
-    """Position and score (a ratio to Axum, higher is better); "*": a CPU-efficiency basis; "≈": within the A/A
-    margin of Axum."""
+def _category_cell(key: str, entry: dict, flagged: dict | None = None) -> str:
+    """Position and score (a ratio to Axum, higher is better); "*": a CPU-cost basis; "≈": within the tie
+    margin of Axum; PUT_SIGN: an Application score whose PUT did not write (flagged: put_flags)."""
     if entry["score"] is None and entry["status"] == "errors":
         rates = ", ".join(f"{ENDPOINT_LABELS.get(ep, '/' + ep)} {rate:.1%}"
                           for ep, rate in entry.get("error_runs", {}).items())
@@ -258,6 +402,8 @@ def _category_cell(key: str, entry: dict) -> str:
         value += "*"
     if entry.get("database_note"):
         value += " †"
+    if key == "application" and entry["slug"] in (flagged or {}):
+        value += f" {PUT_SIGN}"
     if entry.get("within_reference_margin"):
         value += " ≈"
     if key == "startup" and entry["detail"].get("startup_s") is not None:
@@ -296,10 +442,15 @@ TIE_RULE = ("Tie margins: each implementation has one score per job (runner) in 
             "per job and pooled), (b) the root of the sum of squares of their two spreads and (c) the pooled "
             "floor (the median spread of the ranked implementations measured on at least two jobs). An "
             "implementation whose jobs all ran on one CPU model counts with at least the floor as its spread, one "
-            "measured on a single job with the floor. A score is compared with the best score of the group above "
-            "it, counting with the widest spread of that group's other members when it is wider than its own, so "
-            "that equal scores share a position. \"±\" after a score: the margin of that comparison (the first "
-            "position has none).")
+            "measured on a single job with the floor. A run in which most round pairs had one side "
+            "PostgreSQL-bound and the other not compares CPU cost at two different loads: each such run adds the "
+            "change in CPU cost with the load that the [CPU split](README.md#cpu-split) experiment measured for its "
+            "endpoint (7% for a single-query read, 2% for /fortunes, a third for /queries and the writes), divided "
+            "by the category's number of runs, to that implementation's spread. Scores are sorted and each is compared "
+            "with its neighbour above: a new group starts only where that gap is larger than their margin, so a "
+            "group is a chain of neighbours within their margins (its two ends can be further apart than one "
+            "margin) and its members share the range of positions it occupies, for example \"5–7\". \"±\" after "
+            "a score: the margin of its comparison with the score above it (the first position has none).")
 
 
 def _rule_text(rule: dict | None, margin: dict | None = None) -> str:
@@ -318,11 +469,15 @@ def _margins_line(rankings: dict) -> str:
     return TIE_RULE + " A/A margin and pooled floor per category: " + "; ".join(parts) + "."
 
 
-POOL_NOTE = ("**Connection-pool defaults.** The Database and Application rankings partly measure connection-pool "
-             "defaults. SQLx, used by the Axum, Actix Web, Loco and Rullst implementations, tests each connection "
-             "with a round trip before handing it out (`test_before_acquire`, on by default). The unranked "
-             "`axum-no-ping` diagnostic shows the size of that cost: {measured}. Every implementation runs its "
-             "framework's documented defaults.")
+POOL_NOTE = ("**Database-layer defaults.** The Database and Application rankings partly measure the defaults of "
+             "each stack's database layer, and they differ: SQLx (Axum, Actix Web, Loco, Rullst) tests each pooled "
+             "connection with a round trip before handing it out (`test_before_acquire`, on by default; the "
+             "unranked `axum-no-ping` diagnostic, measured for Axum only, shows its size: {measured}); "
+             "node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new "
+             "PostgreSQL connection for every request; Npgsql (ASP.NET Core) resets a pooled connection's state "
+             "before each query EF Core runs; GORM (Gin) wraps each write in a transaction by default (`SkipDefaultTransaction` off); "
+             "Rails uses 6 of its 16 connections. [Fairness](README.md#fairness) and each folder README list the "
+             "settings that were changed from the defaults, and why.")
 
 
 def pool_note(data: dict) -> str:
@@ -353,8 +508,11 @@ def rankings_section(data: dict, level: str = "###", review: bool = False) -> li
     cells = {c["key"]: {e["slug"]: e for e in c["entries"]} for c in rankings["categories"]}
     stability = {e["slug"]: e for e in rankings.get("stability", {}).get("entries", [])}
     keys = [c["key"] for c in rankings["categories"]]
-    titles = [c["title"] for c in rankings["categories"]]
+    flagged = put_flags(data["implementations"])["flagged"]
+    titles = [c["title"] + (f" {PUT_SIGN}" if c["key"] == "application" and flagged else "")
+              for c in rankings["categories"]]
     header = ["Implementation", *(["Overall"] if show_overall else []), *titles, "Stability", "Runner CPUs"]
+    apart = {r["slug"] for r in data["implementations"] if r.get("listing") == "diagnostics"}
     # Without a published overall ranking, rows keep the neutral order of the
     # implementations (reference, groups, names), so that no overall order is implied.
     if show_overall:
@@ -365,8 +523,10 @@ def rankings_section(data: dict, level: str = "###", review: bool = False) -> li
     lines = []
     for entry in order:
         slug = entry["slug"]
+        if slug in apart:
+            continue
         lines.append([labels.get(slug, entry["framework"]), *([_overall_cell(entry)] if show_overall else []),
-                      *(_category_cell(key, cells[key][slug]) for key in keys),
+                      *(_category_cell(key, cells[key][slug], flagged) for key in keys),
                       _stability_cell(stability.get(slug)), _runners(by_slug.get(slug, {}))])
     noted = [(labels.get(e["slug"], e["framework"]), e["database_note"])
              for e in cells.get("database", {}).values() if e.get("database_note")]
@@ -382,7 +542,9 @@ def rankings_section(data: dict, level: str = "###", review: bool = False) -> li
         f"- **Memory (Tier 3):** the RAM high-water mark while answering /{t3.get('endpoint')} with "
         f"{t3.get('connections')} connections for {t3.get('duration_s')} s, measured after the phase-1 Tier 1 "
         "runs, Tiers 2 and 4 and an idle period, so it includes memory the server kept from that load; the score "
-        "is Axum's high-water mark / the implementation's, both counted as at least 64 MiB.",
+        "is Axum's high-water mark / the implementation's, both counted as at least 64 MiB. It is measured "
+        "before the logins of the application endpoints: the RAM after them (\"Peak RAM after the logins\" in "
+        "the application table) is not part of any score.",
         "- **Startup:** time from starting the container to its first answer; the score is Axum's time / the "
         "implementation's, both counted as at least 1 s.",
         f"- **Stability (Tiers 2 and 4, not a score):** /{t2.get('endpoint')} with {t2.get('connections')} "
@@ -391,32 +553,59 @@ def rankings_section(data: dict, level: str = "###", review: bool = False) -> li
         "than 1% errors (timeouts included); warn when RAM was still growing at the end of Tier 4 (for a "
         "garbage-collected runtime that can be heap growth rather than a leak).",
         "",
-        "Every score is an efficiency-aware ratio to Axum (1.00), higher is better. In the throughput categories "
-        "each run counts with its requests/s ratio when neither server was client-bound, and otherwise with the "
-        "ratio of requests per CPU-second of the server and PostgreSQL together (\"*\"), so a framework is "
-        "charged for the PostgreSQL work its queries cause. A run limited by the load generator while a server "
-        "used less than 75% of its vCPUs is not comparable. A run with more than 1% errors has no score "
-        "(\"errors\"). \"≈\": within the tie margin of Axum's 1.00 (the largest of the A/A margin, the score's "
-        "own spread and the pooled floor), so not distinguishable from Axum. \"(tie)\": within the tie margin of "
-        "the best score of its group. Axum, diagnostics and the A/A control have no position. \"incomplete\": a "
-        "result is missing or left out.",
+        "Every score is a ratio to Axum (1.00), higher is better. In the throughput categories each run counts "
+        "with its requests/s ratio when neither server was client-bound, and otherwise with its CPU-cost ratio "
+        "(\"*\"): the ratio of requests per CPU-second of the server and PostgreSQL together, so a framework is "
+        "charged for the PostgreSQL work its queries cause. When both sides were client-bound their requests/s "
+        "were about equal, and the score compares CPU cost per request, not throughput. A run limited by the "
+        "load generator while a server used less than 75% of its vCPUs is not comparable. A run with more than "
+        "1% errors has no score (\"errors\"). \"≈\": within the tie margin of Axum's 1.00 (the largest of the "
+        "A/A margin, the score's own spread and the pooled floor), so not distinguishable from Axum. A range "
+        "such as \"5–7\": scores that cannot be told apart, sharing the positions 5 to 7 in no particular order. "
+        "Axum, diagnostics and the A/A control have no position. \"incomplete\": a result is missing or left "
+        "out.",
         "",
         _margins_line(rankings),
         "",
         _table(header, lines),
         *(["", "† Database: " + "; ".join(f"{name}: {note}" for name, note in noted) + "."] if noted else []),
+        *(["", f"{PUT_SIGN} Application: the score includes a PUT /world/{{id}} run that did not write in most "
+               "measured requests (the note under the application table)."] if flagged else []),
     ]
     if show_overall:
-        note = ("published" if rankings.get("publish_overall")
-                else "**computed for review, not published** (config.json scoring.publish_overall is false)")
-        out += ["", f"Overall: the geometric mean of the {len(keys)} category scores with equal weights, {note}. "
-                "Stability is not a score; an implementation that fails it has no overall position. The weighting "
-                "is a choice; the table below shows the positions under other weightings.", "",
-                *sensitivity_table(rankings, labels)]
+        out += ["", overall_text(rankings), "", *sensitivity_table(rankings, labels, apart)]
     return out
 
 
-def sensitivity_table(rankings: dict, labels: dict) -> list[str]:
+def overall_text(rankings: dict) -> str:
+    """What the overall score is and is not, with its weights."""
+    weights = (rankings.get("overall") or {}).get("weight_ratio") or {}
+    titles = {c["key"]: c["title"].split(" (")[0] for c in rankings["categories"]}
+    groups: dict[int, list[str]] = {}
+    for key, weight in weights.items():
+        groups.setdefault(weight, []).append(titles.get(key, key))
+
+    def listed(names: list[str]) -> str:
+        return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    if len(set(weights.values())) <= 1:
+        how = "with equal weights"
+    else:
+        counted = {1: "once", 2: "twice"}
+        how = "with " + " and ".join(f"{listed(names)} counted {counted.get(w, f'{w} times')}"
+                                     for w, names in sorted(groups.items(), reverse=True)) \
+            + " (" + ":".join(str(weights[k]) for k in weights) + ")"
+    status = ("" if rankings.get("publish_overall")
+              else " **Computed for review, not published** (config.json scoring.publish_overall is false).")
+    return (f"Overall: the geometric mean of the {len(titles)} category scores, {how}, with the same tie margins "
+            "and position ranges as the categories."
+            + (" The three throughput categories count twice because the Memory and Startup floors make most "
+               "native implementations tie there." if len(set(weights.values())) > 1 else "")
+            + " It is a summary for quick reading; the categories are the result, and other weightings change the "
+              "order (the table below, equal weights included). Stability is not a score; an implementation that "
+              "fails it has no overall position." + status)
+
+
+def sensitivity_table(rankings: dict, labels: dict, apart: set | frozenset = frozenset()) -> list[str]:
     weightings = rankings.get("sensitivity") or []
     if not weightings:
         return []
@@ -425,27 +614,43 @@ def sensitivity_table(rankings: dict, labels: dict) -> list[str]:
     lines = []
     for entry in rankings["overall"]["entries"]:
         slug = entry["slug"]
+        if slug in apart:
+            continue
         cells = []
         for w in weightings:
             item = positions[w["key"]].get(slug)
             cells.append("–" if not item or item["score"] is None else f"{_rank_text(item)}: {_times(item['score'])}")
         lines.append([labels.get(slug, entry["framework"]), *cells])
-    legend = "; ".join(f"{w['title']}: " + ", ".join(f"{k} ×{v}" for k, v in w["weights"].items())
+    titles = {c["key"]: c["title"].split(" (")[0] for c in rankings["categories"]}
+    legend = "; ".join(f"{w['title']}: " + ", ".join(f"{titles.get(k, k)} ×{v}" for k, v in w["weights"].items())
                        for w in weightings)
     return ["Positions under other weightings (" + legend + "):", "", _table(header, lines)]
 
 
-def application_table(rows: list[dict]) -> str:
-    """The phase-2 endpoints as ratios to Axum, with each implementation's CSRF design and session store."""
-    header = ["Implementation", *(f"{ENDPOINT_LABELS[ep]} vs Axum" for ep in PHASE2_ENDPOINTS), "CSRF",
-              "Session store", "Hot rows p99 (ms)", "Hot rows errors"]
+def application_table(rows: list[dict], flags_from: list[dict] | None = None, logins: int = 125) -> str:
+    """The phase-2 endpoints as ratios to Axum, with each implementation's CSRF design and session store.
+
+    flags_from: the rows put_flags reads (all of them, so that a subset of
+    rows shows the same marks); logins: how many users each round signed in.
+    """
+    flagged = put_flags(flags_from if flags_from is not None else rows)["flagged"]
+
+    def cell(row: dict, ep: str) -> str:
+        if not _served(row, ep):
+            return "n/i"
+        text = _ratio(row, f"tier1.{ep}.rps")
+        return text + (f" {PUT_SIGN}" if ep == "world-update" and row["slug"] in flagged and text != "–" else "")
+    header = ["Implementation", *(f"{ENDPOINT_LABELS[ep]} vs Axum" + (f" {PUT_SIGN}" if ep == "world-update" and
+                                                                      flagged else "") for ep in PHASE2_ENDPOINTS),
+              "CSRF", "Session store", f"Peak RAM after the {logins} logins (MiB)", "Hot rows p99 (ms)",
+              "Hot rows errors"]
     lines = []
     for row in _measured(rows):
         lines.append([
-            _label(row),
-            *(_ratio(row, f"tier1.{ep}.rps") if _served(row, ep) else "n/i" for ep in PHASE2_ENDPOINTS),
+            _label(row), *(cell(row, ep) for ep in PHASE2_ENDPOINTS),
             _phase2_label(row, "csrf") if _served(row, "form") else "n/i",
             _phase2_label(row, "session") if _served(row, "me") else "n/i",
+            _paired(row, "application.ram_peak_mib"),
             _median(row, "hot_rows.latency_ms.p99", 2), _errors(row, "hot_rows.error_rate"),
         ])
     return _table(header, lines)
@@ -456,9 +661,12 @@ APPLICATION_NOTE = ("Application endpoints (phase 2). CSRF is the design of the 
                     "each framework's default for a signed-in user, with where the mechanism comes from (built-in, "
                     "generator, stdlib, documented, library): /form and /me compare those defaults, not one common "
                     "mechanism. A cookie store reads no database row for /me; a PostgreSQL store (Axum's "
-                    "tower-sessions store included) reads one, which shows in the PostgreSQL CPU per request. Hot "
-                    "rows: PUT /world/{id} on ids 1-10 only, so requests wait for each other's row locks; reported, "
-                    "not ranked.")
+                    "tower-sessions store included) reads one, which shows in the PostgreSQL CPU per request. Peak "
+                    "RAM after the logins: the server's highest RAM while answering the application endpoints and the "
+                    "hot-rows run, after each round signed its users in (a memory-hard password hash can leave "
+                    "hundreds of MiB in the allocator), with Axum's on the same runners in brackets; the Memory "
+                    "score is measured before the logins and does not include it. Hot rows: PUT /world/{id} on ids "
+                    "1-10 only, so requests wait for each other's row locks; reported, not ranked.")
 
 
 def _capacity_cell(entry: dict, endpoint: str) -> str:
@@ -500,7 +708,7 @@ def _check_cell(entry: dict, labels: dict) -> str:
     check = entry.get("tie_check")
     if not check:
         return "–"
-    verdict = "tie" if check["tied"] else "separate"
+    verdict = "same group" if check["tied"] else "new group"
     widest = check.get("group_spread_of")
     using = f" (with the spread of {labels.get(widest, widest)}, in its group)" if widest else ""
     return (f"{_pct(check['percent'])} vs {labels.get(check['against'], check['against'])}{using}, gap "
@@ -528,16 +736,20 @@ def category_tables(data: dict) -> list[str]:
            "In the database tables, \"PG µs/req\" is PostgreSQL's CPU time per request in microseconds, with its "
            "ratio to Axum's on the same runners in brackets: how much database work each request causes. "
            "\"Job scores\" is the score of each job (runner) with its CPU model, \"Spread\" the between-job "
-           "spread the tie margins use (its own, or the pooled floor), \"Position check\" the comparison that set "
-           "the position (a score counts with the widest spread of the group it is compared with, so that equal "
-           "scores share a position) and \"vs Axum margin\" the margin of the \"≈\" check against 1.00.", ""]
+           "spread the tie margins use (its own, or the pooled floor; \"+ mixed limits\": widened for runs measured "
+           "at different loads on the two sides), \"Position check\" the comparison with the score above it "
+           "(within the margin: the same group; otherwise a new group starts) and \"vs Axum margin\" the margin "
+           "of the \"≈\" check against 1.00. A CPU-cost ratio (\"*\") compares requests per CPU-second, not "
+           "requests/s: when both sides were client-bound, their requests/s were about equal.", ""]
     labels = {r["slug"]: _label(r) for r in data["implementations"]}
     tie_columns = ["Job scores", "Spread", "Position check", "vs Axum margin"]
+    note = put_note(data["implementations"])
     for category in rankings["categories"]:
         key = category["key"]
         out += [f"### {category['title']}", "",
                 f"{category['description'][0].upper()}{category['description'][1:]}. Tie margins: "
-                f"{_rule_text(category.get('tie_rule'), margins.get(key))}.", ""]
+                f"{_rule_text(category.get('tie_rule'), margins.get(key))}.", "",
+                *([note, ""] if key == "application" and note else [])]
 
         def tie_cells(entry: dict) -> list[str]:
             return [_job_scores_cell(entry), _spread_cell(entry), _check_cell(entry, labels), _reference_cell(entry)]
@@ -640,9 +852,40 @@ def gate_section(data: dict) -> list[str]:
             *(f"- {p}" for p in gate["problems"]), ""]
 
 
+def scores_table(data: dict, rows: list[dict]) -> str:
+    """The category scores of the given rows (the diagnostics listed apart)."""
+    rankings = data.get("rankings") or {}
+    cells = {c["key"]: {e["slug"]: e for e in c["entries"]} for c in rankings.get("categories", [])}
+    keys = [c["key"] for c in rankings.get("categories", [])]
+    flagged = put_flags(data["implementations"])["flagged"]
+    lines = [[_label(r), *(_category_cell(k, cells[k][r["slug"]], flagged) if r["slug"] in cells[k] else "–"
+                           for k in keys), _runners(r)] for r in rows]
+    return _table(["Implementation", *(c["title"] for c in rankings.get("categories", [])), "Runner CPUs"], lines)
+
+
+def diagnostics_section(data: dict, level: str = "###") -> list[str]:
+    """Rows that bench.json lists under diagnostics ("listing"), apart from the headline tables."""
+    listed = _listed_apart(data["implementations"])
+    if not listed:
+        return []
+    logins = (data.get("config", {}).get("phase2") or {}).get("sessions", 125)
+    out = [f"{level} Diagnostics", "",
+           "Unranked rows kept out of the tables above, with what they measure:", "",
+           *(f"- **{_label(r)}**: {r.get('listing_note') or r.get('role_note', '')}" for r in listed), "",
+           summary_table(listed)]
+    if any(_served(r, ep) for r in listed for ep in PHASE2_ENDPOINTS):
+        out += ["", application_table(listed, data["implementations"], logins)]
+    if data.get("rankings"):
+        out += ["", scores_table(data, listed)]
+    return out
+
+
 def render_results(data: dict, review: bool = False) -> str:
     """benchmarks_results.md; review=True (the workflow summary) adds the gate and the unpublished overall."""
     rows = data["implementations"]
+    headline = _headline(rows)
+    logins = (data.get("config", {}).get("phase2") or {}).get("sessions", 125)
+    flagged = put_flags(rows)["flagged"]
     tiers = data.get("config", {}).get("tiers", {})
     run = data.get("run", {})
     env = data.get("environment", {})
@@ -672,16 +915,21 @@ def render_results(data: dict, review: bool = False) -> str:
                   f"{(env.get('load_generator') or {}).get('name')} {(env.get('load_generator') or {}).get('version')}"
                   ". Full details per job are in `results/raw/`.", ""]
     parts += [pool_note(data), ""]
-    parts += ["## Summary", "", summary_table(rows), "", SUMMARY_NOTE, ""]
+    parts += ["## Summary", "", summary_table(headline), "", SUMMARY_NOTE, ""]
     if any(_served(r, ep) for r in _measured(rows) for ep in PHASE2_ENDPOINTS):
-        parts += ["### Application endpoints", "", application_table(rows), "", APPLICATION_NOTE, ""]
+        parts += ["### Application endpoints", "", application_table(headline, rows, logins), "",
+                  APPLICATION_NOTE, *(["", put_note(rows)] if flagged else []), ""]
     if _corrections(rows):
         parts += ["Corrections (left-out results are shown as –):", "", _corrections(rows), ""]
     if _structure(rows):
         parts += ["Structural differences (what else runs inside the server's 2 vCPUs, runtime versions):", "",
                   _structure(rows), ""]
     if data.get("rankings"):
-        parts += [*rankings_section(data, "##", review=review), "", *category_tables(data)]
+        parts += [*rankings_section(data, "##", review=review), ""]
+    if diagnostics_section(data):
+        parts += [*diagnostics_section(data, "##"), ""]
+    if data.get("rankings"):
+        parts += [*category_tables(data)]
 
     t1 = tiers.get("tier1", {})
     paths = data.get("config", {}).get("endpoint_paths", {})
@@ -702,7 +950,7 @@ def render_results(data: dict, review: bool = False) -> str:
                   _median(r, f"{base}.latency_ms.p50", 2), _median(r, f"{base}.latency_ms.p99", 2),
                   _errors(r, f"{base}.error_rate"), _median(r, f"{base}.server_cpu_cores", 2),
                   _median(r, f"{base}.db_cpu_cores", 2),
-                  _endpoint_notes(r, endpoint, base)] for r in _measured(rows)]
+                  _endpoint_notes(r, endpoint, base, flagged)] for r in _measured(rows)]
         heading = endpoint_label(config, endpoint) if config else paths.get(endpoint, "/" + endpoint)
         parts += [f"### {heading}", "", _table(
             ["Implementation", "req/s", "vs Axum", "Efficiency (req/CPU-s)", "vs Axum", "CPU µs/req",
@@ -790,25 +1038,36 @@ def render_results(data: dict, review: bool = False) -> str:
 def render_readme_table(data: dict) -> str:
     run = data.get("run", {})
     ref = f"[workflow run {run['id']}]({run['url']})" if run.get("url") else "the latest run"
+    rows = data["implementations"]
+    logins = (data.get("config", {}).get("phase2") or {}).get("sessions", 125)
     lines = [notice(data), "",
              f"Source: {ref}. Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); "
              "dashboard: <https://rullst.win/Benchmarks/>.", "", pool_note(data), "",
-             summary_table(data["implementations"]), "", SUMMARY_NOTE]
+             summary_table(_headline(rows)), "", SUMMARY_NOTE]
     if _corrections(data["implementations"]):
         lines += ["", "Corrections (left-out results are shown as –):", "", _corrections(data["implementations"])]
     failed = [r for r in data["implementations"] if r["status"] not in MEASURED]
     if failed:
         lines += ["", "Not measured in this run: " + ", ".join(f"{_label(r)} ({r['status']})" for r in failed) + "."]
-    if any(_served(r, ep) for r in _measured(data["implementations"]) for ep in PHASE2_ENDPOINTS):
-        lines += ["", application_table(data["implementations"]), "", APPLICATION_NOTE]
+    if any(_served(r, ep) for r in _measured(rows) for ep in PHASE2_ENDPOINTS):
+        lines += ["", application_table(_headline(rows), rows, logins), "", APPLICATION_NOTE]
+        if put_flags(rows)["flagged"]:
+            lines += ["", put_note(rows)]
     if data.get("rankings"):
         lines += ["", *rankings_section(data)]
+    if diagnostics_section(data):
+        lines += ["", *diagnostics_section(data)]
     return "\n".join(lines)
 
 
-def replace_between_markers(text: str, content: str) -> str:
-    if START not in text or END not in text:
-        raise ValueError("README.md has no results markers")
-    head, rest = text.split(START, 1)
-    _, tail = rest.split(END, 1)
-    return f"{head}{START}\n{content}\n{END}{tail}"
+# The README's "What this means for Rullst" block (bench/reading.py), near the top.
+READING_START = "<!-- reading:start -->"
+READING_END = "<!-- reading:end -->"
+
+
+def replace_between_markers(text: str, content: str, start: str = START, end: str = END) -> str:
+    if start not in text or end not in text:
+        raise ValueError(f"README.md has no {start} {end} markers")
+    head, rest = text.split(start, 1)
+    _, tail = rest.split(end, 1)
+    return f"{head}{start}\n{content}\n{end}{tail}"

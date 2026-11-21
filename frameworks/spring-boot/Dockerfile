@@ -1,6 +1,6 @@
 # Build the executable jar with Maven. Maven has no lockfile: the Spring Boot
 # parent pins every dependency and plugin version (see README.md).
-FROM maven:3.10.0-eclipse-temurin-25-noble AS build
+FROM maven:3.10.0-eclipse-temurin-25-noble@sha256:e3760e0213ee8274e8b7926e5ecfcbabcbef93414c5561c4ecb657e435865329 AS build
 WORKDIR /src
 COPY pom.xml ./
 COPY src ./src
@@ -9,7 +9,7 @@ RUN mvn --batch-mode --no-transfer-progress package
 # Extract the jar into layers, as in the Dockerfile of the Spring Boot
 # reference documentation ("Packaging Spring Boot Applications > Container
 # Images > Dockerfiles"), with Eclipse Temurin in place of Liberica.
-FROM eclipse-temurin:25.0.5_8-jre-noble AS builder
+FROM eclipse-temurin:25.0.5_8-jre-noble@sha256:23481dc33a759b79d62814ceb1ec27a0d1a84da9d7aab0609577427176fbb1b7 AS builder
 WORKDIR /builder
 COPY --from=build /src/target/app.jar application.jar
 RUN java -Djarmode=tools -jar application.jar extract --layers --destination extracted
@@ -20,7 +20,7 @@ RUN find extracted -name '*.jar' -printf '%f\n' \
     && echo "java ${JAVA_VERSION#jdk-}" >> versions.txt \
     && cat versions.txt
 
-FROM eclipse-temurin:25.0.5_8-jre-noble
+FROM eclipse-temurin:25.0.5_8-jre-noble@sha256:23481dc33a759b79d62814ceb1ec27a0d1a84da9d7aab0609577427176fbb1b7
 WORKDIR /application
 COPY --from=builder /builder/extracted/dependencies/ ./
 COPY --from=builder /builder/extracted/spring-boot-loader/ ./

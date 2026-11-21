@@ -355,19 +355,44 @@ window (`min` in 1..9001, `max = min + 999`), `limit=20`, `page` 1..5
 5. With `write_csrf`: the same PUT without the cookie and header is refused
    (403) and writes nothing.
 6. The table is restored afterwards (phase 1's `reset_tables`).
+7. Under load (the concurrent step, `bench/load_check.py`): the measurement
+   workload for 3 s, first in the step, with pg_stat_statements counting the
+   rows the `UPDATE` statements on `world` wrote; fewer than 0.8 per
+   successful request (`measure.MIN_ROWS_UPDATED`) fails conformance. (Run
+   after `/updates`, the first CI run counted 4.5 rows per PUT for Laravel
+   and 1.3 for Spring Boot: their servers were still answering queued
+   `/updates` requests.)
 
 **Load profile:** Tier 1, measured last in the round (it writes). 10,000
-requests: the ids 1..10000 shuffled, each with a random value
-(`put_world`). With 125 connections over 10,000 rows two requests rarely
-hit the same row at once, so this measures one write per request, not lock
-contention (§3.4 does). Phase 1's `synchronous_commit=off` applies.
+requests: the ids 1..10000 shuffled (`put_world`), each body
+`{"randomNumber":????}`, in which the wrk script puts a new random value in
+1000..9999 for every request it sends (`workload.FRESH_SLOT`; the value has
+the slot's width, so the prebuilt Content-Length stays right), from a
+generator seeded per run and per wrk thread. Until 20 November 2026 the
+values were prebuilt with the requests: both wrk threads send the whole
+list, each pass repeats it, and the measurement repeats its warm-up, so
+after the first pass every request stored the value its row already held
+and an ORM that writes only changed columns answered without an `UPDATE`
+(the first official run measured no write for Rullst, Phoenix, Rails,
+Spring Boot, ASP.NET Core, Laravel and FastAPI). A random value equals the
+stored one about once in 9,000 requests. Around the measured run the harness
+reads `pg_stat_user_tables.n_tup_upd` for `world` (always kept, so the
+measurement runs without pg_stat_statements): the round records
+`rows_updated` and `rows_updated_per_request`. Backends report these counts
+when a transaction ends, at most about once a second, so the window misses
+up to about the last second of the run's writes and includes up to the last
+second of the warm-up's; the gate therefore requires a median of 0.8, not 1.
+With 125 connections over 10,000 rows two requests rarely hit the same row
+at once, so this measures one write per request, not lock contention (§3.4
+does). Phase 1's `synchronous_commit=off` applies.
 
 ### 3.4 Write contention: hot rows
 
 Decision 5 (pending confirmation). After the Tier 1 runs, an implementation
 that declares `world-update` gets one more run of the same `PUT /world/{id}`
 with the Tier 1 connections (125) and duration (10 s), but with 2,000
-pre-built requests whose ids are drawn from 1..10 only (`hot_rows` in
+pre-built requests whose ids are drawn from 1..10 only, each with a new
+value per request as in §3.3 (`hot_rows` in
 `bench/workload.py`, `"hot_rows"` in `bench/config.json`; removing that key
 removes the run). Every connection writes the same ten rows, so requests
 wait for each other's row locks and the run measures lock waits and the
@@ -1177,3 +1202,68 @@ margin alone being too small; jobs all on one CPU model; a single job; no
 implementation with two jobs; equal scores with different spreads; the "≈"
 check; every category, the overall score and the weightings; the aggregate
 and the rendered tables; the connection-pool note.
+
+## 13. Review of the first official run (2026-11-20)
+
+An independent review of the Rullst 13.0.0-alpha.6 publication (workflow
+run 44765309608) reproduced every published number from the raw files and
+found problems in what some of them measure. The harness changes:
+
+1. **PUT writes** (§3.3): a new value in every request, the rows written
+   counted in conformance (pg_stat_statements) and in every measured round
+   (`pg_stat_user_tables`), and the publication gate refuses a median below
+   0.8 rows per request or a run without the count. Results measured before
+   the count existed are labelled by the report generator (`report.put_flags`):
+   a row whose PostgreSQL CPU per PUT was at most 1.10 times its
+   `GET /world/{id}`'s is marked "‡" in the PUT column and the Application
+   ranking (in that run: 0.75-1.03 for the rows that skipped the write,
+   1.23-2.98 for those that wrote). The label disappears with the next run.
+2. **Positions** (`rankings._assign_positions`): sorted scores, each compared
+   with its neighbour above; a new group starts only where the gap exceeds
+   the pair's margin, and every member shows the group's range ("5–7"). The
+   rule is transitive between neighbours, so two scores within their margin
+   are never shown in different groups; a group can be wider than one margin
+   (a chain). The leader-anchored rule of §12 step 6 is gone, and with it
+   the "widest spread of the group" exception (`tie_check.group_spread_of`
+   stays, always null).
+3. **Runs measured at different loads** (`rankings.LOAD_EFFECT`): a run in
+   which most comparable pairs had exactly one side PostgreSQL-bound adds the
+   change in CPU cost with the load measured for its endpoint in the CPU-split
+   experiment (README "CPU split": `/db-single` 7%, `/fortunes` 2%,
+   `/queries` and `/updates` 34%; the single-query application reads count
+   like `/db-single`, the PUT like `/updates`, anything else a third),
+   divided by the category's number of runs, to the implementation's
+   effective spread (root of the sum of squares). Marking those runs not
+   comparable was the other option; it would have left every Rust and Go row
+   without a Database score (their `/fortunes` was server-bound against a
+   PostgreSQL-bound Axum), so the margin is widened instead. The efficiency
+   ratio is called a CPU-cost ratio where it is used.
+4. **CPU models**: the generated notice states, from the per-job scores, how
+   much one implementation's score differed between CPU models, for the Rust
+   and Go rows and for the others (instead of "cancel most of the
+   difference"). `scoring.cpu_model_weighting` = `"per-model"` (off) scores
+   each run by the geometric mean of its per-model medians; every row
+   records `ratios_by_cpu_model` and the per-model category score
+   (`detail.score_per_cpu_model`) for comparison.
+5. **Memory after logins**: `application.ram_peak_mib`, the server's highest
+   RAM during the application endpoints and the hot-rows run (after the
+   logins), is a column next to the phase-2 ratios, outside every score.
+6. **Presentation**: the database-layer defaults note lists SQLx's
+   `test_before_acquire`, node-postgres's unprepared statements, Laravel's
+   connection per request, Npgsql's connection reset and GORM's default
+   write transaction, without the former claim that every implementation
+   runs its framework's documented defaults; Rullst (minimal) is listed in
+   a Diagnostics section (`"listing": "diagnostics"`); the notice says that
+   the server's 2 vCPUs are the two SMT threads of one core; tag-only base
+   images are pinned to the digests that run built with; the gate also
+   refuses a pooled floor above 15% (`publication.max_floor`).
+7. **Overall** (maintainer decision): published, with the weights 2:2:2:1:1
+   (`scoring.overall_weights`), the same tie margins and position ranges,
+   and the sensitivity table below it. The README's "What this means for
+   Rullst" block is generated from the data (`bench/reading.py`) and ends
+   with a disclosure of who maintains the benchmark.
+
+Scoring settings now come from the current `bench/config.json` when results
+are aggregated (they decide how results are ranked, not how they were
+measured), so the alpha.6 results were re-rendered with these rules from
+their raw files.

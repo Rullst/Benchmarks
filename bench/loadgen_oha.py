@@ -5,7 +5,9 @@ oha (Rust, Tokio, Hyper) varies the URL per request with --urls-from-file
 uniform random choice among the file's lines), independently of each other.
 Method and headers are fixed for a run, so a workload whose requests carry
 different cookies with matching CSRF tokens ("joint" pairing) cannot be
-replayed: run_load raises ValueError, and the caller uses one session.
+replayed: run_load raises ValueError, and the caller uses one session. Nor
+can it draw a new value for every request (the PUT workloads' fresh value):
+those raise ValueError too.
 
 Differences from bombardier that the results must state:
 - with -z, requests still in flight at the deadline are cancelled and
@@ -58,6 +60,8 @@ def build_command(binary: Path, base: str, workload: Workload, workdir: Path, *,
                   duration_s: int, threads: int, timeout_s: int, client_cpus: list[int]) -> list[str]:
     if workload.pairing == "joint":
         raise ValueError("oha cannot pair per-request headers with bodies; use one session")
+    if workload.fresh_value:
+        raise ValueError("oha cannot put a new value in every request body (workload.FRESH_SLOT); use wrk")
     if len(workload.methods()) != 1 or len(workload.header_sets()) != 1:
         raise ValueError("oha sends one method and one header set per run")
     first = workload.requests[0]

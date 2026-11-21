@@ -37,10 +37,35 @@ class WorkloadTests(unittest.TestCase):
 
     def test_put_bodies_are_valid(self):
         wl = W.put_world(100, write_csrf=("rullst_csrf", "X-CSRF-Token", "abc"))
+        self.assertEqual(wl.fresh_value, (W.FRESH_SLOT, 1000, 9999))
+        self.assertFalse(wl.static)
+        rng = random.Random(1)
         for r in wl.requests:
-            self.assertTrue(1 <= json.loads(r.body)["randomNumber"] <= 10000)
+            self.assertEqual(r.body.count(W.FRESH_SLOT.encode()), 1)
+            sent = W.fill_fresh(r.body, rng, wl.fresh_value)
+            self.assertEqual(len(sent), len(r.body))  # the Content-Length stays right
+            self.assertTrue(1 <= json.loads(sent)["randomNumber"] <= 10000)
             self.assertIn(("Cookie", "rullst_csrf=abc"), r.headers)
             self.assertIn(("X-CSRF-Token", "abc"), r.headers)
+        self.assertEqual(W.hot_rows(ids=10, count=5).fresh_value, wl.fresh_value)
+
+    def test_the_wrk_script_puts_a_new_value_in_every_put(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script, requests = loadgen_wrk.write_files(W.put_world(20), Path(tmp), count_statuses=True, seed=7)
+            text = script.read_text()
+            self.assertTrue(text.startswith('local FRESH_SLOT, FRESH_LOW, FRESH_HIGH, FRESH_SEED = "????", 1000, '
+                                            "9999, 7\n"))
+            self.assertIn("math.random(FRESH_LOW, FRESH_HIGH)", text)
+            self.assertIn("math.randomseed(FRESH_SEED + tid)", text)
+            self.assertTrue(all(line.endswith('{"randomNumber":????}') for line in requests.read_text().split("\n") if line))
+            static = loadgen_wrk.write_files(W.static("/json"), Path(tmp))[0].read_text()
+            self.assertTrue(static.startswith("local FRESH_SLOT, FRESH_LOW, FRESH_HIGH, FRESH_SEED = nil"))
+            bad = W.Workload([W.Request("PUT", "/world/1", (), b"{}")], fresh_value=(W.FRESH_SLOT, 1000, 9999))
+            with self.assertRaises(ValueError):
+                loadgen_wrk.write_files(bad, Path(tmp))
+            wide = W.Workload(W.put_world(2).requests, fresh_value=(W.FRESH_SLOT, 1, 10000))
+            with self.assertRaises(ValueError):
+                loadgen_wrk.write_files(wide, Path(tmp))
 
     def test_form_posts_pair_cookie_and_token(self):
         sessions = [W.Session(cookie=f"sid={i}", csrf_field="_token", csrf_token=f"t{i}") for i in range(3)]
@@ -215,9 +240,11 @@ class RoundOrderTests(unittest.TestCase):
             events.append("sessions")
             return {"form_sessions": [W.Session(cookie="c=1")], "login_sessions": [W.Session(cookie="id=1")]}
 
+        updated = iter(range(0, 10**9, 10))  # rows_updated readings: 10 rows per PUT run of 10 requests
+
         saved = {name: getattr(measure, name) for name in
                  ("start_server", "reset_tables", "database_handle", "run_load", "phase2_context", "time",
-                  "_idle_window")}
+                  "_idle_window", "rows_updated")}
         fake_time = type("T", (), {"sleep": staticmethod(lambda s: None), "monotonic": staticmethod(lambda: 0.0)})
         try:
             measure.start_server = lambda *a, **k: FakeServer()
@@ -228,6 +255,7 @@ class RoundOrderTests(unittest.TestCase):
             measure.time = fake_time
             measure._idle_window = lambda server, seconds, interval: {"ram_mib": 1.0, "cpu_cores": 0.0, "tasks": 1,
                                                                         "processes": 1}
+            measure.rows_updated = lambda config, table: next(updated)
             config = load_config()
             record = measure.measure_round({"slug": "axum", "endpoints": list(ENDPOINTS)}, config,
                                            {"server": [0], "client": [1]}, Path("wrk"), 1)
@@ -248,6 +276,12 @@ class RoundOrderTests(unittest.TestCase):
         self.assertGreater(events.index(f"load /json {config['tiers']['tier3']['duration_s']}"), tier4)
         self.assertEqual(set(record["warmup"]), set(ENDPOINTS))
         self.assertEqual(record["warmup_s"], warm)
+        # The PUT run counts the rows PostgreSQL updated during the measurement (and only that run).
+        self.assertEqual(record["tier1"]["world-update"]["rows_updated"], 10)
+        self.assertEqual(record["tier1"]["world-update"]["rows_updated_per_request"], 1.0)
+        self.assertNotIn("rows_updated", record["tier1"]["world"])
+        self.assertEqual(measure.application_ram_peak({**record, "sessions": {"login_sessions": 1}}), 1.0)
+        self.assertIsNone(measure.application_ram_peak({**record, "sessions": {}}))
 
 
 class WrkTests(unittest.TestCase):
@@ -280,6 +314,16 @@ class WrkTests(unittest.TestCase):
             self.assertEqual(len(requests.read_text().splitlines()), 10)
 
 
+class ConcurrentStepTests(unittest.TestCase):
+    def test_the_put_write_count_runs_first(self):
+        import load_check
+        order = load_check.concurrent_order(["text", "updates", "world", "world-update", "me"])
+        self.assertEqual(order, ["world-update", "text", "updates", "world", "me"])
+        self.assertEqual(load_check.write_problem(19354, 19408, "world"), None)
+        self.assertIn("must write it", load_check.write_problem(10, 100, "world"))
+        self.assertIsNotNone(load_check.write_problem(0, 0, "world"))
+
+
 class OhaTests(unittest.TestCase):
     def test_parse_ignores_deadline_aborts(self):
         out = json.dumps({"summary": {"total": 2.0, "average": 0.001, "slowest": 0.01},
@@ -297,9 +341,18 @@ class OhaTests(unittest.TestCase):
             loadgen_oha.build_command(Path("oha"), "http://h/", W.me(sessions), Path(tmp), connections=1,
                                       duration_s=1, threads=1, timeout_s=5, client_cpus=[0])
 
+    def test_fresh_values_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError):
+            loadgen_oha.build_command(Path("oha"), "http://h/", W.put_world(5), Path(tmp), connections=1,
+                                      duration_s=1, threads=1, timeout_s=5, client_cpus=[0])
+
     def test_independent_paths_and_bodies(self):
+        rng = random.Random(3)
+        headers = (("Content-Type", "application/json"),)
+        drawn = W.Workload([W.Request("PUT", f"/world/{i}", headers, f'{{"randomNumber":{rng.randint(1, 99)}}}'
+                                      .encode()) for i in range(1, 51)])
         with tempfile.TemporaryDirectory() as tmp:
-            cmd = loadgen_oha.build_command(Path("oha"), "http://h/", W.put_world(50), Path(tmp), connections=4,
+            cmd = loadgen_oha.build_command(Path("oha"), "http://h/", drawn, Path(tmp), connections=4,
                                             duration_s=1, threads=1, timeout_s=5, client_cpus=[0])
             self.assertIn("--urls-from-file", cmd)
             self.assertIn("-Z", cmd)

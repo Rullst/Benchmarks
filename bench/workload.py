@@ -17,6 +17,14 @@ from urllib.parse import urlencode
 MAX_ID = 10000
 # Fixed seed: every implementation and every round gets the same request mix.
 SEED = 20261119
+# PUT /world/{id} bodies hold FRESH_SLOT, which the load generator replaces in every request it sends with
+# a random integer in FRESH_VALUES (four digits, so the Content-Length stays right). A prebuilt value would
+# repeat: wrk cycles through the prebuilt requests, the warm-up sends them first and both threads send
+# each one, so an ORM that writes only changed columns (Rullst's RowSnapshot, ActiveRecord, Eloquent, Ecto,
+# Hibernate, EF Core) would answer most measured requests without an UPDATE. A random value equals the
+# stored one about once in 9,000 requests.
+FRESH_SLOT = "????"
+FRESH_VALUES = (1000, 9999)
 # What a browser sends with a same-origin form submission (docs/v3-spec.md section 2.4).
 ORIGIN = "http://127.0.0.1:8080"
 
@@ -37,16 +45,22 @@ class Workload:
     path, headers and body belong together (a session cookie and its CSRF
     token), "independent" when the paths and the bodies were drawn
     independently, so a tool may also draw them independently.
+
+    `fresh_value` is (slot, low, high) when every body holds `slot` once and
+    the load generator must replace it in each request it sends with a new
+    random integer in low..high, as wide as the slot (FRESH_SLOT); a tool
+    that cannot do that must refuse the workload.
     """
 
     requests: list[Request]
     pairing: str = "independent"
     label: str = ""
     notes: dict = field(default_factory=dict)
+    fresh_value: tuple[str, int, int] | None = None
 
     @property
     def static(self) -> bool:
-        return len(self.requests) == 1
+        return len(self.requests) == 1 and self.fresh_value is None
 
     def methods(self) -> set[str]:
         return {r.method for r in self.requests}
@@ -95,13 +109,21 @@ def _put_headers(write_csrf: tuple[str, str, str] | None) -> tuple[tuple[str, st
     return headers
 
 
-def _put_body(rng: random.Random) -> bytes:
-    return json.dumps({"randomNumber": rng.randint(1, MAX_ID)}, separators=(",", ":")).encode()
+# The PUT body: {"randomNumber":????}, the slot replaced per request (FRESH_SLOT).
+PUT_BODY = json.dumps({"randomNumber": 0}, separators=(",", ":")).replace("0", FRESH_SLOT).encode()
+
+
+def fill_fresh(body: bytes, rng: random.Random, fresh: tuple[str, int, int]) -> bytes:
+    """A body with its slot replaced by a random value, as the load generator sends it (for the tests)."""
+    slot, low, high = fresh
+    return body.replace(slot.encode(), str(rng.randint(low, high)).encode(), 1)
 
 
 def put_world(count: int = MAX_ID, write_csrf: tuple[str, str, str] | None = None) -> Workload:
-    """PUT /world/{id} with {"randomNumber": n}: random id and value, drawn independently.
+    """PUT /world/{id} with {"randomNumber": n}: the ids shuffled, a new random value in every request.
 
+    The value is drawn by the load generator for each request it sends
+    (FRESH_SLOT), so that a request never repeats a value it stored before.
     write_csrf is (cookie name, header name, token) for implementations whose
     bench.json declares phase2.write_csrf: the cookie and the header carry
     the same token, as a same-site script sends them.
@@ -110,17 +132,18 @@ def put_world(count: int = MAX_ID, write_csrf: tuple[str, str, str] | None = Non
     ids = list(range(1, count + 1))
     rng.shuffle(ids)
     headers = _put_headers(write_csrf)
-    requests = [Request("PUT", f"/world/{i}", headers, _put_body(rng)) for i in ids]
-    return Workload(requests, label="PUT /world/{id}")
+    requests = [Request("PUT", f"/world/{i}", headers, PUT_BODY) for i in ids]
+    return Workload(requests, label="PUT /world/{id}", fresh_value=(FRESH_SLOT, *FRESH_VALUES))
 
 
 def hot_rows(ids: int = 10, count: int = 2000, write_csrf: tuple[str, str, str] | None = None) -> Workload:
     """PUT /world/{id} on a few rows (ids 1..`ids`): every connection writes the same rows, so
-    requests wait for each other's row locks (write contention)."""
+    requests wait for each other's row locks (write contention). Values as in put_world."""
     rng = _rng("hot")
     headers = _put_headers(write_csrf)
-    requests = [Request("PUT", f"/world/{rng.randint(1, ids)}", headers, _put_body(rng)) for _ in range(count)]
-    return Workload(requests, label=f"PUT /world/{{1..{ids}}}", notes={"ids": ids})
+    requests = [Request("PUT", f"/world/{rng.randint(1, ids)}", headers, PUT_BODY) for _ in range(count)]
+    return Workload(requests, label=f"PUT /world/{{1..{ids}}}", notes={"ids": ids},
+                    fresh_value=(FRESH_SLOT, *FRESH_VALUES))
 
 
 @dataclass(frozen=True)

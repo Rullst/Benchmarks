@@ -116,9 +116,13 @@ def validate_manifest(slug: str, manifest: dict) -> list[str]:
         problems.append(f"{slug}: a {role} implementation needs a 'role_note' saying what it is for")
     if "jit" in manifest and not isinstance(manifest["jit"], bool):
         problems.append(f"{slug}: 'jit' must be true or false")
-    for field in ("structure_note", "role_note", "control_of", "database_note"):
+    for field in ("structure_note", "role_note", "control_of", "database_note", "listing", "listing_note"):
         if field in manifest and not isinstance(manifest[field], str):
             problems.append(f"{slug}: '{field}' must be a string")
+    if manifest.get("listing", "") not in ("", "diagnostics"):
+        problems.append(f"{slug}: 'listing' must be \"diagnostics\" or absent")
+    if manifest.get("listing") == "diagnostics" and (role != "diagnostic" or not manifest.get("listing_note")):
+        problems.append(f"{slug}: a row listed under diagnostics must be a diagnostic with a 'listing_note'")
     setup = manifest.get("db_setup")
     if setup is not None:
         path = folder / str(setup)

@@ -1,7 +1,7 @@
 {
   "schema": "rullst.benchmarks.versions.v1",
   "latest": "13.0.0-alpha.6",
-  "updated_at": "2026-11-21T01:06:47Z",
+  "updated_at": "2026-11-21T02:31:28Z",
   "versions": [
     {
       "version": "13.0.0-alpha.5",
@@ -75,7 +75,7 @@
     {
       "version": "13.0.0-alpha.6",
       "measured_from": "2026-11-20T15:39:56Z",
-      "generated_at": "2026-11-21T01:06:47Z",
+      "generated_at": "2026-11-21T02:31:28Z",
       "run_url": "https://github.com/Rullst/Benchmarks/actions/runs/44765309608",
       "file": "rullst/13.0.0-alpha.6.json",
       "note": "",
