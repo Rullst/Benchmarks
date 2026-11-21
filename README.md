@@ -41,6 +41,13 @@ and every number on this page is generated from the measurement output.
 Rullst as `cargo rullst new` generates it (13.0.0-alpha.6, with its production middleware) is in positions 4–5 of 14 in the overall score, at 0.75× Axum (Axum = 1.00); in the same group as Loco (0.77×); the closest scores outside its group are Gin (0.83×, higher) and Fastify (0.61×, lower). By category: Hello world positions 3–6 of 14 (0.50×); Database positions 3–7 of 14 (0.79×); Application positions 4–5 of 14 (0.81×); Memory (high-water mark) positions 1–5 of 14 (1.00×); Startup positions 1–11 of 14 (1.00×). Memory: its RAM high-water mark under the Tier 3 load was 12 MiB (Axum: 17 MiB on the same runners), both counted as the 64 MiB floor of the Memory score; after the 125 logins of the application endpoints its peak was 470 MiB (Axum: 927 MiB), which no score includes. Its Application figure, and through it the overall score, is affected by this run's PUT /world/{id} problem (‡): most of its measured PUT requests did not write, so its PUT ratio and its Application score are higher than they would be with a write. This benchmark is maintained by Rullst's maintainer, who also wrote every implementation in it and designed the method ([Authorship](#authorship)).
 <!-- reading:end -->
 
+Deeper performance tests of Rullst alone (CPU and allocation profiles, the
+database statements each request runs, the generated middleware stack one
+layer at a time, SSE and WebSocket load, and a real-application workload) are
+planned for Rullst 13.1 and tracked in
+[Rullst's roadmap](https://github.com/Rullst/Rullst/blob/main/ROADMAP.md#next-131).
+They are not part of this cross-framework benchmark.
+
 ## What this benchmark does not measure
 
 - **Logins and password hashing.** The harness signs in before measuring;
