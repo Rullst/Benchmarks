@@ -1097,7 +1097,7 @@ website's 1 MiB download limit:
              "within_reference_margin": "≈" },  the flags a score can carry and their signs
   "logins": 125,                               phase-2 logins before the RAM after the logins
   "rows": [                                    Rullst (as generated), Loco, Topcoat, Actix Web, Gin and
-                                               Rullst (minimal), when measured
+                                               Rullst (minimal), when the run has them
     {
       "slug": "rullst", "framework": "Rullst", "label": "Rullst (as generated)",
       "version": "13.0.0-alpha.6", "role": "ranked", "status": "measured",
