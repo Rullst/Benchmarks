@@ -4,8 +4,11 @@ wrk (C, epoll, LuaJIT) sends either one fixed request (static mode: no Lua
 `request` function, wrk builds the request once) or, for a Workload with
 several requests, the prebuilt requests in a shuffled cycle (dynamic mode:
 the Lua `request` function returns the next prebuilt string, so no request
-is formatted while measuring). A Lua `done` function prints the summary as
-one `WRK_JSON {...}` line.
+is formatted while measuring). For a workload with a fresh value (the PUT
+bodies, workload.FRESH_SLOT), each prebuilt request is split around its slot
+once, and `request` joins the two parts around a new random integer, drawn
+from a generator seeded per run and per thread. A Lua `done` function prints
+the summary as one `WRK_JSON {...}` line.
 
 What the results must state:
 - wrk itself counts a response as an error only when its status is 400 or
@@ -21,6 +24,7 @@ What the results must state:
 from __future__ import annotations
 
 import json
+import random
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -110,29 +114,58 @@ end
 """
 
 LUA_DYNAMIC = r"""
-local reqs, n, i = {}, 0, 0
+local reqs, heads, tails, n, i = {}, {}, {}, 0, 0
 function init(args)
   for line in io.lines(args[1]) do
     local method, path, headers, body = parse(line)
     if not headers["Host"] then headers["Host"] = wrk.headers["Host"] end
-    reqs[#reqs + 1] = wrk.format(method, path, headers, body)
+    local req = wrk.format(method, path, headers, body)
+    reqs[#reqs + 1] = req
+    if FRESH_SLOT and body then
+      -- wrk.format ends the request with the body: look for the slot there only.
+      local a, b = string.find(req, FRESH_SLOT, #req - #body + 1, true)
+      if a then
+        heads[#reqs] = string.sub(req, 1, a - 1)
+        tails[#reqs] = string.sub(req, b + 1)
+      end
+    end
   end
   n = #reqs
   -- Threads start at different points of the shuffled cycle.
   i = (tid * 7919) % n
+  if FRESH_SLOT then math.randomseed(FRESH_SEED + tid) end
 end
 
 function request()
   i = i + 1
   if i > n then i = 1 end
+  local head = heads[i]
+  if head then
+    -- A new value in every request (the slot and the value have the same width).
+    return head .. math.random(FRESH_LOW, FRESH_HIGH) .. tails[i]
+  end
   return reqs[i]
 end
 """
 
 
-def write_files(workload: Workload, workdir: Path, count_statuses: bool = False) -> tuple[Path, Path]:
-    """The Lua script and its request file for a workload."""
+def fresh_prelude(workload: Workload, seed: int | None) -> str:
+    """The Lua settings of a workload's fresh value (FRESH_SLOT nil without one)."""
+    if workload.fresh_value is None:
+        return "local FRESH_SLOT, FRESH_LOW, FRESH_HIGH, FRESH_SEED = nil, 0, 0, 0\n"
+    slot, low, high = workload.fresh_value
+    if not (0 < low <= high) or not len(str(low)) == len(str(high)) == len(slot):
+        raise ValueError(f"fresh value {low}..{high} must have the width of its slot {slot!r}")
+    if any(ch in slot for ch in '"\\') or any(r.body.decode("utf-8").count(slot) != 1 for r in workload.requests):
+        raise ValueError(f"every request body must contain the slot {slot!r} exactly once")
+    return f'local FRESH_SLOT, FRESH_LOW, FRESH_HIGH, FRESH_SEED = "{slot}", {low}, {high}, {int(seed or 0)}\n'
+
+
+def write_files(workload: Workload, workdir: Path, count_statuses: bool = False,
+                seed: int | None = None) -> tuple[Path, Path]:
+    """The Lua script and its request file for a workload (seed: the fresh values' generator)."""
     workdir.mkdir(parents=True, exist_ok=True)
+    prelude = fresh_prelude(workload, seed)
     lines = []
     for r in workload.requests:
         body = r.body.decode("utf-8")
@@ -144,7 +177,7 @@ def write_files(workload: Workload, workdir: Path, count_statuses: bool = False)
     requests = workdir / "requests.tsv"
     requests.write_text("\n".join(lines) + "\n", encoding="utf-8")
     script = workdir / ("static.lua" if workload.static else "dynamic.lua")
-    script.write_text(LUA_COMMON + (LUA_STATIC if workload.static else LUA_DYNAMIC)
+    script.write_text(prelude + LUA_COMMON + (LUA_STATIC if workload.static else LUA_DYNAMIC)
                       + (LUA_STATUS if count_statuses else ""), encoding="utf-8")
     return script, requests
 
@@ -199,7 +232,9 @@ def run_load(binary: Path, url: str, *, connections: int, duration_s: int, confi
     if workload is None:
         workload = static(parts.path + (f"?{parts.query}" if parts.query else "") or "/")
     workdir = workdir or Path(tempfile.gettempdir()) / "bench-wrk"
-    script, requests = write_files(workload, workdir, count_statuses)
+    # A new seed for every run: a warm-up and the measurement after it send different values.
+    seed = random.SystemRandom().randrange(1, 2**31) if workload.fresh_value else None
+    script, requests = write_files(workload, workdir, count_statuses, seed)
     threads = max(1, min(len(client_cpus), connections))
     cmd = build_command(binary, base, script, requests, connections=connections, duration_s=duration_s,
                         threads=threads, timeout_s=tool_config["timeout_s"], client_cpus=client_cpus)
@@ -212,4 +247,7 @@ def run_load(binary: Path, url: str, *, connections: int, duration_s: int, confi
     metrics["workload"] = {"label": workload.label, "requests": len(workload.requests),
                            "mode": "static" if workload.static else "dynamic",
                            "count_statuses": count_statuses}
+    if workload.fresh_value:
+        slot, low, high = workload.fresh_value
+        metrics["workload"]["fresh_value"] = {"low": low, "high": high, "seed": seed}
     return metrics

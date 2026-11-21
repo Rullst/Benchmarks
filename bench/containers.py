@@ -172,6 +172,21 @@ def reset_tables(config: dict, framework_tables: list[str] | tuple = ()) -> None
         psql(config, f"TRUNCATE {', '.join(framework_tables)}")
 
 
+def rows_updated(config: dict, table: str = "world") -> int:
+    """PostgreSQL's count of rows updated in `table` since it started (pg_stat_user_tables.n_tup_upd).
+
+    These statistics are always kept (track_counts) and cost the measured
+    runs nothing, unlike pg_stat_statements. Each backend reports its counts
+    when a transaction ends, at most about once a second, and the rest some
+    seconds after it goes idle: a reading taken just after a load run misses
+    up to about the last second of its writes, and one taken just before it
+    misses up to the last second of the warm-up's (reported during the run).
+    """
+    value = psql(config, "SELECT coalesce(sum(n_tup_upd), 0) FROM pg_stat_user_tables "
+                         f"WHERE relname = '{table}'")
+    return int(value or 0)
+
+
 TABLES_SQL = ("SELECT quote_ident(schemaname) || '.' || quote_ident(tablename) FROM pg_tables "
               "WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY 1")
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import sessions
 import workload as W
 from common import ENDPOINTS, PHASE2_ENDPOINTS, BenchError, declared_endpoints, endpoint_path, log, phase2
-from containers import Server, database_handle, reset_tables, start_server
+from containers import Server, database_handle, reset_tables, rows_updated, start_server
 from loadgen import MIB, run_load
 from loadgen_process import per_request_cpu
 from stats import get_path, ratio, summary, window_median
@@ -35,8 +35,16 @@ METRICS = [
     "tier4.server_cpu_cores", "tier4.rps_per_cpu",
     "tier4.ram_mid_mib", "tier4.ram_end_mib", "tier4.ram_growth_mib",
     "startup_s", "idle.tasks", "after.ram_mib", "after.memory_peak_mib",
+    # The write check of PUT /world/{id} (WRITE_CHECKS) and the RAM after the logins (application_ram_peak).
+    "tier1.world-update.rows_updated", "tier1.world-update.rows_updated_per_request", "application.ram_peak_mib",
 ]
-NO_RATIO = ("error_rate", "transport_errors", "timeouts", "ram_growth_mib", "tasks", "db_cpu_cores")
+NO_RATIO = ("error_rate", "transport_errors", "timeouts", "ram_growth_mib", "tasks", "db_cpu_cores", "rows_updated")
+# Endpoints whose every request must write one row of a table: PostgreSQL's row statistics are read
+# before and after the measured run (containers.rows_updated). They lag by up to about a second of writes
+# at each end, so a run counts as writing when it updated at least MIN_ROWS_UPDATED rows per successful
+# request; the publication gate refuses results where an implementation's median is lower.
+WRITE_CHECKS = {"world-update": "world"}
+MIN_ROWS_UPDATED = 0.8
 LOAD_RUNS = [*(f"tier1.{ep}" for ep in ENDPOINTS), "hot_rows", "tier2", "tier3_load", "tier4"]
 # Runs whose capacity ratio the rankings use (see capacity_ratio). Tiers 2
 # and 4 are stability checks (pass or fail), not scores.
@@ -211,8 +219,14 @@ def measure_round(manifest: dict, config: dict, split: dict, binary: Path, numbe
             "error_rate": warmed["error_rate"]}
         _check_alive(server, f"warm-up /{endpoint}")
         time.sleep(warm.get("settle_s", 0))
-        record["tier1"][endpoint] = _strip_samples(load(workload, t1["connections"], t1["duration_s"],
-                                                        count_statuses))
+        table = WRITE_CHECKS.get(endpoint)
+        before = rows_updated(config, table) if table else None
+        measured = _strip_samples(load(workload, t1["connections"], t1["duration_s"], count_statuses))
+        if table:
+            measured["rows_updated"] = rows_updated(config, table) - before
+            measured["rows_updated_per_request"] = (round(measured["rows_updated"] / measured["requests_ok"], 3)
+                                                    if measured.get("requests_ok") else None)
+        record["tier1"][endpoint] = measured
         _check_alive(server, f"tier 1 /{endpoint}")
         time.sleep(srv["cooldown_s"])
 
@@ -333,11 +347,33 @@ def enrich(rounds: list[dict]) -> list[dict]:
     return rounds
 
 
+def application_ram_peak(r: dict) -> float | None:
+    """A round's highest server RAM during the application endpoints and the hot-rows run: after the logins.
+
+    The Memory score (Tier 3) is measured before the logins; a memory-hard
+    password hash can leave hundreds of MiB in the allocator after them.
+    None when the round signed nobody in.
+    """
+    if not (r.get("sessions") or {}).get("login_sessions"):
+        return None
+    runs = [*((r.get("tier1") or {}).get(ep) for ep in PHASE2_ENDPOINTS), r.get("hot_rows")]
+    peaks = [run["server_ram_peak_mib"] for run in runs if run and run.get("server_ram_peak_mib") is not None]
+    return max(peaks) if peaks else None
+
+
+# Metrics computed from a round's runs rather than read from one field (rounds recorded before them count too).
+DERIVED = {"application.ram_peak_mib": application_ram_peak}
+
+
+def round_value(r: dict, path: str):
+    return DERIVED[path](r) if path in DERIVED else get_path(r, path)
+
+
 def summarize(rounds: list[dict]) -> dict:
     enrich(rounds)
     metrics = {}
     for path in METRICS:
-        values = [get_path(r, path) for r in rounds]
+        values = [round_value(r, path) for r in rounds]
         stat = summary(values)
         if stat:
             metrics[path] = stat
@@ -413,16 +449,18 @@ def ratios(framework_rounds: list[dict], baseline_rounds: list[dict]) -> dict:
     `<run>.capacity` (for example tier1.json.capacity) summarizes the
     comparable pairs' capacity ratios (capacity_ratio); `pairs` counts every
     pair with both runs, `cpu_rounds` the pairs scored by CPU efficiency,
-    `not_comparable_rounds` the pairs left out, and `postgresql_rounds` /
+    `not_comparable_rounds` the pairs left out, `postgresql_rounds` /
     `load_generator_rounds` the pairs in which either side was limited by
-    PostgreSQL or by the load generator.
+    PostgreSQL or by the load generator, and `mixed_limit_rounds` the
+    comparable pairs in which exactly one side was PostgreSQL-bound (the two
+    were measured at different loads; rankings.MIXED_LIMIT_EFFECT).
     """
     out = {}
     pairs = list(zip(enrich(framework_rounds), enrich(baseline_rounds)))
     for path in METRICS:
         if path.rsplit(".", 1)[-1] in NO_RATIO or any(part in path for part in NO_RATIO):
             continue
-        values = [ratio(get_path(f, path), get_path(b, path)) for f, b in pairs]
+        values = [ratio(round_value(f, path), round_value(b, path)) for f, b in pairs]
         stat = summary(values)
         if stat:
             out[path] = stat
@@ -439,8 +477,26 @@ def ratios(framework_rounds: list[dict], baseline_rounds: list[dict]) -> dict:
         stat["not_comparable_rounds"] = sum(1 for _, basis, _, _ in present if basis == "not comparable")
         for name, key in (("postgresql", "postgresql_rounds"), ("load-generator", "load_generator_rounds")):
             stat[key] = sum(1 for _, _, f, b in present if name in (run_limiter(f), run_limiter(b)))
+        stat["mixed_limit_rounds"] = sum(1 for _, basis, f, b in present if basis in ("rps", "cpu")
+                                         and (run_limiter(f) == "postgresql") != (run_limiter(b) == "postgresql"))
         out[f"{run}.capacity"] = stat
     return out
+
+
+def write_check(row: dict, endpoint: str) -> tuple[str, float | None]:
+    """Whether an implementation's measured runs of a writing endpoint (measure.WRITE_CHECKS) wrote.
+
+    "ok", "no write" (median rows updated per successful request below
+    measure.MIN_ROWS_UPDATED), "unchecked" (measured before the harness
+    counted them) or "" (not served or not measured).
+    """
+    if row.get("status") not in ("measured", "crashed") or endpoint not in row.get("endpoints", (endpoint,)) \
+            or f"tier1.{endpoint}.rps" not in row.get("metrics", {}):
+        return "", None
+    stat = row["metrics"].get(f"tier1.{endpoint}.rows_updated_per_request")
+    if not stat or stat.get("median") is None:
+        return "unchecked", None
+    return ("ok" if stat["median"] >= MIN_ROWS_UPDATED else "no write"), stat["median"]
 
 
 def require_measurable(conformance: dict, slug: str) -> None:
