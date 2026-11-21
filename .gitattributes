@@ -1,0 +1,2 @@
+# The test fixture of site/ is written by site/tests/fixtures/trim.py.
+site/tests/fixtures/results/** linguist-generated=true

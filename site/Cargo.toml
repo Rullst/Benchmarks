@@ -1,0 +1,21 @@
+# The results website (https://rullst.win/Benchmarks/): static pages rendered
+# from results/*.json with Rullst's html! macro. A package of its own, outside
+# any workspace, so the benchmark implementations stay independent of it.
+[package]
+name = "bench-site"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96.0"
+publish = false
+license = "MIT"
+
+[dependencies]
+# No features: html! and Markup come with the facade's default (empty) feature set.
+rullst = { version = "=13.0.0-alpha.6", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.dev]
+debug = 0
+
+[workspace]

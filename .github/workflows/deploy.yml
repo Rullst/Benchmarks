@@ -1,17 +1,24 @@
-name: Deploy dashboard
+name: Deploy results website
 
-# Builds the dashboard and publishes it with the results data to GitHub Pages:
-#   https://rullst.win/Benchmarks/                       dashboard
+# Renders the results website from results/ with site/ (a Rust program that
+# writes static pages with Rullst's html!) and publishes it with the results
+# data to GitHub Pages:
+#   https://rullst.win/Benchmarks/                       results website
 #   https://rullst.win/Benchmarks/data/latest.json       newest published results
 #   https://rullst.win/Benchmarks/data/site.json         compact summary for the Rullst website
 #   https://rullst.win/Benchmarks/data/versions.json     index of measured Rullst versions
 #   https://rullst.win/Benchmarks/data/rullst/<v>.json   results for one Rullst version
 # The benchmark workflow starts this workflow after it commits new results
-# (pushes made with GITHUB_TOKEN do not trigger `push` workflows).
+# (pushes made with GITHUB_TOKEN do not trigger `push` workflows). The daily
+# run re-renders the pages, so results measured more than RESULTS_MAX_AGE_DAYS
+# days earlier (a repository variable, 90 by default) give way to the
+# "results pending" page, the rule the Rullst website applies to site.json.
 
 on:
   push:
     branches: ["main"]
+  schedule:
+    - cron: "40 5 * * *"
   workflow_dispatch:
 
 permissions:
@@ -24,34 +31,43 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: ./dashboard
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: ./dashboard/package-lock.json
-      - name: Install dependencies
-        run: npm ci
+          toolchain: 1.100.0
+      - name: Cache the Cargo registry and the generator build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            site/target
+          key: site-deploy-${{ runner.os }}-1.100.0-${{ hashFiles('site/Cargo.lock') }}
+          restore-keys: |
+            site-deploy-${{ runner.os }}-1.100.0-
+      - name: Build the generator
+        working-directory: site
+        run: cargo build --locked
+      - name: Render the pages
+        env:
+          MAX_AGE_DAYS: ${{ vars.RESULTS_MAX_AGE_DAYS || '90' }}
+        run: site/target/debug/bench-site --results results --out _site --max-age-days "$MAX_AGE_DAYS"
       - name: Copy the results data
         run: |
-          mkdir -p public/data
-          if [ -f ../results/latest.json ]; then
-            cp ../results/latest.json ../results/versions.json public/data/
-            if [ -f ../results/site.json ]; then cp ../results/site.json public/data/; fi
-            cp -R ../results/rullst public/data/rullst
+          mkdir -p _site/data
+          if [ -f results/latest.json ]; then
+            cp results/latest.json results/versions.json _site/data/
+            if [ -f results/site.json ]; then cp results/site.json _site/data/; fi
+            cp -R results/rullst _site/data/rullst
           fi
-      - name: Build
-        run: npm run build
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: ./dashboard/dist
+          path: ./_site
 
   deploy:
     needs: build

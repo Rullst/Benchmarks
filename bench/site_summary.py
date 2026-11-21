@@ -6,7 +6,7 @@ checks every value and renders a table of the overall and category scores of
 a few implementations, their position ranges, tie margins and flags, their
 memory, and the Rullst reading in English and Brazilian Portuguese. The file
 is written with latest.json on every publication; latest.json keeps its full
-shape for the dashboard and other consumers.
+shape for the results website (site/) and other consumers.
 
 The schema string changes whenever the website would have to change to read
 the file correctly: a new field the website must show (a new flag, category,
