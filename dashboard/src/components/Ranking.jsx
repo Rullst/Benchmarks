@@ -10,12 +10,24 @@ const times = (value) => {
   return `${value.toFixed(value >= 0.1 ? 2 : 3)}×`;
 };
 
+// A group of scores that cannot be told apart shares the range of positions it occupies ("3–7").
 function position(entry) {
   if (entry.status === 'reference') return 'ref.';
   if (entry.status === 'diagnostic') return 'diag.';
   if (entry.status === 'A/A control') return 'A/A';
   if (entry.position === null || entry.position === undefined) return '–';
+  if (entry.position_label) return entry.position_label;
   return entry.tie ? `${entry.position}=` : String(entry.position);
+}
+
+// "Hello world ×2, Database ×2, …" from the overall weights (rankings.overall.weight_ratio).
+function weightText(rankings) {
+  const weights = rankings.overall?.weight_ratio;
+  if (!weights) return 'equal weights';
+  const titles = Object.fromEntries(rankings.categories.map((c) => [c.key, c.title]));
+  return Object.entries(weights)
+    .map(([key, weight]) => `${titles[key] ?? key} ×${weight}`)
+    .join(', ');
 }
 
 const RUN_NAMES = {
@@ -37,16 +49,20 @@ const RUN_NAMES = {
 
 const LIMITS = { postgresql: 'PostgreSQL-bound', 'load-generator': 'load-generator-bound' };
 
-function notes(entry, names) {
+function notes(entry, names, flagged = []) {
   if (['not measured', 'incomplete', 'not comparable', 'errors', 'unstable'].includes(entry.status)) return entry.reason;
   const out = [];
+  if (flagged.includes(entry.slug)) out.push('‡ PUT /world/{id} did not write in most measured requests (see the note below)');
   if (entry.role_note && ['diagnostic', 'A/A control'].includes(entry.status)) out.push(entry.role_note);
   if (entry.within_reference_margin) out.push('within the tie margin of Axum');
   if (entry.status !== 'reference' && entry.spread?.effective_percent !== null && entry.spread?.effective_percent !== undefined) {
     const cpus = entry.spread.cpu_models?.length ? ` over ${entry.spread.cpu_models.join(', ')}` : '';
     out.push(`spread between jobs ±${entry.spread.effective_percent.toFixed(1)}%${cpus}`);
   }
-  if (entry.tie && entry.tied_with?.length) out.push(`tie with ${entry.tied_with.map(names).join(', ')}`);
+  if (entry.tie && entry.tied_with?.length) out.push(`same group as ${entry.tied_with.map(names).join(', ')}`);
+  if (entry.mixed_limit_runs?.length) {
+    out.push(`margin widened: ${entry.mixed_limit_runs.map((r) => RUN_NAMES[r] ?? r).join(', ')} measured at different loads on the two sides`);
+  }
   const limited = Object.entries(entry.limited_runs ?? {}).map(
     ([run, counts]) =>
       `${RUN_NAMES[run] ?? run}: ${Object.entries(counts)
@@ -55,7 +71,7 @@ function notes(entry, names) {
   );
   if (limited.length) out.push(limited.join('; '));
   if (entry.efficiency_runs?.length) {
-    out.push(`scored by CPU efficiency on ${entry.efficiency_runs.map((r) => RUN_NAMES[r] ?? r).join(', ')}`);
+    out.push(`scored by CPU cost on ${entry.efficiency_runs.map((r) => RUN_NAMES[r] ?? r).join(', ')}`);
   }
   return out.join('; ');
 }
@@ -166,7 +182,7 @@ function StabilityTable({ stability, names }) {
   );
 }
 
-function RankTable({ caption, title, entries, extra, value, cells, score, names }) {
+function RankTable({ caption, title, entries, extra, value, cells, score, names, flagged }) {
   const scale = Math.max(1, ...entries.map(score).filter((v) => v !== null && v !== undefined));
   return (
     <div className="table-wrap">
@@ -197,7 +213,7 @@ function RankTable({ caption, title, entries, extra, value, cells, score, names 
               {cells(entry).map((cell, index) => (
                 <td key={index}>{cell}</td>
               ))}
-              <td className="text">{notes(entry, (slug) => names(slug))}</td>
+              <td className="text">{notes(entry, (slug) => names(slug), flagged)}</td>
             </tr>
           ))}
         </tbody>
@@ -211,10 +227,10 @@ const margin = (category) => {
   const floor = category.tie_rule?.floor_percent;
   const aa = percent === null || percent === undefined ? 'no A/A margin' : `A/A margin ±${percent.toFixed(1)}%`;
   const pooled = floor === null || floor === undefined ? '' : `, pooled floor ±${floor.toFixed(1)}%`;
-  return ` Two scores tie when their gap is within the largest of the A/A margin, the root of the sum of squares of their spreads between jobs and the pooled floor (${aa}${pooled}); "≈" rows are within it of Axum.`;
+  return ` Two scores tie when their gap is within the largest of the A/A margin, the root of the sum of squares of their spreads between jobs and the pooled floor (${aa}${pooled}); scores are compared with their neighbour above, and a group of ties shares the range of positions it occupies ("3–7"); "≈" rows are within the margin of Axum.`;
 };
 
-export function Ranking({ rankings, rows }) {
+export function Ranking({ rankings, rows, labels }) {
   const hasOverall = Boolean(rankings?.overall?.entries);
   const [selected, setSelected] = useState(hasOverall ? 'overall' : (rankings?.categories?.[0]?.key ?? 'overall'));
   if (!rankings?.categories) return <p className="note">These results have no rankings.</p>;
@@ -228,6 +244,8 @@ export function Ranking({ rankings, rows }) {
     ...(rankings.stability ? [{ key: 'stability', title: rankings.stability.title }] : []),
   ];
   const category = categories.find((c) => c.key === selected);
+  const putFlags = labels?.put_world?.flagged ?? [];
+  const flaggedHere = selected === 'application' || selected === 'overall' ? putFlags : [];
   const throughputKinds = ['hello', 'database', 'application', 'speed', 'pressure', 'endurance'];
 
   return (
@@ -243,7 +261,7 @@ export function Ranking({ rankings, rows }) {
         <StabilityTable stability={rankings.stability} names={names} />
       ) : category ? (
         <RankTable
-          caption={`${category.title}${category.tier ? ` (${category.tier})` : ''}: ${category.description}. The bar shows the score (longer is better); the line marks Axum.${throughputKinds.includes(category.key) ? ' Endpoint columns are capacity ratios; "*" marks a run scored by requests per CPU-second of the server and PostgreSQL because a side was client-bound.' : ''}${margin(category)}`}
+          caption={`${category.title}${category.tier ? ` (${category.tier})` : ''}: ${category.description}. The bar shows the score (longer is better); the line marks Axum.${throughputKinds.includes(category.key) ? ' Endpoint columns are capacity ratios; "*" marks a run scored by its CPU-cost ratio (requests per CPU-second of the server and PostgreSQL) because a side was client-bound: it then compares CPU cost per request, not requests/s.' : ''}${margin(category)}`}
           title={DETAIL[category.key]?.title ?? 'vs Axum'}
           entries={category.entries}
           extra={DETAIL[category.key]?.columns ?? []}
@@ -251,10 +269,11 @@ export function Ranking({ rankings, rows }) {
           cells={DETAIL[category.key]?.cells ?? (() => [])}
           score={(e) => e.score}
           names={names}
+          flagged={flaggedHere}
         />
       ) : hasOverall ? (
         <RankTable
-          caption={`Overall: geometric mean of the ${categories.length} category scores, equal weights. Category columns: position · score (higher is better). The line marks Axum (1.00).`}
+          caption={`Overall: the geometric mean of the ${categories.length} category scores, weighted ${weightText(rankings)}, with the same tie margins and position ranges as the categories. It is a summary for quick reading: the categories are the result, and other weightings change the order (below). Category columns: position · score (higher is better). The line marks Axum (1.00).`}
           title="Score"
           entries={rankings.overall.entries}
           extra={categories.map((c) => c.title)}
@@ -268,8 +287,45 @@ export function Ranking({ rankings, rows }) {
           }
           score={(e) => e.score}
           names={names}
+          flagged={flaggedHere}
         />
       ) : null}
+      {selected === 'overall' && rankings.sensitivity?.length ? (
+        <Sensitivity rankings={rankings} names={names} />
+      ) : null}
+      {flaggedHere.length > 0 && labels?.put_world?.note ? <p className="note">{labels.put_world.note}</p> : null}
     </>
+  );
+}
+
+// Positions under other weightings (rankings.sensitivity), so a reader sees how much the order depends on them.
+function Sensitivity({ rankings, names }) {
+  const tables = rankings.sensitivity.map((w) => ({ ...w, bySlug: Object.fromEntries(w.entries.map((e) => [e.slug, e])) }));
+  const rows = rankings.overall.entries.filter((e) => e.status === 'ranked' || e.status === 'unstable');
+  return (
+    <div className="table-wrap">
+      <table className="ranking">
+        <caption>Positions under other weightings: how much the overall order depends on the weights.</caption>
+        <thead>
+          <tr>
+            <th className="text" scope="col">Implementation</th>
+            {tables.map((w) => (
+              <th key={w.key} scope="col">{w.title}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((entry) => (
+            <tr key={entry.slug}>
+              <th scope="row" className="text">{names(entry.slug, entry)}</th>
+              {tables.map((w) => {
+                const item = w.bySlug[entry.slug];
+                return <td key={w.key}>{item?.score === null || !item ? '–' : `${position(item)} · ${times(item.score).slice(0, -1)}`}</td>;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

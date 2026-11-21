@@ -87,6 +87,7 @@ export function ApplicationTable({ rows }) {
     })),
     { title: 'CSRF', text: true, value: (r) => (serves(r, 'form') ? mechanism(r, 'csrf') : 'n/i') },
     { title: 'Session store', text: true, value: (r) => (serves(r, 'me') ? mechanism(r, 'session') : 'n/i') },
+    { title: 'Peak RAM after the logins (MiB)', value: (r) => paired(r, 'application.ram_peak_mib') },
     { title: 'Hot rows p99 (ms)', value: (r) => num(median(r, 'hot_rows.latency_ms.p99'), 2) },
     { title: 'Hot rows errors', value: (r) => errorRate(r, 'hot_rows.error_rate') },
   ];
@@ -98,8 +99,10 @@ export function ApplicationTable({ rows }) {
         CSRF is the design of the form protection (token: a secret the form echoes; fetch-metadata:
         Sec-Fetch-Site/Origin checks) and the session store is each framework&apos;s default for a signed-in user,
         with where the mechanism comes from: POST /form and GET /me compare those defaults, not one common mechanism.
-        Hot rows: PUT /world/{'{id}'} on ids 1-10 only, so requests wait for each other&apos;s row locks; reported, not
-        ranked.
+        Peak RAM after the logins: the server&apos;s highest RAM while answering these endpoints, after each round
+        signed its users in (a memory-hard password hash can leave hundreds of MiB in the allocator), with Axum&apos;s
+        in brackets; the Memory score is measured before the logins and does not include it. Hot rows: PUT
+        /world/{'{id}'} on ids 1-10 only, so requests wait for each other&apos;s row locks; reported, not ranked.
       </p>
     </>
   );

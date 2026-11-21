@@ -92,20 +92,25 @@ export default function App() {
       {state.status === 'ready' && (
         <>
           <HowToRead />
+          {state.data.reading_rullst && (
+            <section className="notice" aria-labelledby="reading-title">
+              <h2 id="reading-title">What this means for Rullst</h2>
+              <p>{inlineCode(state.data.reading_rullst)}</p>
+            </section>
+          )}
           <Notice data={state.data} />
           <section>
             <h2>Ranking</h2>
             <p className="note">
-              One ranking per category: Hello world, Database and Application (Tier 1), Memory (Tier 3) and
-              Startup, plus the Stability check (Tiers 2 and 4: pass, warn or fail). &quot;3=&quot; is a shared
-              position: scores within the tie margin (from the A/A control and the spread between jobs). Axum is
-              the reference; diagnostics (Rullst minimal, an Axum variant) and the A/A control have scores but no
-              position. A run with more than 1%
-              errors gets no score; an implementation with a missing or left-out result is incomplete. An overall
-              ranking is shown only when the results publish one. &quot;How to read these results&quot; above
-              explains the scores.
+              The overall score, then one ranking per category: Hello world, Database and Application (Tier 1),
+              Memory (Tier 3) and Startup, plus the Stability check (Tiers 2 and 4: pass, warn or fail). &quot;3–7&quot;
+              is a group of scores that cannot be told apart, sharing positions 3 to 7 in no particular order (the tie
+              margin comes from the A/A control and the spread between jobs). Axum is the reference; diagnostics
+              (Rullst minimal, an Axum variant) and the A/A control have scores but no position. A run with more
+              than 1% errors gets no score; an implementation with a missing or left-out result is incomplete.
+              &quot;How to read these results&quot; above explains the scores.
             </p>
-            <Ranking rankings={state.data.rankings} rows={state.rows} />
+            <Ranking rankings={state.data.rankings} rows={state.rows} labels={state.data.labels} />
           </section>
           <section>
             <h2>Summary</h2>
