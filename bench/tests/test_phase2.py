@@ -314,6 +314,16 @@ class WrkTests(unittest.TestCase):
             self.assertEqual(len(requests.read_text().splitlines()), 10)
 
 
+class ConcurrentStepTests(unittest.TestCase):
+    def test_the_put_write_count_runs_first(self):
+        import load_check
+        order = load_check.concurrent_order(["text", "updates", "world", "world-update", "me"])
+        self.assertEqual(order, ["world-update", "text", "updates", "world", "me"])
+        self.assertEqual(load_check.write_problem(19354, 19408, "world"), None)
+        self.assertIn("must write it", load_check.write_problem(10, 100, "world"))
+        self.assertIsNotNone(load_check.write_problem(0, 0, "world"))
+
+
 class OhaTests(unittest.TestCase):
     def test_parse_ignores_deadline_aborts(self):
         out = json.dumps({"summary": {"total": 2.0, "average": 0.001, "slowest": 0.01},

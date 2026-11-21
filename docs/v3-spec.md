@@ -356,9 +356,12 @@ window (`min` in 1..9001, `max = min + 999`), `limit=20`, `page` 1..5
    (403) and writes nothing.
 6. The table is restored afterwards (phase 1's `reset_tables`).
 7. Under load (the concurrent step, `bench/load_check.py`): the measurement
-   workload for 3 s, with pg_stat_statements counting the rows the `UPDATE`
-   statements on `world` wrote; fewer than 0.8 per successful request
-   (`measure.MIN_ROWS_UPDATED`) fails conformance.
+   workload for 3 s, first in the step, with pg_stat_statements counting the
+   rows the `UPDATE` statements on `world` wrote; fewer than 0.8 per
+   successful request (`measure.MIN_ROWS_UPDATED`) fails conformance. (Run
+   after `/updates`, the first CI run counted 4.5 rows per PUT for Laravel
+   and 1.3 for Spring Boot: their servers were still answering queued
+   `/updates` requests.)
 
 **Load profile:** Tier 1, measured last in the round (it writes). 10,000
 requests: the ids 1..10000 shuffled (`put_world`), each body

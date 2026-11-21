@@ -29,12 +29,23 @@ def write_problem(rows: int, requests: int, table: str) -> str | None:
             "carries a new value and must write it")
 
 
+def concurrent_order(endpoints: list[str]) -> list[str]:
+    """The endpoints with the write-checked ones first.
+
+    A server can go on answering the requests it had queued after wrk
+    stops (PHP-FPM, Tomcat): the UPDATE statements of an earlier /updates
+    run would then be counted as PUT writes. Run first, after the
+    one-request-at-a-time checks only, the PUT count sees its own writes.
+    """
+    return [ep for ep in endpoints if ep in WRITE_CHECKS] + [ep for ep in endpoints if ep not in WRITE_CHECKS]
+
+
 def concurrent_checks(manifest: dict, config: dict, client_cpus: list[int], binary: Path, server) -> list[dict]:
     """One check per declared Tier 1 endpoint: zero errors at the configured connections."""
     options = config.get("concurrent_check", {})
     connections, duration = options.get("connections", 125), options.get("duration_s", 3)
     served = declared_endpoints(manifest)
-    endpoints = [ep for ep in config["tiers"]["tier1"]["endpoints"] if ep in served]
+    endpoints = concurrent_order([ep for ep in config["tiers"]["tier1"]["endpoints"] if ep in served])
     checks: list[dict] = []
     try:
         context = phase2_context(manifest, config, server.port) if any(

@@ -402,8 +402,9 @@ recorded in the results (`detail.score_per_cpu_model`) for comparison.
    shows under load (a pool that times out waiting for a connection, a
    server that closes connections). For `PUT /world/{id}`,
    `pg_stat_statements` also counts the rows its `UPDATE` statements wrote
-   during that step: fewer than 0.8 per successful request fails
-   conformance.
+   during that step (run first in the step, so that `/updates` requests a
+   server still had queued are not counted): fewer than 0.8 per successful
+   request fails conformance.
 4. **Rounds.** The framework and Axum then alternate for 5 rounds per job,
    in ABBA order (framework first in odd rounds, Axum first in even rounds;
    a second job starts with Axum), so that a drift during the job (a runner
