@@ -13,7 +13,7 @@ have several jobs, on different runners, whose round pairs are pooled). With
   results/raw/<version>/<framework>.json  each job's full output, rounds included
   benchmarks_results.md                   the full results tables
   README.md                               the table between the results markers
-The dashboard and https://rullst.win/Benchmarks/data/ serve the JSON files.
+https://rullst.win/Benchmarks/data/ serves the JSON files; the results website (site/) is rendered from them.
 No number in these files is written by hand.
 """
 
@@ -572,7 +572,7 @@ def version_note(version: str, rows: list[dict], notes_path: Path = NOTES, lang:
 
 
 def history_entry(combined: dict) -> dict:
-    """The few numbers per Rullst version that the dashboard plots over time."""
+    """The few numbers per Rullst version that the results website shows over time."""
     rows = {r["slug"]: r for r in combined["implementations"]}
     entry = {
         "version": combined["rullst_version"],

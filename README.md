@@ -5,7 +5,7 @@ with other web frameworks under the same conditions. Every number is measured
 by a GitHub Actions workflow on GitHub-hosted runners, so anyone can rerun it,
 and every number on this page is generated from the measurement output.
 
-- Dashboard: <https://rullst.win/Benchmarks/>
+- Results website: <https://rullst.win/Benchmarks/> (static pages that [site/](site/) renders from the files under `results/` with Rullst's `html!`)
 - Full results tables: [benchmarks_results.md](benchmarks_results.md)
 - Machine-readable results: <https://rullst.win/Benchmarks/data/latest.json> (see [Machine-readable results](#machine-readable-results))
 
@@ -854,7 +854,11 @@ prereleases included. When that version has not been measured yet, the
 workflow measures every implementation with it (5 rounds on each of 3 jobs
 per implementation) and commits the results to `main`: this README's table,
 [benchmarks_results.md](benchmarks_results.md) and the JSON files under
-[results/](results/). The dashboard is then rebuilt. Each measured Rullst
+[results/](results/). The results website is then rebuilt by [site/](site/):
+its pages say "results pending" and show no numbers when the results files
+are missing, of a schema it does not know, inconsistent with each other, or
+measured more than 90 days earlier (the `RESULTS_MAX_AGE_DAYS` repository
+variable), and a daily deployment applies that age limit. Each measured Rullst
 version keeps its own results file, so the history shows how Rullst's
 numbers change between releases. If Rullst cannot be built or fails
 conformance with the new version, nothing is published, the failure is

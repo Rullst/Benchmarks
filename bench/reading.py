@@ -1,8 +1,8 @@
 """A plain-language reading of the results for Rullst as generated, written from the data.
 
-The README's "What this means for Rullst" block and the dashboard show it
-(`reading_rullst` in latest.json); results/site.json carries it in English
-and Brazilian Portuguese for the Rullst website. It states positions, scores
+The README's "What this means for Rullst" block shows it (`reading_rullst`
+in latest.json); results/site.json carries it in English and Brazilian
+Portuguese for the Rullst website and the results website (site/). It states positions, scores
 and RAM with the same wording whichever way they point, and says who
 maintains the benchmark. Both languages say the same things.
 """
