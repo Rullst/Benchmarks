@@ -107,7 +107,7 @@ each framework). In short:
 | --- | --- | --- |
 | `world` | `GET /world/{id}` | `{"id":…,"randomNumber":…}`, `application/json`, read by primary key on every request; 404 without a row; 400, 404 or 422 for a non-integer id |
 | `worlds` | `GET /worlds?min=&max=&limit=&page=` | a JSON array of the rows `min..max` ordered by id, page `page` of `limit` rows, in one query; defaults 1, 10000, 20, 1; ranges 1-10000, 1-100, 1-1000 and `min <= max`, otherwise 400 or 422; unknown parameters ignored |
-| `world-update` | `PUT /world/{id}`, `{"randomNumber": n}` | the row as stored after setting `randomnumber` (1-10000) the ORM's usual way (or one `UPDATE … RETURNING`); malformed JSON, a missing, non-integer (a JSON string such as `"5"` included) or out-of-range value: 400 or 422 and nothing written; 404 without a row. No cookies are sent: exempt the route from a global CSRF check the documented way |
+| `world-update` | `PUT /world/{id}`, `{"randomNumber": n}` | the row as stored after setting `randomnumber` (1-10000) the ORM's usual way (or one `UPDATE … RETURNING`); malformed JSON, a missing, non-integer (a JSON string such as `"5"` included) or out-of-range value: 400 or 422 and nothing written; 404 without a row. No cookies are sent: exempt the route from a global CSRF check the documented way. The load sends a new value in every request, and the concurrent conformance step requires at least 0.8 rows written per successful request, so the route must write whenever the value changes |
 | `form` | `GET /form`, then `POST /form` (urlencoded `name`, `randomNumber` and the CSRF field) | `GET`: a page with `<form method="post" action="/form">`, inputs `name` and `randomNumber` and the framework's hidden CSRF field; `POST`: `<!DOCTYPE html><html><head><title>Form</title></head><body><h1>Hello, {name}</h1><p>{randomNumber}</p></body></html>`, the name escaped, `text/html; charset=utf-8`; a forged post: 400, 403, 419 or 422; invalid fields: 200, 302, 303, 400 or 422, never the success page |
 | `me` | `GET /login`, `POST /login` (urlencoded `username`, `password`, the hidden fields), then `GET /me` | login: 200, 204, 302 or 303 and session cookies (wrong password: 200, 302, 303, 400, 401 or 422 and no session); `/me`: `{"id":…,"username":…,"displayName":…}` with the user's row read on every request; without a session 401, 403, 302 or 303 |
 
@@ -137,7 +137,8 @@ RAM, and sets:
 Use the framework's own production recommendations for everything else:
 
 - a release or production build, with versions pinned and a lockfile
-  committed (base images pinned to an exact version);
+  committed (base images pinned to an exact version and its digest,
+  `image:tag@sha256:…`);
 - the framework's standard database layer (its ORM where it has one) and its
   standard template engine;
 - its documented production server and worker settings, sized for 2 vCPUs;
