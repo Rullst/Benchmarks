@@ -55,64 +55,93 @@ and every number on this page is generated from the measurement output.
 ## Results
 
 <!-- results:start -->
-> Measured on 2026-11-15 with **Rullst 13.0.0-alpha.5** on GitHub-hosted runners (INTEL(R) XEON(R) PLATINUM 8573C, 4 vCPUs, 16 GiB RAM; each server limited to 2 vCPUs and 2 GiB). Values are medians of 5 rounds. "vs Axum" is the ratio to the Axum baseline measured in alternating rounds on the same runner, which cancels most of the difference between runners; compare ratios rather than absolute numbers across runs. These results update automatically when a new Rullst version is published on crates.io. Last update: 2026-11-15.
->
-> **Note:** This measurement found a throughput problem in the production stack that `cargo rullst new` generates: Rullst as generated reached 0.31× Axum's requests/s on /json, while the minimal configuration reached 1.00×. A fix is planned for Rullst 13.0.0-alpha.6. These results update automatically when a new Rullst version is published.
+> Measured on 2026-11-20 with **Rullst 13.0.0-alpha.6** (from crates.io) on GitHub-hosted runners (4 vCPUs; each server limited to 2 vCPUs and 2 GiB). Each implementation ran 5 rounds on each of 3 runners (jobs), alternating which side goes first with the Axum baseline measured on the same runner (ABBA); values are medians over every round pair. Runner CPUs per job: EPYC 7763 ×24, Xeon 6975P-C ×9, EPYC 9V74 ×8, Xeon PLATINUM 8573C ×4, EPYC 9V45 ×3, Xeon Platinum 8370C CPU @ 2.80GHz ×2, Xeon 6973P-C ×1; each row names its own. Ratios to Axum (1.00 = Axum) cancel most of the difference between runners, so the tables lead with them. These results update automatically when a new Rullst version is published on crates.io. Last update: 2026-11-21.
 
-Source: [workflow run 43731095115](https://github.com/Rullst/Benchmarks/actions/runs/43731095115). Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); dashboard: <https://rullst.win/Benchmarks/>.
+Source: [workflow run 44765309608](https://github.com/Rullst/Benchmarks/actions/runs/44765309608). Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); dashboard: <https://rullst.win/Benchmarks/>.
 
-| Implementation | Version | Language | /json req/s | vs Axum | /db-single req/s | vs Axum | /html req/s | Tier 2 p99 (ms) | Idle RAM (MiB) | Peak RAM (MiB) | Tier 4 errors | req/s per MiB |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Axum – baseline | 0.8.9 | Rust | 186,759 | 1.00 | 19,658 | 1.00 | 186,891 | 3.02 | 1.1 | 10.7 | 0 | 17,454.1 |
-| Actix Web | 4.19.0 | Rust | 190,569 | 0.97 | 19,370 | 0.98 | 191,126 | 2.92 | 1.3 | 9.5 | 0 | 20,059.9 |
-| Loco | 1.3.1 | Rust | 65,740 | 0.42 | 15,323 | 1.01 | 59,368 | 7.10 | 3.0 | 13.9 | 0 | 4,729.5 |
-| Rullst (as generated) | 13.0.0-alpha.5 | Rust | 59,139 | 0.31 | 17,531 | 0.77 | 57,206 | 11.30 | 1.6 | 12.6 | 0 | 4,693.6 |
-| Rullst (minimal) | 13.0.0-alpha.5 | Rust | 114,422 | 1.00 | 9,935 | 1.00 | 109,272 | 4.83 | 1.2 | 11.3 | 0 | 10,125.8 |
-| Topcoat | 0.12.1 | Rust | 218,610 | 0.83 | 41,049 | 1.42 | 204,761 | 3.10 | 1.3 | 11.1 | 0 | 19,694.6 |
-| ASP.NET Core | 10.0.15 | C# | 71,839 | 0.62 | 4,091 | 0.41 | 38,234 | 8.03 | 26.4 | 108.7 | 0 | 660.9 |
-| Django | 6.1.3 | Python | 5,990 | 0.02 | 2,480 | 0.08 | 5,162 | 102.90 | 104.1 | 116.6 | 0 | 51.4 |
-| Laravel | 13.42.0 | PHP | 1,169 | 0.01 | 312 | 0.01 | 898 | 315.44 | 37.4 | 80.2 | 0 | 14.6 |
-| NestJS | 12.5.0 | TypeScript | 126,809 | 0.48 | 19,516 | 0.67 | 58,469 | 2.93 | 162.9 | 263.2 | 0 | 481.8 |
-| Phoenix | 1.8.16 | Elixir | 26,831 | 0.17 | 12,930 | 0.88 | 20,294 | 13.39 | 135.9 | 153.7 | 0 | 174.6 |
-| Ruby on Rails | 8.1.4.1 | Ruby | 1,682 | 0.02 | 1,441 | 0.14 | 1,511 | 416.58 | 102.5 | 369.3 | 0 | 4.6 |
-| Spring Boot | 4.1.2 | Java | 32,571 | 0.21 | 8,965 | 0.59 | 16,279 | 12.49 | 213.9 | 377.2 | 0 | 86.3 |
-| FastAPI | 0.163.0 | Python | 17,577 | 0.07 | – | – | 14,292 | 20.09 | 167.7 | 225.2 | 0 | 78.1 |
-| Fastify | 5.12.8 | JavaScript | 154,630 | 0.59 | 22,840 | 0.78 | 117,739 | 3.16 | 72.8 | 165.0 | 0 | 937.1 |
-| Gin | 1.12.0 | Go | 78,542 | 0.51 | 19,765 | 1.32 | 76,162 | 9.50 | 3.5 | 19.8 | 0 | 3,966.8 |
+**Connection-pool defaults.** The Database and Application rankings partly measure connection-pool defaults. SQLx, used by the Axum, Actix Web, Loco and Rullst implementations, tests each connection with a round trip before handing it out (`test_before_acquire`, on by default). The unranked `axum-no-ping` diagnostic shows the size of that cost: in these results Axum scored 1.23 in Database and 1.15 in Application with it switched off. Every implementation runs its framework's documented defaults.
 
-Corrections (left-out results are shown as –):
+| Implementation | Version | Language | /json vs Axum | /html vs Axum | /db-single vs Axum | /queries vs Axum | /updates vs Axum | /fortunes vs Axum | /json req/s (Axum) | Idle RAM (MiB) | Peak RAM (MiB) | Runner CPUs |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Axum – baseline | 0.8.9 | Rust | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 126,538 | 1.1 | 17.3 | EPYC 7763 ×24, Xeon 6975P-C ×9, EPYC 9V74 ×8, Xeon PLATINUM 8573C ×4, EPYC 9V45 ×3, Xeon Platinum 8370C CPU @ 2.80GHz ×2, Xeon 6973P-C ×1 |
+| Actix Web | 4.19.0 | Rust | 1.17 | 1.15 | 0.99 | 0.97 | 1.00 | 0.80 | 197,090 (165,074) | 2.3 | 11.6 | EPYC 9V45, EPYC 7763, Xeon Platinum 8370C CPU @ 2.80GHz |
+| Loco | 1.3.1 | Rust | 0.51 | 0.49 | 0.99 | 0.97 | 0.95 | 0.59 | 69,336 (126,069) | 3.1 | 16.6 | EPYC 9V74, EPYC 7763, Xeon 6975P-C |
+| Rullst (as generated) | 13.0.0-alpha.6 | Rust | 0.52 | 0.47 | 0.98 | 0.97 | 0.81 | 0.62 | 59,870 (117,159) | 1.5 | 12.1 | EPYC 7763, EPYC 7763, EPYC 9V74 |
+| Topcoat | 0.12.1 | Rust | 0.79 | 0.73 | 1.39 | 1.48 | 1.47 | 0.79 | 145,754 (188,753) | 1.4 | 11.8 | Xeon 6975P-C, EPYC 7763, Xeon PLATINUM 8573C |
+| ASP.NET Core | 10.0.15 | C# | 0.53 | 0.34 | 0.32 | 0.75 | 1.19 | 0.23 | 100,996 (188,502) | 30.0 | 126.8 | Xeon Platinum 8370C CPU @ 2.80GHz, Xeon PLATINUM 8573C, EPYC 9V45 |
+| Django | 6.1.3 | Python | 0.03 | 0.03 | 0.14 | 0.30 | 0.38 | 0.06 | 3,682 (114,336) | 104.3 | 118.0 | EPYC 7763, EPYC 7763, Xeon PLATINUM 8573C |
+| Laravel | 13.42.0 | PHP | 0.01 | 0.00 | 0.02 | 0.18 | 0.29 | 0.01 | 733 (119,406) | 37.5 | 84.1 | EPYC 7763, Xeon 6975P-C, EPYC 7763 |
+| NestJS | 12.5.0 | TypeScript | 0.30 | 0.28 | 0.70 | 0.61 | 0.72 | 0.40 | 34,596 (114,917) | 190.9 | 252.3 | EPYC 7763, EPYC 7763, Xeon 6975P-C |
+| Phoenix | 1.8.16 | Elixir | 0.16 | 0.14 | 0.72 | 1.22 | 1.33 | 0.40 | 18,470 (113,892) | 136.4 | 158.2 | EPYC 9V45, EPYC 7763, EPYC 7763 |
+| Ruby on Rails | 8.1.4.1 | Ruby | 0.01 | 0.01 | 0.11 | 0.71 | 0.73 | 0.07 | 2,480 (162,816) | 103.6 | 402.1 | EPYC 7763, EPYC 9V74, Xeon 6975P-C |
+| Spring Boot | 4.1.2 | Java | 0.27 | 0.20 | 0.49 | 1.29 | 1.51 | 0.14 | 63,006 (226,883) | 233.6 | 471.1 | EPYC 7763, Xeon 6975P-C, Xeon 6973P-C |
+| FastAPI | 0.163.0 | Python | 0.07 | 0.06 | 0.11 | 0.23 | 0.28 | 0.07 | 12,727 (166,508) | 170.1 | 190.9 | Xeon 6975P-C, EPYC 9V74, EPYC 7763 |
+| Fastify | 5.12.8 | JavaScript | 0.44 | 0.32 | 0.72 | 0.67 | 0.77 | 0.62 | 55,421 (126,538) | 101.8 | 169.6 | EPYC 7763, EPYC 9V74, EPYC 9V74 |
+| Gin | 1.12.0 | Go | 0.45 | 0.44 | 1.26 | 1.34 | 1.38 | 0.51 | 77,222 (165,719) | 3.8 | 26.1 | EPYC 7763, EPYC 9V74, Xeon PLATINUM 8573C |
+| Axum (test_before_acquire off) – diagnostic, unranked | 0.8.9 | Rust | 1.00 | 1.00 | 1.15 | 1.18 | 1.18 | 1.24 | 115,387 (115,310) | 1.2 | 16.8 | EPYC 7763, EPYC 7763, EPYC 7763 |
+| Rullst (minimal) – diagnostic, unranked | 13.0.0-alpha.6 | Rust | 1.03 | 0.96 | 0.97 | 0.97 | 0.78 | 0.82 | 169,518 (166,909) | 1.3 | 15.2 | EPYC 7763, Xeon 6975P-C, EPYC 9V74 |
+| Axum (A/A control) – A/A control, unranked | 0.8.9 | Rust | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 118,278 (118,931) | 1.1 | 17.1 | EPYC 7763, Xeon 6975P-C, EPYC 7763 |
 
-- **FastAPI**: /db-single is not measured in this run: under load every request timed out because of a defect in this implementation (the session dependency's cleanup waited for a thread-pool slot held by requests waiting for a database connection), so the number says nothing about FastAPI. Fixed in Rullst/Benchmarks#8; the next run (Rullst 13.0.0-alpha.6) measures it again.
+Ratios are requests/s divided by Axum's on the same runners (higher is better); the scores in the rankings use capacity ratios instead (see below). "/json req/s (Axum)" is the absolute number, with Axum's on the same runners in brackets: compare absolute numbers only within a row. Peak RAM is the Memory category's high-water mark. "n/i": not implemented yet. /queries and /updates use queries=20. Runner CPUs: the CPU model of each job (runner) the row was measured on.
+
+| Implementation | GET /world/{id} vs Axum | GET /worlds vs Axum | PUT /world/{id} vs Axum | POST /form vs Axum | GET /me vs Axum | CSRF | Session store | Hot rows p99 (ms) | Hot rows errors |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: |
+| Axum – baseline | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | token (library) | postgresql (library) | 13.68 | 0 |
+| Actix Web | 0.97 | 0.98 | 0.99 | 1.42 | 1.81 | token (library) | cookie-encrypted (documented) | 11.32 | 0 |
+| Loco | 0.97 | 0.99 | 0.59 | 0.64 | 1.82 | token (library) | cookie-signed (built-in) | 25.05 | 0 |
+| Rullst (as generated) | 0.96 | 0.75 | 1.16 | 0.63 | 0.99 | token (built-in) | postgresql (generator) | 31.97 | 0 |
+| Topcoat | 1.37 | 1.27 | 0.85 | 1.20 | 1.39 | fetch-metadata (built-in) | postgresql (built-in) | 10.41 | 0 |
+| ASP.NET Core | 0.34 | 0.42 | 0.38 | 0.22 | 0.52 | token (built-in) | cookie-encrypted (built-in) | 35.09 | 0 |
+| Django | 0.13 | 0.12 | 0.11 | 0.04 | 0.16 | token (built-in) | postgresql (built-in) | 155.53 | 0 |
+| Laravel | 0.02 | 0.02 | 0.02 | 0.01 | 0.03 | token (built-in) | cookie-encrypted (built-in) | 587.58 | 0 |
+| NestJS | 0.68 | 0.59 | 0.39 | 0.18 | 0.47 | fetch-metadata (built-in) | postgresql (documented) | 79.47 | 0 |
+| Phoenix | 0.74 | 0.74 | 0.77 | 0.18 | 0.94 | token (built-in) | postgresql (generator) | 25.08 | 0 |
+| Ruby on Rails | 0.11 | 0.12 | 0.13 | 0.02 | 0.15 | token (built-in) | postgresql (generator) | 181.66 | 0 |
+| Spring Boot | 0.67 | 0.62 | 0.66 | 0.08 | 1.15 | token (built-in) | memory (built-in) | 57.35 | 0 |
+| FastAPI | 0.11 | 0.10 | 0.10 | 0.05 | 0.17 | token (documented) | cookie-signed (documented) | 183.18 | 0 |
+| Fastify | 0.73 | 0.69 | 0.75 | 0.29 | 1.33 | token (library) | cookie-encrypted (library) | 20.67 | 0 |
+| Gin | 1.24 | 1.09 | 0.61 | 0.57 | 1.64 | fetch-metadata (stdlib) | cookie-signed (library) | 45.47 | 0 |
+| Axum (test_before_acquire off) – diagnostic, unranked | 1.14 | 1.10 | 1.13 | 1.01 | 1.15 | token (library) | postgresql (library) | 13.94 | 0 |
+| Rullst (minimal) – diagnostic, unranked | 0.97 | 0.74 | 1.18 | 1.18 | 0.99 | token (built-in) | postgresql (generator) | 21.34 | 0 |
+| Axum (A/A control) – A/A control, unranked | 1.00 | 1.00 | 1.00 | 0.99 | 1.00 | token (library) | postgresql (library) | 14.82 | 0 |
+
+Application endpoints (phase 2). CSRF is the design of the form protection (`token`: a secret the form echoes; `fetch-metadata`: `Sec-Fetch-Site`/`Origin` checks) and the session store is each framework's default for a signed-in user, with where the mechanism comes from (built-in, generator, stdlib, documented, library): /form and /me compare those defaults, not one common mechanism. A cookie store reads no database row for /me; a PostgreSQL store (Axum's tower-sessions store included) reads one, which shows in the PostgreSQL CPU per request. Hot rows: PUT /world/{id} on ids 1-10 only, so requests wait for each other's row locks; reported, not ranked.
 
 ### Rankings
 
-- **Speed (Tier 1):** requests per second on each of the four endpoints with 125 connections for 10 s; the score is the geometric mean of the four ratios to Axum.
-- **Under pressure (Tier 2):** requests per second on /json with 300 connections for 30 s.
-- **Memory (Tier 3):** the most RAM the server used while answering /json with 200 connections; lower is better, so the table shows the RAM ratio and the score is its inverse.
-- **Endurance (Tier 4):** requests per second on /json with 500 connections for 2 minutes; errors, timeouts, RAM still growing and stops are listed with it.
-- **Startup:** time from starting the container to its first answer; lower is better. The harness checks every 0.25 s, so times below 0.25 s count as equal.
-- **Overall:** the geometric mean of the five category scores, each weighted equally (1/5), with every score oriented so that higher is better and Axum at 1.00. The weighting is a choice; the per-category positions are the detail.
+- **Hello world (Tier 1):** /text, /json and /html with 125 connections for 10 s each; the score is the geometric mean of the three capacity ratios to Axum.
+- **Database (Tier 1):** /db-single, /queries and /updates (20 random rows per request) and /fortunes, with the same 125 connections; the geometric mean of the four capacity ratios.
+- **Application (Tier 1):** GET /world/{id}, GET /worlds, PUT /world/{id}, POST /form (CSRF verified) and GET /me (a signed-in session); the geometric mean of the five capacity ratios. /form and /me compare each framework's own default CSRF design and session store (cookie or PostgreSQL), not one mechanism.
+- **Memory (Tier 3):** the RAM high-water mark while answering /json with 200 connections for 15 s, measured after the phase-1 Tier 1 runs, Tiers 2 and 4 and an idle period, so it includes memory the server kept from that load; the score is Axum's high-water mark / the implementation's, both counted as at least 64 MiB.
+- **Startup:** time from starting the container to its first answer; the score is Axum's time / the implementation's, both counted as at least 1 s.
+- **Stability (Tiers 2 and 4, not a score):** /json with 300 connections for 30 s and 500 connections for 2 minutes: fail when the server stopped or a round had more than 1% errors (timeouts included); warn when RAM was still growing at the end of Tier 4 (for a garbage-collected runtime that can be heap growth rather than a leak).
 
-Each cell is the position and the ratio to Axum (seconds for Startup). "(tie)": the load generator was the limit (client-bound) for both and the results are within 10% of each other, or the start-up times are within 0.25 s, so they share the position. Axum is the reference and has no position. "incomplete": a result is missing or left out, so there is no position rather than one computed from fewer metrics.
+Every score is an efficiency-aware ratio to Axum (1.00), higher is better. In the throughput categories each run counts with its requests/s ratio when neither server was client-bound, and otherwise with the ratio of requests per CPU-second of the server and PostgreSQL together ("*"), so a framework is charged for the PostgreSQL work its queries cause. A run limited by the load generator while a server used less than 75% of its vCPUs is not comparable. A run with more than 1% errors has no score ("errors"). "≈": within the tie margin of Axum's 1.00 (the largest of the A/A margin, the score's own spread and the pooled floor), so not distinguishable from Axum. "(tie)": within the tie margin of the best score of its group. Axum, diagnostics and the A/A control have no position. "incomplete": a result is missing or left out.
 
-| Implementation | Overall | Speed | Under pressure | Memory (RAM) | Endurance | Startup |
-| --- | --- | --- | --- | --- | --- | --- |
-| Actix Web | 1: 1.01 | 1 (tie): 0.98× | 1 (tie): 0.97× | 1: 0.88× | 1 (tie): 0.97× | 1 (tie): 0.01 s |
-| Axum – baseline | reference: 1.00 | reference: 1.00× | reference: 1.00× | reference: 1.00× | reference: 1.00× | reference: 0.01 s |
-| Rullst (minimal) | 2: 0.98 | 1 (tie): 0.99× | 1 (tie): 1.00× | 3: 1.08× | 1 (tie): 1.00× | 1 (tie): 0.02 s |
-| Topcoat | 3: 0.91 | 3: 0.94× | 3: 0.83× | 2: 1.06× | 3: 0.85× | 1 (tie): 0.01 s |
-| Gin | 4: 0.62 | 4: 0.66× | 6: 0.51× | 6: 1.84× | 6: 0.51× | 1 (tie): 0.01 s |
-| Loco | 5: 0.59 | 6: 0.51× | 8: 0.43× | 5: 1.32× | 8: 0.43× | 1 (tie): 0.01 s |
-| Rullst (as generated) | 6: 0.49 | 9: 0.38× | 10: 0.29× | 4: 1.14× | 9: 0.29× | 1 (tie): 0.01 s |
-| Fastify | 7: 0.42 | 5: 0.60× | 5: 0.60× | 11: 15.65× | 5: 0.63× | 7 (tie): 0.28 s |
-| ASP.NET Core | 8: 0.38 | 7: 0.48× | 4: 0.62× | 8: 10.23× | 4: 0.63× | 9 (tie): 0.61 s |
-| NestJS | 9: 0.25 | 8: 0.44× | 7: 0.49× | 13: 24.79× | 7: 0.50× | 11 (tie): 1.06 s |
-| Phoenix | 10: 0.16 | 10: 0.24× | 11: 0.16× | 10: 13.73× | 11: 0.17× | 11 (tie): 1.08 s |
-| Spring Boot | 11: 0.12 | 11: 0.20× | 9: 0.29× | 15: 35.92× | 10: 0.27× | 15: 4.12 s |
-| Django | 12: 0.056 | 12: 0.031× | 13: 0.024× | 9: 10.37× | 13: 0.024× | 9 (tie): 0.76 s |
-| Ruby on Rails | 13: 0.031 | 13: 0.025× | 14: 0.014× | 14: 34.16× | 14: 0.014× | 14: 1.38 s |
-| Laravel | 14: 0.030 | 14: 0.007× | 15: 0.006× | 7: 7.42× | 15: 0.006× | 7 (tie): 0.41 s |
-| FastAPI | incomplete | incomplete | 12: 0.072× | 12: 20.97× | 12: 0.068× | 11 (tie): 1.07 s |
+Tie margins: each implementation has one score per job (runner) in each category; its between-job spread is the half-range of their logarithms. Two scores tie when their gap is at most the largest of (a) the A/A margin (the largest deviation from 1.00 of the A/A control, an identical copy of Axum, per job and pooled), (b) the root of the sum of squares of their two spreads and (c) the pooled floor (the median spread of the ranked implementations measured on at least two jobs). An implementation whose jobs all ran on one CPU model counts with at least the floor as its spread, one measured on a single job with the floor. A score is compared with the best score of the group above it, counting with the widest spread of that group's other members when it is wider than its own, so that equal scores share a position. "±" after a score: the margin of that comparison (the first position has none). A/A margin and pooled floor per category: Hello world: A/A ±1.3%, floor ±9.0% (14 implementations); Database: A/A ±0.4%, floor ±6.0% (14 implementations); Application: A/A ±1.2%, floor ±5.9% (14 implementations); Memory (high-water mark): A/A ±0.0%, floor ±0.4% (14 implementations); Startup: A/A ±0.0%, floor ±0.0% (14 implementations).
+
+| Implementation | Hello world | Database | Application | Memory (high-water mark) | Startup | Stability | Runner CPUs |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Axum – baseline | reference: 1.00× | reference: 1.00× | reference: 1.00× | reference: 1.00× (17 MiB) | reference: 1.00× (0.02 s) | pass | EPYC 7763 ×24, Xeon 6975P-C ×9, EPYC 9V74 ×8, Xeon PLATINUM 8573C ×4, EPYC 9V45 ×3, Xeon Platinum 8370C CPU @ 2.80GHz ×2, Xeon 6973P-C ×1 |
+| Actix Web | 1: 1.18×* | 3 (tie): 0.95×* ≈ ±6.0% | 1: 1.19×* | 1 (tie): 1.00× ≈ (12 MiB) | 1 (tie): 1.00× ≈ (0.02 s) | pass | EPYC 9V45, EPYC 7763, Xeon Platinum 8370C CPU @ 2.80GHz |
+| Loco | 3 (tie): 0.49×* ±9.0% | 5 (tie): 0.84×* ±11.5% | 4 (tie): 0.84×* ±5.9% | 1 (tie): 1.00× ≈ (17 MiB) ±0.4% | 1 (tie): 1.00× ≈ (0.02 s) ±0.0% | pass | EPYC 9V74, EPYC 7763, Xeon 6975P-C |
+| Rullst (as generated) | 3 (tie): 0.50×* ±9.0% | 7: 0.79×* ±6.0% | 4 (tie): 0.81×* ±5.9% | 1 (tie): 1.00× ≈ (12 MiB) ±0.4% | 1 (tie): 1.00× ≈ (0.02 s) ±0.0% | pass | EPYC 7763, EPYC 7763, EPYC 9V74 |
+| Topcoat | 2: 0.76×* ±9.0% | 1: 1.19×* | 2: 1.06×* ±5.9% | 1 (tie): 1.00× ≈ (12 MiB) ±0.4% | 1 (tie): 1.00× ≈ (0.02 s) ±0.0% | pass | Xeon 6975P-C, EPYC 7763, Xeon PLATINUM 8573C |
+| ASP.NET Core | 3 (tie): 0.46× ±11.6% | 9 (tie): 0.51×* ±18.3% | 9 (tie): 0.37×* ±16.2% | 8: 0.50× (127 MiB) ±0.7% | 1 (tie): 1.00× ≈ (0.64 s) ±0.0% | pass | Xeon Platinum 8370C CPU @ 2.80GHz, Xeon PLATINUM 8573C, EPYC 9V45 |
+| Django | 12: 0.029×* ±21.3% | 12 (tie): 0.23×* ±29.3% | 11 (tie): 0.12×* ±31.2% | 7: 0.54× (118 MiB) ±0.6% | 1 (tie): 0.93× (1.08 s) ±23.6% | pass | EPYC 7763, EPYC 7763, Xeon PLATINUM 8573C |
+| Laravel | 14: 0.005×* ±37.5% | 14: 0.057×* † ±39.8% | 14: 0.018×* ±43.4% | 6: 0.76× (84 MiB) ±0.4% | 1 (tie): 1.00× ≈ (0.45 s) ±0.0% | pass | EPYC 7763, Xeon 6975P-C, EPYC 7763 |
+| NestJS | 8 (tie): 0.30×* ±22.4% | 9 (tie): 0.60×* ±8.6% | 9 (tie): 0.38×* ±10.0% | 12: 0.25× (252 MiB) ±1.4% | 13: 0.53× (1.89 s) ±24.2% | pass | EPYC 7763, EPYC 7763, Xeon 6975P-C |
+| Phoenix | 10: 0.15×* ±32.4% | 3 (tie): 0.86×* ±11.5% | 7: 0.62×* ±8.6% | 9: 0.40× (158 MiB) ±2.5% | 12: 0.74× (1.35 s) ±23.6% | pass | EPYC 9V45, EPYC 7763, EPYC 7763 |
+| Ruby on Rails | 13: 0.014×* ±28.6% | 11: 0.31×* ±18.3% | 11 (tie): 0.11×* ±43.4% | 13: 0.16× (402 MiB) ±3.1% | 1 (tie): 0.91× ≈ (1.10 s) ±23.6% | pass | EPYC 7763, EPYC 9V74, Xeon 6975P-C |
+| Spring Boot | 8 (tie): 0.24×* ±29.8% | 8: 0.66×* ±6.0% | 8: 0.46×* ±9.1% | 14: 0.14× (471 MiB) ±7.0% | 14: 0.18× (5.66 s) ±26.5% | pass | EPYC 7763, Xeon 6975P-C, Xeon 6973P-C |
+| FastAPI | 11: 0.070×* ±24.7% | 12 (tie): 0.20×* ±39.8% | 11 (tie): 0.12×* ±41.7% | 11: 0.34× (191 MiB) ±5.9% | 1 (tie): 0.93× ≈ (1.07 s) ±23.6% | pass | Xeon 6975P-C, EPYC 9V74, EPYC 7763 |
+| Fastify | 7: 0.39×* ±11.6% | 5 (tie): 0.80×* ±6.0% | 6: 0.71×* ±5.9% | 10: 0.38× (170 MiB) ±6.4% | 1 (tie): 1.00× ≈ (0.83 s) ±0.0% | pass | EPYC 7763, EPYC 9V74, EPYC 9V74 |
+| Gin | 3 (tie): 0.46×* ±9.0% | 2: 1.11×* ±6.0% | 3: 0.92×* ±5.9% | 1 (tie): 1.00× ≈ (26 MiB) ±0.4% | 1 (tie): 1.00× ≈ (0.02 s) ±0.0% | pass | EPYC 7763, EPYC 9V74, Xeon PLATINUM 8573C |
+| Axum (test_before_acquire off) – diagnostic, unranked | diagnostic: 1.00×* ≈ | diagnostic: 1.23×* | diagnostic: 1.15×* | diagnostic: 1.00× ≈ (17 MiB) | diagnostic: 1.00× ≈ (0.02 s) | pass | EPYC 7763, EPYC 7763, EPYC 7763 |
+| Rullst (minimal) – diagnostic, unranked | diagnostic: 1.00×* ≈ | diagnostic: 0.87×* | diagnostic: 0.98×* ≈ | diagnostic: 1.00× ≈ (15 MiB) | diagnostic: 1.00× ≈ (0.01 s) | pass | EPYC 7763, Xeon 6975P-C, EPYC 9V74 |
+| Axum (A/A control) – A/A control, unranked | A/A: 1.00×* ≈ | A/A: 1.00×* ≈ | A/A: 1.00×* ≈ | A/A: 1.00× ≈ (17 MiB) | A/A: 1.00× ≈ (0.02 s) | pass | EPYC 7763, Xeon 6975P-C, EPYC 7763 |
+
+† Database: Laravel: opens a new PostgreSQL connection for every request (PHP-FPM; Laravel's documentation does not recommend persistent PDO connections).
 <!-- results:end -->
 
 ## What is measured

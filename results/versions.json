@@ -1,7 +1,7 @@
 {
   "schema": "rullst.benchmarks.versions.v1",
-  "latest": "13.0.0-alpha.5",
-  "updated_at": "2026-11-15T20:16:25Z",
+  "latest": "13.0.0-alpha.6",
+  "updated_at": "2026-11-21T01:06:47Z",
   "versions": [
     {
       "version": "13.0.0-alpha.5",
@@ -66,6 +66,120 @@
             "tier2.latency_ms.p99": 3.021,
             "tier3.idle_ram_mib": 1.1,
             "tier3.load_ram_peak_mib": 10.7,
+            "tier4.error_rate": 0.0
+          },
+          "ratios": {}
+        }
+      }
+    },
+    {
+      "version": "13.0.0-alpha.6",
+      "measured_from": "2026-11-20T15:39:56Z",
+      "generated_at": "2026-11-21T01:06:47Z",
+      "run_url": "https://github.com/Rullst/Benchmarks/actions/runs/44765309608",
+      "file": "rullst/13.0.0-alpha.6.json",
+      "note": "",
+      "note_pt_br": "",
+      "implementations": {
+        "rullst": {
+          "status": "measured",
+          "metrics": {
+            "tier1.json.rps": 59870.16,
+            "tier1.db-single.rps": 12507.57,
+            "tier1.html.rps": 52836.62,
+            "tier1.text.rps": 60355.15,
+            "tier1.queries.rps": 755.31,
+            "tier1.updates.rps": 272.37,
+            "tier1.fortunes.rps": 12156.6,
+            "tier1.world.rps": 11787.69,
+            "tier1.worlds.rps": 7380.6,
+            "tier1.world-update.rps": 11827.77,
+            "tier1.form.rps": 35598.97,
+            "tier1.me.rps": 6527.19,
+            "hot_rows.latency_ms.p99": 31.966,
+            "tier2.latency_ms.p99": 7.826,
+            "tier3.idle_ram_mib": 1.5,
+            "tier3.load_ram_peak_mib": 12.1,
+            "tier4.error_rate": 0.0
+          },
+          "ratios": {
+            "tier1.json.rps": 0.5154,
+            "tier1.db-single.rps": 0.9841,
+            "tier1.html.rps": 0.475,
+            "tier1.text.rps": 0.5095,
+            "tier1.queries.rps": 0.9732,
+            "tier1.updates.rps": 0.8148,
+            "tier1.fortunes.rps": 0.6199,
+            "tier1.world.rps": 0.9595,
+            "tier1.worlds.rps": 0.7477,
+            "tier1.world-update.rps": 1.1643,
+            "tier1.form.rps": 0.631,
+            "tier1.me.rps": 0.9926,
+            "hot_rows.latency_ms.p99": 2.1039,
+            "tier2.latency_ms.p99": 1.7276,
+            "tier3.idle_ram_mib": 1.3636,
+            "tier3.load_ram_peak_mib": 0.759
+          }
+        },
+        "rullst-minimal": {
+          "status": "measured",
+          "metrics": {
+            "tier1.json.rps": 169518.44,
+            "tier1.db-single.rps": 17928.53,
+            "tier1.html.rps": 154904.02,
+            "tier1.text.rps": 172802.05,
+            "tier1.queries.rps": 1074.36,
+            "tier1.updates.rps": 383.99,
+            "tier1.fortunes.rps": 23146.2,
+            "tier1.world.rps": 17303.4,
+            "tier1.worlds.rps": 10273.08,
+            "tier1.world-update.rps": 17274.46,
+            "tier1.form.rps": 104800.82,
+            "tier1.me.rps": 9417.96,
+            "hot_rows.latency_ms.p99": 21.34,
+            "tier2.latency_ms.p99": 3.344,
+            "tier3.idle_ram_mib": 1.3,
+            "tier3.load_ram_peak_mib": 15.2,
+            "tier4.error_rate": 0.0
+          },
+          "ratios": {
+            "tier1.json.rps": 1.0255,
+            "tier1.db-single.rps": 0.9734,
+            "tier1.html.rps": 0.9569,
+            "tier1.text.rps": 1.0247,
+            "tier1.queries.rps": 0.9666,
+            "tier1.updates.rps": 0.7805,
+            "tier1.fortunes.rps": 0.8176,
+            "tier1.world.rps": 0.9698,
+            "tier1.worlds.rps": 0.7436,
+            "tier1.world-update.rps": 1.1809,
+            "tier1.form.rps": 1.1844,
+            "tier1.me.rps": 0.9875,
+            "hot_rows.latency_ms.p99": 2.0294,
+            "tier2.latency_ms.p99": 0.9712,
+            "tier3.idle_ram_mib": 1.0833,
+            "tier3.load_ram_peak_mib": 0.871
+          }
+        },
+        "axum": {
+          "status": "measured",
+          "metrics": {
+            "tier1.json.rps": 126538.05,
+            "tier1.db-single.rps": 14265.75,
+            "tier1.html.rps": 123912.31,
+            "tier1.text.rps": 129585.3,
+            "tier1.queries.rps": 854.47,
+            "tier1.updates.rps": 371.4,
+            "tier1.fortunes.rps": 21360.04,
+            "tier1.world.rps": 13745.72,
+            "tier1.worlds.rps": 10739.43,
+            "tier1.world-update.rps": 11146.02,
+            "tier1.form.rps": 67041.11,
+            "tier1.me.rps": 7336.39,
+            "hot_rows.latency_ms.p99": 13.678,
+            "tier2.latency_ms.p99": 3.975,
+            "tier3.idle_ram_mib": 1.1,
+            "tier3.load_ram_peak_mib": 17.3,
             "tier4.error_rate": 0.0
           },
           "ratios": {}
