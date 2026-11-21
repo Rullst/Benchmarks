@@ -7,6 +7,7 @@ Reads every *.json written by `harness.py run` (one per job; a framework may
 have several jobs, on different runners, whose round pairs are pooled). With
 --write it updates:
   results/latest.json                     the newest published results
+  results/site.json                       the compact summary the Rullst website renders
   results/rullst/<version>.json           the results for each Rullst version
   results/versions.json                   index of measured Rullst versions
   results/raw/<version>/<framework>.json  each job's full output, rounds included
@@ -37,12 +38,13 @@ from measure import (CAPACITY_RUNS, MIN_ROWS_UPDATED, WRITE_CHECKS, ratios as ro
                      summarize, write_check)
 from release_check import semver_key  # noqa: E402
 from reading import reading_markdown, reading_text  # noqa: E402
+from site_summary import site_summary  # noqa: E402
 from report import (READING_END, READING_START, put_flags, put_note, render_readme_table,  # noqa: E402
                     render_results, replace_between_markers)
 
 SCHEMA = 1
-# The published files follow the shape the Rullst site reads
-# (Rullst/Rullst docs/src/website-maintenance.md); fields are only added to it.
+# latest.json keeps the shape the Rullst website read before results/site.json
+# (bench/site_summary.py, which the website reads now); fields are only added to it.
 SITE_SCHEMA = "rullst.benchmarks.latest.v1"
 VERSIONS_SCHEMA = "rullst.benchmarks.versions.v1"
 SITE_METRICS = {
@@ -655,6 +657,7 @@ def write_outputs(combined: dict, jobs: list[dict]) -> None:
     version = _safe_version(combined["rullst_version"])
     document = site_document(combined)
     write_json(RESULTS / "latest.json", document)
+    write_json(RESULTS / "site.json", site_summary(combined))
     write_json(RESULTS / "rullst" / f"{version}.json", document)
     raw = RESULTS / "raw" / version
     if raw.exists():

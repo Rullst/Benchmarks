@@ -3,6 +3,7 @@ name: Deploy dashboard
 # Builds the dashboard and publishes it with the results data to GitHub Pages:
 #   https://rullst.win/Benchmarks/                       dashboard
 #   https://rullst.win/Benchmarks/data/latest.json       newest published results
+#   https://rullst.win/Benchmarks/data/site.json         compact summary for the Rullst website
 #   https://rullst.win/Benchmarks/data/versions.json     index of measured Rullst versions
 #   https://rullst.win/Benchmarks/data/rullst/<v>.json   results for one Rullst version
 # The benchmark workflow starts this workflow after it commits new results
@@ -43,6 +44,7 @@ jobs:
           mkdir -p public/data
           if [ -f ../results/latest.json ]; then
             cp ../results/latest.json ../results/versions.json public/data/
+            if [ -f ../results/site.json ]; then cp ../results/site.json public/data/; fi
             cp -R ../results/rullst public/data/rullst
           fi
       - name: Build
