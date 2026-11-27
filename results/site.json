@@ -1,17 +1,17 @@
 {
   "schema": "rullst.benchmarks.site.v2",
-  "measured_on": "2026-11-20",
-  "measured_from": "2026-11-20T15:39:56Z",
-  "measured_to": "2026-11-21T01:06:23Z",
-  "generated_at": "2026-11-21T03:28:49Z",
-  "rullst_version": "13.0.0-alpha.6",
+  "measured_on": "2026-11-27",
+  "measured_from": "2026-11-27T13:16:25Z",
+  "measured_to": "2026-11-27T22:36:17Z",
+  "generated_at": "2026-11-27T22:36:31Z",
+  "rullst_version": "13.0.0-rc.1",
   "rullst_source": {
     "kind": "crates.io",
     "label": "crates.io"
   },
   "run": {
-    "id": "44765309608",
-    "url": "https://github.com/Rullst/Benchmarks/actions/runs/44765309608"
+    "id": "46005622692",
+    "url": "https://github.com/Rullst/Benchmarks/actions/runs/46005622692"
   },
   "results_url": "https://rullst.win/Benchmarks/",
   "reference": {
@@ -62,57 +62,55 @@
       "slug": "rullst",
       "framework": "Rullst",
       "label": "Rullst (as generated)",
-      "version": "13.0.0-alpha.6",
+      "version": "13.0.0-rc.1",
       "role": "ranked",
       "status": "measured",
       "overall": {
         "status": "ranked",
-        "score": 0.7489,
+        "score": 0.8566,
         "position": [
-          4,
-          5
+          3,
+          4
         ],
-        "margin_percent": 5.48,
-        "flags": [
-          "put_not_written"
-        ]
+        "margin_percent": 7.53,
+        "flags": []
       },
       "categories": {
         "hello": {
           "status": "ranked",
-          "score": 0.497,
+          "score": 0.6428,
           "position": [
             3,
-            6
+            3
           ],
-          "margin_percent": 8.98,
+          "margin_percent": 12.58,
           "flags": [
             "cpu_cost"
           ]
         },
         "database": {
           "status": "ranked",
-          "score": 0.7853,
+          "score": 1.0264,
           "position": [
-            3,
-            7
+            2,
+            5
           ],
-          "margin_percent": 6.0,
+          "margin_percent": 14.27,
           "flags": [
-            "cpu_cost"
+            "cpu_cost",
+            "within_reference_margin"
           ]
         },
         "application": {
           "status": "ranked",
-          "score": 0.8059,
+          "score": 0.8162,
           "position": [
             4,
             5
           ],
-          "margin_percent": 5.86,
+          "margin_percent": 7.04,
           "flags": [
-            "cpu_cost",
-            "put_not_written"
+            "cpu_cost"
           ]
         },
         "memory": {
@@ -122,7 +120,7 @@
             1,
             5
           ],
-          "margin_percent": 0.41,
+          "margin_percent": 0.31,
           "flags": [
             "within_reference_margin"
           ]
@@ -132,7 +130,7 @@
           "score": 1.0,
           "position": [
             1,
-            11
+            9
           ],
           "margin_percent": 0.0,
           "flags": [
@@ -142,12 +140,12 @@
       },
       "stability": "pass",
       "memory": {
-        "peak_ram_mib": 12.1,
-        "axum_peak_ram_mib": 16.6,
-        "after_logins_peak_ram_mib": 470.4,
-        "axum_after_logins_peak_ram_mib": 927.2
+        "peak_ram_mib": 12.9,
+        "axum_peak_ram_mib": 17.1,
+        "after_logins_peak_ram_mib": 471.6,
+        "axum_after_logins_peak_ram_mib": 927.6
       },
-      "startup_s": 0.02
+      "startup_s": 0.01
     },
     {
       "slug": "loco",
@@ -158,35 +156,35 @@
       "status": "measured",
       "overall": {
         "status": "ranked",
-        "score": 0.7685,
+        "score": 0.7637,
         "position": [
-          4,
+          5,
           5
         ],
-        "margin_percent": 5.48,
+        "margin_percent": 7.53,
         "flags": []
       },
       "categories": {
         "hello": {
           "status": "ranked",
-          "score": 0.4921,
+          "score": 0.4808,
           "position": [
-            3,
+            4,
             6
           ],
-          "margin_percent": 8.98,
+          "margin_percent": 19.2,
           "flags": [
             "cpu_cost"
           ]
         },
         "database": {
           "status": "ranked",
-          "score": 0.844,
+          "score": 0.8423,
           "position": [
-            3,
+            6,
             7
           ],
-          "margin_percent": 15.63,
+          "margin_percent": 11.07,
           "flags": [
             "cpu_cost"
           ]
@@ -198,7 +196,7 @@
             4,
             5
           ],
-          "margin_percent": 5.86,
+          "margin_percent": 7.04,
           "flags": [
             "cpu_cost"
           ]
@@ -210,7 +208,7 @@
             1,
             5
           ],
-          "margin_percent": 0.41,
+          "margin_percent": 0.31,
           "flags": [
             "within_reference_margin"
           ]
@@ -220,7 +218,7 @@
           "score": 1.0,
           "position": [
             1,
-            11
+            9
           ],
           "margin_percent": 0.0,
           "flags": [
@@ -230,10 +228,10 @@
       },
       "stability": "pass",
       "memory": {
-        "peak_ram_mib": 16.6,
-        "axum_peak_ram_mib": 18.4,
-        "after_logins_peak_ram_mib": 1044.7,
-        "axum_after_logins_peak_ram_mib": 929.2
+        "peak_ram_mib": 16.5,
+        "axum_peak_ram_mib": 18.0,
+        "after_logins_peak_ram_mib": 1045.2,
+        "axum_after_logins_peak_ram_mib": 1040.9
       },
       "startup_s": 0.02
     },
@@ -246,30 +244,30 @@
       "status": "measured",
       "overall": {
         "status": "ranked",
-        "score": 0.9912,
+        "score": 1.0329,
         "position": [
-          2,
+          1,
           2
         ],
-        "margin_percent": 5.48,
+        "margin_percent": 7.53,
         "flags": []
       },
       "categories": {
         "hello": {
           "status": "ranked",
-          "score": 0.7631,
+          "score": 0.8056,
           "position": [
             2,
             2
           ],
-          "margin_percent": 8.98,
+          "margin_percent": 12.58,
           "flags": [
             "cpu_cost"
           ]
         },
         "database": {
           "status": "ranked",
-          "score": 1.1897,
+          "score": 1.3001,
           "position": [
             1,
             1
@@ -281,12 +279,12 @@
         },
         "application": {
           "status": "ranked",
-          "score": 1.0634,
+          "score": 1.0867,
           "position": [
             2,
             2
           ],
-          "margin_percent": 5.86,
+          "margin_percent": 7.04,
           "flags": [
             "cpu_cost"
           ]
@@ -298,7 +296,7 @@
             1,
             5
           ],
-          "margin_percent": 0.41,
+          "margin_percent": 0.31,
           "flags": [
             "within_reference_margin"
           ]
@@ -308,7 +306,7 @@
           "score": 1.0,
           "position": [
             1,
-            11
+            9
           ],
           "margin_percent": 0.0,
           "flags": [
@@ -318,12 +316,12 @@
       },
       "stability": "pass",
       "memory": {
-        "peak_ram_mib": 11.8,
-        "axum_peak_ram_mib": 17.4,
-        "after_logins_peak_ram_mib": 1040.5,
-        "axum_after_logins_peak_ram_mib": 928.5
+        "peak_ram_mib": 12.0,
+        "axum_peak_ram_mib": 17.3,
+        "after_logins_peak_ram_mib": 1040.1,
+        "axum_after_logins_peak_ram_mib": 929.0
       },
-      "startup_s": 0.02
+      "startup_s": 0.01
     },
     {
       "slug": "actix",
@@ -334,10 +332,10 @@
       "status": "measured",
       "overall": {
         "status": "ranked",
-        "score": 1.0747,
+        "score": 1.0648,
         "position": [
           1,
-          1
+          2
         ],
         "margin_percent": null,
         "flags": []
@@ -345,7 +343,7 @@
       "categories": {
         "hello": {
           "status": "ranked",
-          "score": 1.1757,
+          "score": 1.1289,
           "position": [
             1,
             1
@@ -357,12 +355,12 @@
         },
         "database": {
           "status": "ranked",
-          "score": 0.95,
+          "score": 0.9654,
           "position": [
-            3,
-            7
+            2,
+            5
           ],
-          "margin_percent": 6.0,
+          "margin_percent": 11.07,
           "flags": [
             "cpu_cost",
             "within_reference_margin"
@@ -370,7 +368,7 @@
         },
         "application": {
           "status": "ranked",
-          "score": 1.1943,
+          "score": 1.1795,
           "position": [
             1,
             1
@@ -397,7 +395,7 @@
           "score": 1.0,
           "position": [
             1,
-            11
+            9
           ],
           "margin_percent": null,
           "flags": [
@@ -407,12 +405,12 @@
       },
       "stability": "pass",
       "memory": {
-        "peak_ram_mib": 11.6,
-        "axum_peak_ram_mib": 15.6,
-        "after_logins_peak_ram_mib": 695.8,
-        "axum_after_logins_peak_ram_mib": 927.6
+        "peak_ram_mib": 12.0,
+        "axum_peak_ram_mib": 17.2,
+        "after_logins_peak_ram_mib": 714.8,
+        "axum_after_logins_peak_ram_mib": 929.4
       },
-      "startup_s": 0.02
+      "startup_s": 0.01
     },
     {
       "slug": "gin",
@@ -423,49 +421,50 @@
       "status": "measured",
       "overall": {
         "status": "ranked",
-        "score": 0.8285,
+        "score": 0.8427,
         "position": [
           3,
-          3
+          4
         ],
-        "margin_percent": 5.48,
+        "margin_percent": 7.53,
         "flags": []
       },
       "categories": {
         "hello": {
           "status": "ranked",
-          "score": 0.4623,
+          "score": 0.4805,
           "position": [
-            3,
+            4,
             6
           ],
-          "margin_percent": 8.98,
+          "margin_percent": 17.37,
           "flags": [
             "cpu_cost"
           ]
         },
         "database": {
           "status": "ranked",
-          "score": 1.1124,
+          "score": 1.1216,
           "position": [
             2,
-            2
+            5
           ],
-          "margin_percent": 6.0,
+          "margin_percent": 12.11,
           "flags": [
             "cpu_cost"
           ]
         },
         "application": {
           "status": "ranked",
-          "score": 0.9163,
+          "score": 0.9357,
           "position": [
             3,
             3
           ],
-          "margin_percent": 5.86,
+          "margin_percent": 7.04,
           "flags": [
-            "cpu_cost"
+            "cpu_cost",
+            "within_reference_margin"
           ]
         },
         "memory": {
@@ -475,7 +474,7 @@
             1,
             5
           ],
-          "margin_percent": 0.41,
+          "margin_percent": 0.31,
           "flags": [
             "within_reference_margin"
           ]
@@ -485,7 +484,7 @@
           "score": 1.0,
           "position": [
             1,
-            11
+            9
           ],
           "margin_percent": 0.0,
           "flags": [
@@ -495,10 +494,10 @@
       },
       "stability": "pass",
       "memory": {
-        "peak_ram_mib": 26.1,
-        "axum_peak_ram_mib": 17.3,
+        "peak_ram_mib": 26.4,
+        "axum_peak_ram_mib": 15.7,
         "after_logins_peak_ram_mib": 20.5,
-        "axum_after_logins_peak_ram_mib": 927.5
+        "axum_after_logins_peak_ram_mib": 927.2
       },
       "startup_s": 0.02
     },
@@ -506,22 +505,20 @@
       "slug": "rullst-minimal",
       "framework": "Rullst (minimal)",
       "label": "Rullst (minimal) \u2013 diagnostic, unranked",
-      "version": "13.0.0-alpha.6",
+      "version": "13.0.0-rc.1",
       "role": "diagnostic",
       "status": "measured",
       "overall": {
         "status": "diagnostic",
-        "score": 0.9605,
+        "score": 0.9973,
         "position": null,
         "margin_percent": null,
-        "flags": [
-          "put_not_written"
-        ]
+        "flags": []
       },
       "categories": {
         "hello": {
           "status": "diagnostic",
-          "score": 0.9999,
+          "score": 0.9983,
           "position": null,
           "margin_percent": null,
           "flags": [
@@ -531,21 +528,21 @@
         },
         "database": {
           "status": "diagnostic",
-          "score": 0.8678,
-          "position": null,
-          "margin_percent": null,
-          "flags": [
-            "cpu_cost"
-          ]
-        },
-        "application": {
-          "status": "diagnostic",
-          "score": 0.9807,
+          "score": 1.0512,
           "position": null,
           "margin_percent": null,
           "flags": [
             "cpu_cost",
-            "put_not_written",
+            "within_reference_margin"
+          ]
+        },
+        "application": {
+          "status": "diagnostic",
+          "score": 0.9426,
+          "position": null,
+          "margin_percent": null,
+          "flags": [
+            "cpu_cost",
             "within_reference_margin"
           ]
         },
@@ -571,16 +568,16 @@
       "stability": "pass",
       "memory": {
         "peak_ram_mib": 15.2,
-        "axum_peak_ram_mib": 17.3,
-        "after_logins_peak_ram_mib": 472.0,
-        "axum_after_logins_peak_ram_mib": 928.1
+        "axum_peak_ram_mib": 17.8,
+        "after_logins_peak_ram_mib": 471.1,
+        "axum_after_logins_peak_ram_mib": 928.3
       },
       "startup_s": 0.01
     }
   ],
   "reading": {
-    "en": "Rullst as `cargo rullst new` generates it (13.0.0-alpha.6, with its production middleware) is in positions 4\u20135 of 14 in the overall score, at 0.75\u00d7 Axum (Axum = 1.00); in the same group as Loco (0.77\u00d7); the closest scores outside its group are Gin (0.83\u00d7, higher) and Fastify (0.61\u00d7, lower). By category: Hello world positions 3\u20136 of 14 (0.50\u00d7); Database positions 3\u20137 of 14 (0.79\u00d7); Application positions 4\u20135 of 14 (0.81\u00d7); Memory (high-water mark) positions 1\u20135 of 14 (1.00\u00d7); Startup positions 1\u201311 of 14 (1.00\u00d7). Memory: its RAM high-water mark under the Tier 3 load was 12 MiB (Axum: 17 MiB on the same runners), both counted as the 64 MiB floor of the Memory score; after the 125 logins of the application endpoints its peak was 470 MiB (Axum: 927 MiB), which no score includes. Its Application figure, and through it the overall score, is affected by this run's PUT /world/{id} problem (\u2021): most of its measured PUT requests did not write, so its PUT ratio and its Application score are higher than they would be with a write. This benchmark is maintained by Rullst's maintainer, who also wrote every implementation in it and designed the method.",
-    "pt_br": "O Rullst como o `cargo rullst new` o gera (13.0.0-alpha.6, com o middleware de produ\u00e7\u00e3o dele) est\u00e1 nas posi\u00e7\u00f5es 4\u20135 de 14 na pontua\u00e7\u00e3o geral, com 0,75\u00d7 o Axum (Axum = 1,00); no mesmo grupo que Loco (0,77\u00d7); as pontua\u00e7\u00f5es mais pr\u00f3ximas fora do grupo s\u00e3o Gin (0,83\u00d7, acima) e Fastify (0,61\u00d7, abaixo). Por categoria: Hello world: posi\u00e7\u00f5es 3\u20136 de 14 (0,50\u00d7); Banco de dados: posi\u00e7\u00f5es 3\u20137 de 14 (0,79\u00d7); Aplica\u00e7\u00e3o: posi\u00e7\u00f5es 4\u20135 de 14 (0,81\u00d7); Mem\u00f3ria (pico): posi\u00e7\u00f5es 1\u20135 de 14 (1,00\u00d7); Inicializa\u00e7\u00e3o: posi\u00e7\u00f5es 1\u201311 de 14 (1,00\u00d7). Mem\u00f3ria: o pico de RAM dele sob a carga do Tier 3 foi de 12 MiB (Axum: 17 MiB nas mesmas m\u00e1quinas), ambos contados como o piso de 64 MiB da pontua\u00e7\u00e3o de Mem\u00f3ria; depois dos 125 logins dos endpoints de aplica\u00e7\u00e3o, o pico dele foi de 470 MiB (Axum: 927 MiB), que nenhuma pontua\u00e7\u00e3o inclui. O n\u00famero de Aplica\u00e7\u00e3o dele, e por meio dele a pontua\u00e7\u00e3o geral, \u00e9 afetado pelo problema do PUT /world/{id} desta rodada (\u2021): a maioria das requisi\u00e7\u00f5es PUT medidas dele n\u00e3o gravou, ent\u00e3o a raz\u00e3o do PUT e a pontua\u00e7\u00e3o de Aplica\u00e7\u00e3o dele s\u00e3o mais altas do que seriam com uma grava\u00e7\u00e3o. Este benchmark \u00e9 mantido pelo mantenedor do Rullst, que tamb\u00e9m escreveu todas as implementa\u00e7\u00f5es dele e projetou o m\u00e9todo."
+    "en": "Rullst as `cargo rullst new` generates it (13.0.0-rc.1, with its production middleware) is in positions 3\u20134 of 14 in the overall score, at 0.86\u00d7 Axum (Axum = 1.00); in the same group as Gin (0.84\u00d7); the closest scores outside its group are Topcoat (1.03\u00d7, higher) and Loco (0.76\u00d7, lower). By category: Hello world position 3 of 14 (0.64\u00d7); Database positions 2\u20135 of 14 (1.03\u00d7); Application positions 4\u20135 of 14 (0.82\u00d7); Memory (high-water mark) positions 1\u20135 of 14 (1.00\u00d7); Startup positions 1\u20139 of 14 (1.00\u00d7). Memory: its RAM high-water mark under the Tier 3 load was 13 MiB (Axum: 17 MiB on the same runners), both counted as the 64 MiB floor of the Memory score; after the 125 logins of the application endpoints its peak was 472 MiB (Axum: 928 MiB), which no score includes. This benchmark is maintained by Rullst's maintainer, who also wrote every implementation in it and designed the method.",
+    "pt_br": "O Rullst como o `cargo rullst new` o gera (13.0.0-rc.1, com o middleware de produ\u00e7\u00e3o dele) est\u00e1 nas posi\u00e7\u00f5es 3\u20134 de 14 na pontua\u00e7\u00e3o geral, com 0,86\u00d7 o Axum (Axum = 1,00); no mesmo grupo que Gin (0,84\u00d7); as pontua\u00e7\u00f5es mais pr\u00f3ximas fora do grupo s\u00e3o Topcoat (1,03\u00d7, acima) e Loco (0,76\u00d7, abaixo). Por categoria: Hello world: posi\u00e7\u00e3o 3 de 14 (0,64\u00d7); Banco de dados: posi\u00e7\u00f5es 2\u20135 de 14 (1,03\u00d7); Aplica\u00e7\u00e3o: posi\u00e7\u00f5es 4\u20135 de 14 (0,82\u00d7); Mem\u00f3ria (pico): posi\u00e7\u00f5es 1\u20135 de 14 (1,00\u00d7); Inicializa\u00e7\u00e3o: posi\u00e7\u00f5es 1\u20139 de 14 (1,00\u00d7). Mem\u00f3ria: o pico de RAM dele sob a carga do Tier 3 foi de 13 MiB (Axum: 17 MiB nas mesmas m\u00e1quinas), ambos contados como o piso de 64 MiB da pontua\u00e7\u00e3o de Mem\u00f3ria; depois dos 125 logins dos endpoints de aplica\u00e7\u00e3o, o pico dele foi de 472 MiB (Axum: 928 MiB), que nenhuma pontua\u00e7\u00e3o inclui. Este benchmark \u00e9 mantido pelo mantenedor do Rullst, que tamb\u00e9m escreveu todas as implementa\u00e7\u00f5es dele e projetou o m\u00e9todo."
   },
   "note": "",
   "note_pt_br": ""
