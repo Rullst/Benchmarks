@@ -169,10 +169,11 @@ fn pool_note(ctx: &Ctx) -> Option<Markup> {
         <section class="section" aria-labelledby="pool">
             <h2 id="pool">"Database-layer defaults"</h2>
             <p>"The Database and Application rankings partly measure the defaults of each stack's database layer, and "
-               "they differ: SQLx (Axum, Actix Web, Loco, Rullst) tests each pooled connection with a round trip "
+               "they differ: SQLx (Axum, Actix Web, Loco) tests each pooled connection with a round trip "
                "before handing it out ("<code>"test_before_acquire"</code>", on by default; the unranked "
                <code>"axum-no-ping"</code>" diagnostic, measured for Axum only, shows its size: "{measured}"); "
-               "node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new "
+               "Rullst's ORM turns that test off and, since 13.0.0-rc.1, pings a PostgreSQL connection only when "
+               "it has been idle for at least 500 ms; node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new "
                "PostgreSQL connection for every request; Npgsql (ASP.NET Core) resets a pooled connection's state "
                "before each query EF Core runs; GORM (Gin) wraps each write in a transaction by default; Rails uses 6 "
                "of its 16 connections. "<a href={readme("fairness")}>"Fairness"</a>" and each folder README list the "

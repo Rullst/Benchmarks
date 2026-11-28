@@ -470,10 +470,11 @@ def _margins_line(rankings: dict) -> str:
 
 
 POOL_NOTE = ("**Database-layer defaults.** The Database and Application rankings partly measure the defaults of "
-             "each stack's database layer, and they differ: SQLx (Axum, Actix Web, Loco, Rullst) tests each pooled "
+             "each stack's database layer, and they differ: SQLx (Axum, Actix Web, Loco) tests each pooled "
              "connection with a round trip before handing it out (`test_before_acquire`, on by default; the "
              "unranked `axum-no-ping` diagnostic, measured for Axum only, shows its size: {measured}); "
-             "node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new "
+             "Rullst's ORM turns that test off and, since 13.0.0-rc.1, pings a PostgreSQL connection only when it "
+             "has been idle for at least 500 ms; node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new "
              "PostgreSQL connection for every request; Npgsql (ASP.NET Core) resets a pooled connection's state "
              "before each query EF Core runs; GORM (Gin) wraps each write in a transaction by default (`SkipDefaultTransaction` off); "
              "Rails uses 6 of its 16 connections. [Fairness](README.md#fairness) and each folder README list the "

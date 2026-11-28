@@ -51,9 +51,10 @@ Changes from the generated application, all for the benchmark:
 
 ## Production settings
 
-Each setting audited against Rullst's documentation and source at the
-measured commit (`58438b6`, checked 2026-11-19), under the same rule as every
-other folder.
+Each setting audited against Rullst's documentation and source at
+13.0.0-alpha.6 (commit `58438b6`, checked 2026-11-19), under the same rule as
+every other folder. Results for a later release build the same code against
+that release (`RULLST_VERSION`); a row that release changed says so.
 
 | Setting | Value | Source |
 | --- | --- | --- |
@@ -62,5 +63,5 @@ other folder.
 | Tracing subscriber | `Server`'s default, `RUST_LOG` unset: filter `info,sqlx=warn`; start-up messages and warnings only. ORM operations open INFO spans that the subscriber records without printing | [telemetry-guide.md](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/docs/src/telemetry-guide.md#L120), [telemetry.rs](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/rullst-core/src/telemetry.rs#L55), [startup.rs](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/rullst-core/src/server/builder/startup.rs#L34) |
 | Middleware | `Server`'s production stack as generated, global (security baseline, `Vary: HX-Request`); development tools need a debug build | [v3 spec §2.3 and decision 2](../../docs/v3-spec.md); [startup.rs](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/rullst-core/src/server/builder/startup.rs#L227) |
 | Pool | `Orm::init_with_options(url, DB_POOL_SIZE, 10)`: 16 connections, the 10 s acquire timeout, 300 s idle timeout and 30 min lifetime that `Orm::init` also uses | [pool.rs](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/rullst-orm/src/pool.rs#L173), [config.rs](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/rullst-orm/src/pool/config.rs#L103) |
-| Prepared statements, connection checks | SQLx's defaults: 100 cached statements per connection, a ping when a connection is taken from the pool (`test_before_acquire`; Rullst turns it off only for SQLite) and when it is returned | [pool.rs](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/rullst-orm/src/pool.rs#L121); SQLx [options.rs](https://github.com/launchbadge/sqlx/blob/v0.9.0/sqlx-core/src/pool/options.rs#L149) |
+| Prepared statements, connection checks | SQLx's defaults: 100 cached statements per connection, a ping when a connection is taken from the pool (`test_before_acquire`; Rullst turns it off only for SQLite) and when it is returned. Since 13.0.0-rc.1 (checked 2026-11-27 at tag `v13.0.0-rc.1`, commit `9ea50d9`), Rullst turns `test_before_acquire` off for every pool and pings a PostgreSQL or MySQL connection before handing it out only when it has been idle for at least 500 ms ([liveness.rs](https://github.com/Rullst/Rullst/blob/9ea50d980ca99634e25778cb3686e902dcf99945/rullst-orm/src/pool/liveness.rs#L18)); the ping when a connection is returned stays | [pool.rs](https://github.com/Rullst/Rullst/blob/58438b64caa847ef7ffdcc08653ce26cb5a8a8a0/rullst-orm/src/pool.rs#L121); SQLx [options.rs](https://github.com/launchbadge/sqlx/blob/v0.9.0/sqlx-core/src/pool/options.rs#L149) |
 | Server and workers | `Server::run` (Hyper) on Tokio's multi-threaded runtime, one worker per CPU (2) | as generated |
