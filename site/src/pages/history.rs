@@ -16,6 +16,30 @@ const THROUGHPUT: [(&str, &str); 3] =
     [("tier1.json.rps", "/json req/s"), ("tier1.db-single.rps", "/db-single req/s"), ("tier1.html.rps", "/html req/s")];
 const COSTS: [(&str, &str); 2] = [("tier2.latency_ms.p99", "Tier 2 p99"), ("tier3.load_ram_peak_mib", "Peak RAM")];
 
+/// What limits a comparison of two published runs, shown when both versions are in versions.json.
+/// It is the generator's text: the stored results are never edited.
+fn comparisons() -> [(&'static str, &'static str, Markup); 1] {
+    [(
+        "13.0.0-alpha.6",
+        "13.0.0-rc.1",
+        html! {
+            "Rullst 13.0.0-rc.1 pings a pooled PostgreSQL connection before handing it out only when it has been "
+            "idle for at least 500 ms; 13.0.0-alpha.6 pinged on every acquisition, SQLx's default. That change likely "
+            "accounts for most of the Database change (0.79× to 1.03×): on EPYC 9V74, the one runner CPU both runs "
+            "used, the ratio to Axum of requests per CPU-second of the server and PostgreSQL went from 0.84 to 1.01 "
+            "for /db-single, 0.88 to 1.08 for /queries and 0.72 to 0.89 for /fortunes, while /text stayed at 0.55 "
+            "and 0.56. No run measured 13.0.0-rc.1 with the ping on, and the runners changed (13.0.0-alpha.6: two "
+            "EPYC 7763 jobs and one EPYC 9V74; 13.0.0-rc.1: two EPYC 9V45 and one EPYC 9V74, where Rullst's ratios "
+            "on EPYC 9V45 were 0.08 to 0.13 higher than on EPYC 9V74), so part of the Database change, and the "
+            "Hello world change (0.50× to 0.64×), comes from the runners. Application is not comparable between "
+            "the two runs: the 13.0.0-alpha.6 run used the harness before "
+            <a href="https://github.com/Rullst/Benchmarks/commit/c24153c">"c24153c"</a>
+            ", whose PUT /world/{id} mostly sent the value already stored, so Rullst's "<code>"RowSnapshot"</code>
+            " save mostly wrote nothing (PUT /world/{id}: 1.16× Axum in 13.0.0-alpha.6, 0.56× in 13.0.0-rc.1)."
+        },
+    )]
+}
+
 pub fn page(ctx: &Ctx) -> Page {
     let root = "../";
     let versions = &ctx.results.versions.versions;
@@ -47,6 +71,14 @@ pub fn page(ctx: &Ctx) -> Page {
         .map(|v| html! { <li><b>{v.version.as_str()}": "</b>{rich(&v.note)}</li> })
         .collect();
     let any_notes = versions.iter().any(|v| !v.note.is_empty());
+    let measured = |version: &str| versions.iter().any(|v| v.version == version);
+    let comparisons: Vec<Markup> = comparisons()
+        .into_iter()
+        .filter(|(from, to, _)| measured(from) && measured(to))
+        .map(|(from, to, text)| html! { <li><b>{from}" and "{to}": "</b>{text}</li> })
+        .collect();
+    let any_comparison = !comparisons.is_empty();
+    let comparisons: Markup = comparisons.into_iter().collect();
     let table = html! {
         <table class="ranking history">
             <caption>"Ratios to Axum measured on the same runners (1.00 = Axum). Requests/s: higher is better. "
@@ -73,6 +105,12 @@ pub fn page(ctx: &Ctx) -> Page {
             <h2 id="versions">"Ratios to Axum per version"</h2>
             {table_region("Rullst across versions", table)}
         </section>
+        @if any_comparison {
+            <section class="section" aria-labelledby="comparing">
+                <h2 id="comparing">"Comparing two runs"</h2>
+                <ul class="footnotes">{comparisons}</ul>
+            </section>
+        }
         @if any_notes {
             <section class="section" aria-labelledby="version-notes">
                 <h2 id="version-notes">"Version notes"</h2>

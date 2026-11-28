@@ -229,10 +229,10 @@ pub fn unranked_table(
         .unranked
         .iter()
         .map(|entry| {
-            let note = ctx
-                .row(&entry.slug)
-                .map(|r| if r.listing_note.is_empty() { r.role_note.as_str() } else { r.listing_note.as_str() })
-                .unwrap_or("");
+            let row = ctx.row(&entry.slug);
+            let note =
+                row.map(|r| if r.listing_note.is_empty() { r.role_note.as_str() } else { r.listing_note.as_str() }).unwrap_or("");
+            let correction = row.and_then(|r| crate::format::role_note_correction(r, &ctx.data().rullst_version));
             let extra: Markup = columns.iter().map(|c| html! { <td>{(c.cell)(entry)}</td> }).collect();
             html! {
                 <tr class={row_class(ctx, entry, "row-unranked")}>
@@ -240,7 +240,7 @@ pub fn unranked_table(
                     {implementation_cell(ctx, root, &entry.slug)}
                     {score_cell(ctx, key, entry, &scale, Tone::Unranked)}
                     {extra}
-                    <td class="note-cell">{crate::layout::rich(note)}</td>
+                    <td class="note-cell">{crate::layout::rich(note)}@if let Some(correction) = correction { " "{correction} }</td>
                 </tr>
             }
         })

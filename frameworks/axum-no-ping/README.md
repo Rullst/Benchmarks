@@ -13,7 +13,8 @@ ping is a round trip (Sync, then ReadyForQuery). With `&pool` as the
 executor, as Axum's examples use it, every statement takes and returns a
 connection, so each statement can cost up to two extra round trips and
 PostgreSQL CPU. That is SQLx's documented default and Axum keeps it, as do
-Actix Web, Loco and both Rullst folders (all on SQLx); Topcoat's Toasty does
+Actix Web and Loco (on SQLx); since 13.0.0-rc.1 both Rullst folders ping
+only connections idle for at least 500 ms. Topcoat's Toasty does
 not ping by default, and Gin's pgx pings only connections idle for more than
 1 s.
 

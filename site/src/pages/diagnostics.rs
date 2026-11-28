@@ -19,12 +19,16 @@ pub fn page(ctx: &Ctx) -> Page {
         .iter()
         .map(|row| {
             let note = if row.listing_note.is_empty() { row.role_note.as_str() } else { row.listing_note.as_str() };
+            let correction = format::role_note_correction(row, &ctx.data().rullst_version);
             let href = format!("{root}implementations/{}/", row.slug);
             html! {
                 <article class="card card-wide">
                     <h3><a href={href}>{format::label(row)}</a></h3>
                     <p class="role">{format::role_text(row).unwrap_or("")}</p>
                     <p>{rich(note)}</p>
+                    @if let Some(correction) = correction {
+                        <p>{correction}</p>
+                    }
                 </article>
             }
         })
@@ -169,10 +173,11 @@ fn pool_note(ctx: &Ctx) -> Option<Markup> {
         <section class="section" aria-labelledby="pool">
             <h2 id="pool">"Database-layer defaults"</h2>
             <p>"The Database and Application rankings partly measure the defaults of each stack's database layer, and "
-               "they differ: SQLx (Axum, Actix Web, Loco, Rullst) tests each pooled connection with a round trip "
+               "they differ: SQLx (Axum, Actix Web, Loco) tests each pooled connection with a round trip "
                "before handing it out ("<code>"test_before_acquire"</code>", on by default; the unranked "
                <code>"axum-no-ping"</code>" diagnostic, measured for Axum only, shows its size: "{measured}"); "
-               "node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new "
+               "since 13.0.0-rc.1, Rullst's ORM turns that test off and pings a PostgreSQL connection only after "
+               "500 ms idle (earlier releases kept SQLx's default); node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new "
                "PostgreSQL connection for every request; Npgsql (ASP.NET Core) resets a pooled connection's state "
                "before each query EF Core runs; GORM (Gin) wraps each write in a transaction by default; Rails uses 6 "
                "of its 16 connections. "<a href={readme("fairness")}>"Fairness"</a>" and each folder README list the "

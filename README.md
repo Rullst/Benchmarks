@@ -105,7 +105,7 @@ They are not part of this cross-framework benchmark.
 
 Source: [workflow run 46005622692](https://github.com/Rullst/Benchmarks/actions/runs/46005622692). Full tables, ranges and flags: [benchmarks_results.md](benchmarks_results.md); dashboard: <https://rullst.win/Benchmarks/>.
 
-**Database-layer defaults.** The Database and Application rankings partly measure the defaults of each stack's database layer, and they differ: SQLx (Axum, Actix Web, Loco, Rullst) tests each pooled connection with a round trip before handing it out (`test_before_acquire`, on by default; the unranked `axum-no-ping` diagnostic, measured for Axum only, shows its size: in these results Axum scored 1.24 in Database and 1.15 in Application with it switched off); node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new PostgreSQL connection for every request; Npgsql (ASP.NET Core) resets a pooled connection's state before each query EF Core runs; GORM (Gin) wraps each write in a transaction by default (`SkipDefaultTransaction` off); Rails uses 6 of its 16 connections. [Fairness](README.md#fairness) and each folder README list the settings that were changed from the defaults, and why.
+**Database-layer defaults.** The Database and Application rankings partly measure the defaults of each stack's database layer, and they differ: SQLx (Axum, Actix Web, Loco) tests each pooled connection with a round trip before handing it out (`test_before_acquire`, on by default; the unranked `axum-no-ping` diagnostic, measured for Axum only, shows its size: in these results Axum scored 1.24 in Database and 1.15 in Application with it switched off); since 13.0.0-rc.1, Rullst's ORM turns that test off and pings a PostgreSQL connection only after 500 ms idle (earlier releases kept SQLx's default); node-postgres (Fastify, NestJS) sends unprepared statements; Laravel on PHP-FPM opens a new PostgreSQL connection for every request; Npgsql (ASP.NET Core) resets a pooled connection's state before each query EF Core runs; GORM (Gin) wraps each write in a transaction by default (`SkipDefaultTransaction` off); Rails uses 6 of its 16 connections. [Fairness](README.md#fairness) and each folder README list the settings that were changed from the defaults, and why.
 
 | Implementation | Version | Language | /json vs Axum | /html vs Axum | /db-single vs Axum | /queries vs Axum | /updates vs Axum | /fortunes vs Axum | /json req/s (Axum) | Idle RAM (MiB) | Peak RAM (MiB) | Runner CPUs |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -729,10 +729,11 @@ choice can be checked and challenged.
   documentation does not make the stacks equal. Examples the results let you
   see: Laravel on PHP-FPM opens a new PostgreSQL connection for every
   request (its documentation does not recommend persistent PDO connections;
-  its database rows are labelled); SQLx, which Axum, Actix Web, Loco and
-  Rullst use, tests pooled connections with a round trip, while Topcoat's
-  and Gin's drivers mostly do not (the unranked Axum variant without the
-  test bounds that cost); node-postgres, under Fastify and NestJS, sends
+  its database rows are labelled); SQLx, which Axum, Actix Web and Loco
+  use, tests pooled connections with a round trip, while Topcoat's and
+  Gin's drivers mostly do not (the unranked Axum variant without the test
+  bounds that cost), and since 13.0.0-rc.1 Rullst's ORM, also on SQLx,
+  tests only connections idle for at least 500 ms; node-postgres, under Fastify and NestJS, sends
   unprepared statements, as its documentation advises for simple queries;
   Npgsql, under ASP.NET Core, resets a pooled connection's state before each
   query EF Core runs; GORM, under Gin, wraps each write in a transaction by

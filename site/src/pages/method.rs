@@ -33,7 +33,10 @@ pub fn page(ctx: &Ctx) -> Page {
         data.runners.iter().map(|r| html! { <li>{short_cpu(&r.cpu_model)}" ×"{r.jobs}</li> }).collect();
     let server = config.server.as_ref();
     let cpus = server.map(|s| format::num(Some(s.cpus), 0)).unwrap_or(DASH.to_string());
-    let memory = server.map(|s| s.memory.clone()).unwrap_or_default();
+    // Docker's "2g" reads as "2 GiB", as on the front page.
+    let memory = server
+        .map(|s| s.memory.strip_suffix('g').map(|g| format!("{g} GiB")).unwrap_or_else(|| s.memory.clone()))
+        .unwrap_or_default();
     let pool = server.and_then(|s| s.pool_size).map(|p| p.to_string()).unwrap_or(DASH.to_string());
     let generator = env
         .load_generator

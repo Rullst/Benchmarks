@@ -1190,9 +1190,10 @@ results").
 
 **Connection-pool note.** The generated README section also says, with the
 numbers of the run, that the Database and Application rankings partly
-measure connection-pool defaults: SQLx (Axum, Actix Web, Loco, Rullst) tests
-each connection with a round trip before handing it out
-(`test_before_acquire`, on by default), and the unranked `axum-no-ping`
+measure connection-pool defaults: SQLx (Axum, Actix Web, Loco) tests each
+connection with a round trip before handing it out (`test_before_acquire`,
+on by default; since 13.0.0-rc.1 Rullst's ORM pings only connections idle
+for at least 500 ms), and the unranked `axum-no-ping`
 diagnostic shows that cost (Database about 1.25 and Application about 1.15
 in the validation trial).
 
