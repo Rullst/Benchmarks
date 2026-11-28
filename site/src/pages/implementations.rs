@@ -100,6 +100,7 @@ pub fn detail(ctx: &Ctx, row: &Row) -> Page {
     let notes: Vec<(&str, &str)> = [
         ("Problem", row.problem.as_str()),
         ("Role", row.role_note.as_str()),
+        ("Correction", format::role_note_correction(row, &ctx.data().rullst_version).unwrap_or("")),
         ("Listing", row.listing_note.as_str()),
         ("Structure", row.structure_note.as_str()),
         ("Database", row.database_note.as_str()),

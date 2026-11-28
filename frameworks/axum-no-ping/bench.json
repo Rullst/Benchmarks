@@ -44,5 +44,5 @@
   "notes": "Diagnostic: frameworks/axum with SQLx's test_before_acquire off; unranked.",
   "variant": "test_before_acquire off",
   "role": "diagnostic",
-  "role_note": "Axum with one change: the SQLx pool does not ping an idle connection before handing it out (PgPoolOptions::test_before_acquire(false); the default is true). It bounds how much the ping costs Axum, and every other SQLx implementation, in the database endpoints. SQLx 0.9 also pings every connection when it returns to the pool, whatever this setting; that ping stays. Unranked."
+  "role_note": "Axum with one change: the SQLx pool does not ping an idle connection before handing it out (PgPoolOptions::test_before_acquire(false); the default is true). It bounds how much the ping costs Axum, and the other SQLx implementations that keep it (Actix Web and Loco; since 13.0.0-rc.1 both Rullst folders ping only connections idle for at least 500 ms), in the database endpoints. SQLx 0.9 also pings every connection when it returns to the pool, whatever this setting; that ping stays. Unranked."
 }

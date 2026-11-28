@@ -34,8 +34,9 @@ are not a variable.
 | Prepared statements | SQLx prepares each query on first use per connection and caches it (100 statements per connection by default) | <https://docs.rs/sqlx/0.9/sqlx/postgres/struct.PgConnectOptions.html#method.statement_cache_capacity> |
 | Server and workers | `axum::serve`, Tokio's multi-threaded runtime with one worker per CPU the process may use (2) | <https://docs.rs/axum/0.8/axum/fn.serve.html> |
 
-The connection test is SQLx's default, so this baseline keeps it, as do the
-other SQLx implementations (Actix Web, Loco, both Rullst folders).
+The connection test is SQLx's default, so this baseline keeps it, as do
+Actix Web and Loco; since 13.0.0-rc.1 both Rullst folders ping only
+connections idle for at least 500 ms.
 [`../axum-no-ping`](../axum-no-ping) is the same app with
 `test_before_acquire(false)`, an unranked diagnostic that bounds the cost of
 the acquire-side ping; the release-side ping cannot be turned off in SQLx 0.9.

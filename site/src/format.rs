@@ -90,6 +90,24 @@ pub fn label(row: &Row) -> String {
     if row.variant.is_empty() { row.name.clone() } else { format!("{} ({})", row.name, row.variant) }
 }
 
+/// Whether `version` is a Rullst release before 13.0.0-rc.1, whose ORM pool still pinged every
+/// PostgreSQL connection it handed out.
+pub fn rullst_pings_every_connection(version: &str) -> bool {
+    let major = version.split('.').next().and_then(|m| m.parse::<u64>().ok());
+    version.starts_with("13.0.0-alpha.") || major.is_some_and(|m| m < 13)
+}
+
+/// A correction to a role note stored with the results: until the 13.0.0-rc.1 run, the
+/// `axum-no-ping` note said that it bounds the ping of every other SQLx implementation, which stopped
+/// being true for Rullst in 13.0.0-rc.1.
+pub fn role_note_correction(row: &Row, rullst_version: &str) -> Option<&'static str> {
+    (row.role_note.contains("every other SQLx implementation") && !rullst_pings_every_connection(rullst_version))
+        .then_some(
+            "Since Rullst 13.0.0-rc.1, the other SQLx implementations that keep this ping are Actix Web and Loco: \
+             both Rullst folders ping only connections idle for at least 500 ms.",
+        )
+}
+
 /// What a row is when it is not a ranked implementation.
 pub fn role_text(row: &Row) -> Option<&'static str> {
     if row.is_baseline {
@@ -230,6 +248,16 @@ pub fn position_words(entry: &Entry) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rullst_pinged_every_connection_before_rc1() {
+        for version in ["13.0.0-alpha.6", "13.0.0-alpha.1", "12.3.0"] {
+            assert!(rullst_pings_every_connection(version), "{version}");
+        }
+        for version in ["13.0.0-rc.1", "13.0.0", "13.1.0"] {
+            assert!(!rullst_pings_every_connection(version), "{version}");
+        }
+    }
 
     #[test]
     fn formats_like_the_markdown_results() {

@@ -251,7 +251,8 @@ class TieMarginTests(unittest.TestCase):
         self.assertIn("**Database-layer defaults.**", readme)
         self.assertIn("`test_before_acquire`, on by default", readme)
         self.assertIn("SQLx (Axum, Actix Web, Loco) tests", readme)
-        self.assertIn("pings a PostgreSQL connection only when it has been idle for at least 500 ms", readme)
+        self.assertIn("since 13.0.0-rc.1, Rullst's ORM turns that test off and pings a PostgreSQL connection only "
+                      "after 500 ms idle (earlier releases kept SQLx's default)", readme)
         self.assertIn("in these results Axum scored 1.20 in Database and 1.20 in Application", readme)
         for default in ("node-postgres (Fastify, NestJS) sends unprepared statements",
                         "Laravel on PHP-FPM opens a new PostgreSQL connection for every request",
